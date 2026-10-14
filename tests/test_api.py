@@ -24,9 +24,15 @@ def test_orden_minsal():
     """Categoría primero; dentro de la categoría, > 1 año en lista primero y luego orden de llegada."""
     _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
     orden = {"alta": 3, "media": 2, "baja": 1}
-    claves = [(-orden[p["categoria"]], not p["riesgo_vital"], not p["antiguedad_mayor_1_anio"], -p["dias_espera"])
-              for p in d["pacientes"]]
+    claves = [(-orden[p["categoria"]], not p["riesgo_vital"], -p["lace"]["total"], not p["antiguedad_mayor_1_anio"],
+               -p["dias_espera"]) for p in d["pacientes"]]
     assert claves == sorted(claves)
+
+def test_lace_00002():
+    """Angina sin Charlson; hospitalización (A=3) y 1 urgencia (E=1) en los 6 meses previos al 10-08."""
+    _, d = call("GET", "/pacientes", {"fecha_corte": "2026-08-10"})
+    l = fila(d, "PAC-HLF-00002")["lace"]
+    assert {x["letra"]: x["puntos"] for x in l["partes"]} == {"L": 0, "A": 3, "C": 0, "E": 1} and l["total"] == 4
 
 def test_riesgo_vital_00002():
     _, d = call("GET", "/pacientes", {"fecha_corte": "2026-08-10"})

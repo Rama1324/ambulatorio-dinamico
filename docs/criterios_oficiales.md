@@ -34,9 +34,26 @@ MINSAL prioriza la "criticidad / riesgo vital" (Ord. C27 N°373/2021, citado en 
 "impacto en la progresión de la enfermedad y complicaciones" (Ord. 536/2025, criterio 1).
 No es una predicción: se avisa con lo que ya ocurrió.
 
+## 2b. Puntaje de riesgo LACE (puntos publicados, no inventados)
+van Walraven C, Dhalla IA, Bell C, et al. *Derivation and validation of an index to predict early death or
+unplanned readmission after discharge from hospital to the community.* CMAJ 2010;182(6):551-7, Tabla 3.
+https://pmc.ncbi.nlm.nih.gov/articles/PMC2845681/
+
+| Letra | Componente | Puntos |
+|---|---|---|
+| L | Días de estada | <1: 0 · 1: 1 · 2: 2 · 3: 3 · 4–6: 4 · 7–13: 5 · ≥14: 7 — **el registro no lo trae → 0** |
+| A | Ingreso de urgencia | 3 (hospitalización en los 6 meses previos al corte) |
+| C | Charlson | 0–3 = mismo número · ≥4 = 5. Pesos LACE: insuficiencia cardíaca 2, EPOC/enfermedad pulmonar crónica 2, hepática leve 2, diabetes sin complicaciones 1 (CIE-10 según Quan, Med Care 2005) |
+| E | Urgencias en 6 meses | 0–3 = mismo número · ≥4 = 4 |
+
+Uso: ordena dentro de la misma categoría (criterio médico MINSAL: riesgo de complicaciones). No cambia la categoría.
+Validación en el dataset (cortes mensuales feb–jul 2026, evento = urgencia, hospitalización o muerte en 90 días,
+n = 2.297): LACE 0 → 11,0% · 1 → 13,5% · 2 → 14,4% · 3 → 16,7% · 4–5 → 50% (n = 6). AUC 0,54 (original: 0,68–0,71).
+Gradiente en la dirección esperada pero débil: datos sintéticos; recalibrar con datos reales del HLF.
+
 ## 3. Orden dentro de la categoría
 MINSAL Ord. C N°536 (21-03-2025), recogido en el Manual de Gestión de la Demanda SSMSO 2025 (RE 2679), pág. 13:
-1. Criterio médico (categoría y riesgo vital).
+1. Criterio médico (categoría, riesgo vital y puntaje LACE).
 2. Grupos de especial protección (NNA bajo protección del Estado, PRAIS, Valech, Rettig): **el dataset no los trae.**
 3. Antigüedad en la lista mayor a 1 año.
 4. Luego, orden de llegada (fecha de ingreso).

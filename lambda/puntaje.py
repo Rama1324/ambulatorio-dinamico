@@ -53,6 +53,36 @@ GES_ESPECIALISTA = {
 
 DIAS_ANTIGUEDAD = 365  # MINSAL Ord. 536/2025: "antigüedad en la lista de espera mayor a un año"
 
+# Índice LACE — van Walraven C, et al. CMAJ 2010;182(6):551-7, Tabla 3 (riesgo de muerte o reingreso no planificado).
+# L: días de estada (el dataset no los trae → 0) · A: ingreso de urgencia = 3 · C: Charlson → 0,1,2,3, ≥4 = 5
+# · E: consultas en urgencia en los 6 meses previos → 0,1,2,3, ≥4 = 4.
+LACE_FUENTE = "Índice LACE (van Walraven et al., CMAJ 2010)"
+LACE_VENTANA_DIAS = 182  # "previous 6 months" del índice LACE
+# Pesos de Charlson usados por el índice LACE (nota de la Tabla 3); CIE-10 según Quan et al., Med Care 2005.
+CHARLSON_LACE = {
+    "I50": (2, "insuficiencia cardíaca congestiva"),
+    "J44": (2, "enfermedad pulmonar crónica"),
+    "J45": (2, "enfermedad pulmonar crónica"),
+    "K70": (2, "enfermedad hepática leve"),
+    "E11": (1, "diabetes sin complicaciones"),
+}
+
+
+def indice_lace(perfil, corte):
+    """Devuelve el desglose LACE con los eventos con fecha ≤ corte."""
+    desde = corte.toordinal() - LACE_VENTANA_DIAS
+    evs = [e for e in perfil.get("eventos_clinicos", []) if desde <= d(e["fecha_evento"]).toordinal() <= corte.toordinal()]
+    hosp = [e for e in evs if e["tipo_evento"] == "hospitalizacion"]
+    urg = sum(1 for e in evs if e["tipo_evento"] == "visita_urgencia")
+    charlson, cond = CHARLSON_LACE.get(perfil["lista_espera"]["diagnostico_cie10"], (0, None))
+    partes = [
+        {"letra": "L", "nombre": "Días de estada", "valor": "sin dato en el registro", "puntos": 0},
+        {"letra": "A", "nombre": "Ingreso de urgencia (6 meses)", "valor": f'{len(hosp)} hospitalización(es)' if hosp else "no", "puntos": 3 if hosp else 0},
+        {"letra": "C", "nombre": "Comorbilidad (Charlson)", "valor": cond or "sin condición de Charlson", "puntos": charlson if charlson < 4 else 5},
+        {"letra": "E", "nombre": "Consultas en urgencia (6 meses)", "valor": str(urg), "puntos": min(urg, 4)},
+    ]
+    return {"total": sum(p["puntos"] for p in partes), "partes": partes, "fuente": LACE_FUENTE}
+
 
 def d(s): return date.fromisoformat(s)
 
@@ -135,6 +165,12 @@ def puntuar(perfil, corte):
                                                     "el sistema no baja la prioridad solo; puede ajustarla el equipo clínico",
                         "fuente": "Principio de diseño: la herramienta propone, el equipo clínico decide"})
 
+    # --- Puntaje de riesgo clínico publicado (ordena dentro de la categoría: criterio médico MINSAL) ---
+    lace = indice_lace(perfil, corte)
+    if lace["total"]:
+        razones.append({"factor": "lace", "valor": f'{lace["total"]} puntos (' + ", ".join(
+            f'{p["letra"]} {p["puntos"]}' for p in lace["partes"] if p["puntos"]) + ")", "fuente": LACE_FUENTE})
+
     # --- Capa 2: criterios de orden MINSAL ----------------------------------------
     antiguo = dias_espera > DIAS_ANTIGUEDAD
     razones.append({"factor": "dias_espera", "valor": f"{dias_espera} días en lista" + (" (más de 1 año)" if antiguo else ""),
@@ -163,16 +199,16 @@ def puntuar(perfil, corte):
                         "fuente": "Rangos de referencia del diccionario de datos HLF"})
 
     return {"id_paciente": perfil["id_paciente"], "excluido": False, "categoria": categoria,
-            "estado_clinico": estado, "riesgo_vital": riesgo_vital, "antiguedad_mayor_1_anio": antiguo, "dias_espera": dias_espera,
+            "estado_clinico": estado, "riesgo_vital": riesgo_vital, "lace": lace, "antiguedad_mayor_1_anio": antiguo, "dias_espera": dias_espera,
             "ges": ges_info, "medicion_alerta": medicion_alerta,
             "riesgo_inasistencia": consecutivas >= 2, "no_shows": no_show, "razones": razones}
 
 
 def clave_orden(r, categoria=None):
-    """MINSAL: criterio médico (categoría y riesgo vital) → (grupos de protección: sin datos) → antigüedad > 1 año
-    → orden de llegada."""
-    return (-ORDEN_CAT[categoria or r["categoria"]], not r["riesgo_vital"], not r["antiguedad_mayor_1_anio"],
-            -r["dias_espera"], r["id_paciente"])
+    """MINSAL: criterio médico (categoría, riesgo vital, puntaje LACE) → (grupos de protección: sin datos)
+    → antigüedad > 1 año → orden de llegada."""
+    return (-ORDEN_CAT[categoria or r["categoria"]], not r["riesgo_vital"], -r["lace"]["total"],
+            not r["antiguedad_mayor_1_anio"], -r["dias_espera"], r["id_paciente"])
 
 
 def priorizar(perfiles, corte, especialidad=None):

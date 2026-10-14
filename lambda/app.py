@@ -126,6 +126,7 @@ def _enriquecer(r, perfil, revision, pos_ant):
         "categoria_sistema": r["categoria"],
         "estado_clinico": r["estado_clinico"],
         "riesgo_vital": r["riesgo_vital"],
+        "lace": r["lace"],
         "antiguedad_mayor_1_anio": r["antiguedad_mayor_1_anio"],
         "ges": r["ges"],
         "medicion_alerta": r["medicion_alerta"],
@@ -353,6 +354,9 @@ def _diferencia(a, b):
         return f'{b["nombre_fantasia"]} está en prioridad {b["categoria"]}; {a["nombre_fantasia"]} en {a["categoria"]}'
     if a["riesgo_vital"] != b["riesgo_vital"]:
         return f'misma prioridad, pero {a["nombre_fantasia"]} tiene alerta de riesgo vital'
+    la, lb = a["lace"]["total"], b["lace"]["total"]
+    if la != lb:
+        return f'misma prioridad; {b["nombre_fantasia"]} tiene {la - lb} punto{"s" if la - lb != 1 else ""} LACE menos ({lb} vs {la})'
     if a["antiguedad_mayor_1_anio"] != b["antiguedad_mayor_1_anio"]:
         return f'misma prioridad, pero {a["nombre_fantasia"]} lleva más de 1 año en lista (criterio MINSAL)'
     dif = a["dias_espera"] - b["dias_espera"]
