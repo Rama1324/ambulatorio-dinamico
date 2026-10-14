@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+.env.*
+data/*
+!data/.gitkeep
+__pycache__/
+*.csv
+perfiles.json
