@@ -15,7 +15,8 @@ export const EVENTOS = {
 export const FACTOR = {
   riesgo_vital: "Atención hoy", prioridad_inicial: "Priorización de la interconsulta", evento: "Evento posterior a la interconsulta",
   tabla_oficial: "Tabla de priorización HLF", dias_espera: "Tiempo de espera", ges: "Garantía GES", medicion: "Última medición",
-  lace: "Puntaje de riesgo LACE",
+  lace: "Puntaje de riesgo LACE", criticidad: "Criticidad dinámica (señal, no cambia el orden)", autoreporte: "Chat del paciente (por validar)",
+  grupo_proteccion: "Grupo de especial protección", acg: "Riesgo ACG",
 };
 export const TIPO_EVENTO = { visita_urgencia: "Urgencia", hospitalizacion: "Hospitalización", examen_alterado: "Examen alterado", cambio_farmaco: "Cambio de fármaco", control_aps: "Control APS" };
 export const POR_PAGINA = 25;

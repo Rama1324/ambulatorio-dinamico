@@ -19,7 +19,7 @@ async function mock() {
 
 async function req(method, path, body) {
   const r = await fetch(API_URL + path, {
-    method, headers: { "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined,
+    method, headers: { "content-type": "application/json" }, ...(body ? { body: JSON.stringify(body) } : {}),
   });
   const data = await r.json();
   if (!r.ok) throw new Error(data.error || `Error ${r.status}`);
@@ -41,6 +41,7 @@ export async function getPacientes(fechaCorte, especialidad) {
     ...m.pacientes[r.id_paciente], ...r, posicion_anterior: ant[r.id_paciente] ?? null, estado_revision: "pendiente",
   }));
   if (especialidad) pacientes = pacientes.filter((p) => p.especialidad === especialidad);
+  pacientes = pacientes.map(conAutoreporteMock);
   return { fecha_corte: fechaCorte, total: pacientes.length, pacientes, excluidos: corte.excluidos };
 }
 
@@ -81,3 +82,27 @@ export const postInforme = (id, body) => req("POST", `/pacientes/${id}/informe`,
 export const postExplicar = (id, fechaCorte) => req("POST", `/pacientes/${id}/explicar`, { fecha_corte: fechaCorte });
 export const getBoxes = (fechaCorte, especialidad) =>
   req("GET", `/boxes?${new URLSearchParams({ fecha_corte: fechaCorte, ...(especialidad ? { especialidad } : {}) })}`);
+
+// Chat del paciente. Con API: se guarda como "por validar" y el equipo lo valida en la ficha.
+// Sin API (modo mock): queda en memoria y se marca en la lista; validar requiere el servidor.
+const BANDERAS = { ideacion_suicida: "ideas de hacerse daño (PHQ-9 ítem 9)", dolor_pecho: "dolor de pecho en reposo o con poco esfuerzo",
+  disnea_reposo: "falta de aire en reposo" };
+const autoMock = {};
+function conAutoreporteMock(p) {
+  const a = autoMock[p.id_paciente];
+  if (!a) return p;
+  const razones = a.bandera_roja ? [{ factor: "autoreporte", valor: `Bandera roja en el chat: ${a.bandera_roja} (por validar)`, fuente: "Autoreporte del paciente (chat de seguimiento)" }, ...p.razones] : p.razones;
+  return { ...p, autoreporte: a, alerta_chat: !!a.bandera_roja, contactar_hoy: p.contactar_hoy || !!a.bandera_roja, razones };
+}
+export async function postAutoreporte(id, body) {
+  if (MODO === "api") return req("POST", `/pacientes/${id}/autoreporte`, body);
+  const a = { ...body, id_autoreporte: "AR-DEMO-" + Date.now().toString(36).toUpperCase(), fecha: new Date().toISOString(),
+    bandera_roja: body.bandera_roja ? BANDERAS[body.bandera_roja] : null };
+  autoMock[id] = a;
+  return { id_paciente: id, autoreporte: a };
+}
+export async function validarAutoreporte(id, body) {
+  if (MODO === "api") return req("POST", `/pacientes/${id}/autoreporte/validar`, body);
+  if (body.accion === "descartar") { delete autoMock[id]; return { revision: { accion: "descartar" } }; }
+  throw new Error("validar el dato del chat requiere conexión al servidor (en modo demo solo se puede descartar)");
+}

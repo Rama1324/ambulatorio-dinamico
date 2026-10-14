@@ -20,12 +20,12 @@ export const Caja = ({ titulo, accion, children, className = "" }) => (
 export function Logo() {
   const [ok, setOk] = useState(true);
   return ok
-    ? <img src="/logo-hlf.png" alt="Hospital Clínico Dra. Eloísa Díaz Inzunza" className="h-14 w-auto object-contain" onError={() => setOk(false)} />
+    ? <img src="/logo-hlf.png" alt="Hospital Clínico Dra. Eloísa Díaz Inzunza" className="h-10 lg:h-14 w-auto object-contain" onError={() => setOk(false)} />
     : <div className="w-9 h-11 rounded bg-primary text-on-primary flex items-center justify-center"><Icono n="local_hospital" className="text-[22px]" /></div>;
 }
 
 export const Indicador = ({ n, t, tono, onClick }) => {
-  const c = tono === "rojo" ? "border-l-error text-error" : tono === "ambar" ? "border-l-ambar text-ambar" : "border-l-primary text-on-surface";
+  const c = tono === "rojo" ? "border-l-error text-error" : tono === "ambar" ? "border-l-ambar text-ambar" : tono === "azul" ? "border-l-primary text-primary" : "border-l-outline text-on-surface";
   return (
     <button onClick={onClick} disabled={!onClick} className={`text-left bg-surface-container-lowest border border-outline-variant border-l-4 rounded px-3 py-2 ${c} ${onClick ? "hover:bg-surface-container-low" : "cursor-default"}`}>
       <div className="text-[24px] font-semibold leading-tight">{n}</div><div className="text-[14px] text-on-surface-variant">{t}</div>

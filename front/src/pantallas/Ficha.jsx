@@ -31,8 +31,8 @@ export function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso
   const pedirResumen = () => correr("ia", async () => setResumen(await api.postExplicar(p.id_paciente, fecha)));
 
   const timeline = detalle ? [
-    ...detalle.eventos_clinicos.map((e) => ({ f: e.fecha_evento, t: `${TIPO_EVENTO[e.tipo_evento] || e.tipo_evento}: ${e.subtipo}`, d: e.detalle?.startsWith("Informe") ? e.detalle : null, rojo: e.severidad === "grave", nuevo: e.id_evento?.startsWith("EV-DEMO") })),
-    ...detalle.mediciones.map((m) => ({ f: m.fecha_medicion, t: `${m.tipo_medicion.replace("_", " ")}: ${m.valor} ${m.unidad}`, d: m.fuera_de_rango ? "fuera de rango" : null, ambar: m.fuera_de_rango })),
+    ...detalle.eventos_clinicos.map((e) => ({ f: e.fecha_evento, t: `${TIPO_EVENTO[e.tipo_evento] || e.tipo_evento}: ${e.subtipo}`, d: e.detalle?.startsWith("Informe") ? e.detalle : null, rojo: e.severidad === "grave", nuevo: e.id_evento?.startsWith("EV-DEMO") || e.fuente === "autoreporte", chat: e.fuente === "autoreporte" })),
+    ...detalle.mediciones.map((m) => ({ f: m.fecha_medicion, t: `${m.tipo_medicion.replace("_", " ")}: ${m.valor} ${m.unidad}`, d: m.fuera_de_rango ? "fuera de rango" : null, ambar: m.fuera_de_rango, chat: m.fuente === "autoreporte" })),
     ...(detalle.citaciones || []).map((c) => ({ f: c.fecha_cita, t: `Citación ${c.id_box}: ${c.estado_cita.replace("_", " ")}`, ambar: c.estado_cita === "no_asistio" })),
     { f: p.fecha_ingreso_lista, t: "Ingreso de la interconsulta", d: `prioridad inicial ${p.prioridad_inicial}` },
   ].sort((a, b) => b.f.localeCompare(a.f)) : [];
@@ -64,9 +64,11 @@ export function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso
         {p.categoria !== p.categoria_sistema && <p className="mt-2 text-[14px] text-on-surface-variant">El sistema proponía prioridad {p.categoria_sistema}; el equipo clínico la cambió a {p.categoria}. Motivo: {p.revision?.motivo}</p>}
       </Caja>
 
-      <div className="flex border-b border-outline-variant bg-surface-container-lowest rounded-t text-[14px] sticky top-0 z-10">
+      {p.autoreporte && <ChatPendiente p={p} fecha={fecha} onCambio={onCambio} onAviso={onAviso} onDestacar={onDestacar} />}
+
+      <div role="tablist" className="flex border-b-2 border-outline-variant bg-surface-container-lowest text-[15px] sticky top-[var(--ficha-top,0px)] z-10">
         {[["resumen", "Resumen"], ["puntaje", "Puntaje"], ["registrar", "Registrar"], ["historia", "Historia"]].map(([k, t]) => (
-          <button key={k} onClick={() => setTab(k)} className={`flex-1 py-2 border-b-2 -mb-px ${tab === k ? "border-primary text-primary font-semibold" : "border-transparent text-on-surface-variant"}`}>{t}</button>
+          <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)} className={`flex-1 h-11 border-b-4 -mb-[2px] ${tab === k ? "border-primary text-primary font-semibold" : "border-transparent text-on-surface-variant"}`}>{t}</button>
         ))}
       </div>
 
@@ -74,10 +76,12 @@ export function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso
       <Caja titulo="Cómo se decidió su lugar en la lista">
         <Camino p={p} total={total} />
       </Caja>
-      {esApi && p.riesgo_vital && <Contacto p={p} fecha={fecha} onListo={async (r) => { await onCambio(); onAviso({ titulo: `${p.nombre_fantasia}: ${r.contacto.texto}` }); }} onAviso={onAviso} />}
+      {esApi && (p.riesgo_vital || p.alerta_chat) && <Contacto p={p} fecha={fecha} onListo={async (r) => { await onCambio(); onAviso({ titulo: `${p.nombre_fantasia}: ${r.contacto.texto}` }); }} onAviso={onAviso} />}
       </>}
 
       {tab === "puntaje" && <>
+      {p.criticidad != null && <Criticidad p={p} />}
+
       <Caja titulo="Puntaje de riesgo clínico (LACE)">
         <BoletaLace lace={p.lace} />
       </Caja>
@@ -154,7 +158,7 @@ export function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso
           {timeline.map((x, i) => (
             <li key={i} className={`grid grid-cols-[88px_1fr] gap-2 py-1.5 border-b border-outline-variant/50 ${x.nuevo ? "bg-ambar-container/50" : ""}`}>
               <span className="text-on-surface-variant text-[14px]">{fmt(x.f)}</span>
-              <span className={x.rojo ? "text-error font-semibold" : x.ambar ? "text-ambar" : ""}>{x.t}{x.d && <span className="text-on-surface-variant font-normal"> · {x.d}</span>}</span>
+              <span className={x.rojo ? "text-error font-semibold" : x.ambar ? "text-ambar" : ""}>{x.chat && <Icono n="chat" className="text-[16px] text-primary mr-1" />}{x.t}{x.d && <span className="text-on-surface-variant font-normal"> · {x.d}</span>}</span>
             </li>
           ))}
           {!detalle && <li className="text-on-surface-variant">Cargando…</li>}
@@ -526,6 +530,70 @@ function Novedad({ p, fecha, onListo, onAviso }) {
             {tipo === "fallecimiento" ? "Registrar fallecimiento y egresar" : "Registrar atención y egresar"}</button>
         </div>
       )}
+    </Caja>
+  );
+}
+
+
+// Autoreporte del chat pendiente: el equipo clínico decide si entra al cálculo.
+function ChatPendiente({ p, fecha, onCambio, onAviso, onDestacar }) {
+  const a = p.autoreporte;
+  const [enviando, setEnviando] = useState(null);
+  const accion = async (acc) => {
+    setEnviando(acc);
+    try {
+      const r = await api.validarAutoreporte(p.id_paciente, { accion: acc, id_autoreporte: a.id_autoreporte, fecha_corte: fecha });
+      await onCambio();
+      if (acc === "validar") { onDestacar(p.id_paciente); onAviso({ titulo: "Dato del chat validado. Lista actualizada", antes: r.posicion_antes, despues: r.posicion_despues, cat: r.paciente?.categoria }); }
+      else onAviso({ titulo: "Dato del chat descartado" });
+    } catch (e) { onAviso({ titulo: "No se pudo completar: " + e.message }); } finally { setEnviando(null); }
+  };
+  const nombreMed = { PHQ9: "PHQ-9", escala_dolor_eva: "Dolor EVA", presion_sistolica: "PA sistólica", presion_diastolica: "PA diastólica", glicemia: "Glicemia", saturacion_o2: "Saturación O₂" };
+  return (
+    <section aria-label="Dato nuevo del chat" className="border-2 border-primary bg-surface-container-lowest p-4 flex flex-col gap-2.5 text-[15px]">
+      <div className="flex items-center gap-2 flex-wrap">
+        <Icono n="chat" className="text-primary" /><strong className="text-[16px]">Dato nuevo del chat · por validar</strong>
+        <span className="ml-auto text-[13px] text-on-surface-variant">{fmt(a.fecha_corte)} · {a.id_autoreporte}</span>
+      </div>
+      {a.bandera_roja && <p className="p-2.5 bg-error text-on-error font-semibold">Bandera roja: {a.bandera_roja}. Contactar hoy.</p>}
+      {a.resumen?.length > 0 && <ul className="list-disc pl-5 space-y-0.5">{a.resumen.map((l, i) => <li key={i}>{l}</li>)}</ul>}
+      {(a.eventos?.length > 0 || a.mediciones?.length > 0) && (
+        <div className="bg-surface-container-low p-2.5 text-[14px]">
+          <div className="text-on-surface-variant mb-1">Al validar entra al cálculo (tabla HLF, LACE, señal temprana):</div>
+          {a.eventos.map((e, i) => <div key={i}>· Evento: <b>{TIPO_EVENTO[e.tipo_evento]}</b> · {e.subtipo} · {fmt(e.fecha_evento)}</div>)}
+          {a.mediciones.map((m, i) => <div key={i} className={m.fuera_de_rango ? "text-ambar font-semibold" : ""}>· Medición: {nombreMed[m.tipo_medicion] || m.tipo_medicion} {m.valor} {m.unidad}{m.fuera_de_rango ? " (fuera de rango)" : ""}</div>)}
+        </div>
+      )}
+      {a.egreso_propuesto && <p className="text-[14px]">Dice que ya se atendió en otro lugar: si se confirma, regístrelo en <b>Registrar → Atendido</b>.</p>}
+      {a.confirma_asistencia && <p className="text-[14px] text-on-surface-variant">Asistencia con 48 h de aviso: {a.confirma_asistencia} · horario: {a.preferencia_horario || "—"} (no cambia la prioridad)</p>}
+      <div className="flex gap-2 pt-1">
+        <button disabled={!!enviando} onClick={() => accion("validar")} className="flex-1 h-11 bg-primary text-on-primary font-semibold disabled:opacity-50">{enviando === "validar" ? "Validando…" : "Validar y recalcular"}</button>
+        <button disabled={!!enviando} onClick={() => accion("descartar")} className="flex-1 h-11 border-2 border-outline-variant font-semibold disabled:opacity-50">Descartar</button>
+      </div>
+    </section>
+  );
+}
+
+// Capa dinámica: señal para el especialista. No cambia la categoría ni el orden MINSAL.
+function Criticidad({ p }) {
+  const c = p.criticidad_detalle || {};
+  const razon = p.razones.find((r) => r.factor === "criticidad");
+  const barra = (t, v, tono) => (
+    <div className="flex flex-col gap-1">
+      <div className="flex justify-between text-[14px]"><span>{t}</span><b>{Math.round((v || 0) * 100)}</b></div>
+      <div className="h-2.5 bg-surface-container-high"><div className={`h-full ${tono}`} style={{ width: `${Math.round((v || 0) * 100)}%` }} /></div>
+    </div>
+  );
+  return (
+    <Caja titulo="Criticidad dinámica (señal)" accion={<span className="text-[22px] font-bold">{p.criticidad}<span className="text-[14px] font-normal text-on-surface-variant">/100</span></span>}>
+      {p.senal_temprana && <p className="mb-3 p-2.5 bg-ambar-container text-ambar text-[14px] font-semibold">Mediciones empeorando: revisar antes de que llegue el evento.</p>}
+      <div className="flex flex-col gap-2.5">
+        {barra("Eventos recientes (pesan la mitad a los 60 días)", c.eventos, "bg-error")}
+        {barra("Mediciones alteradas o empeorando (90–180 días)", c.mediciones, "bg-ambar")}
+        {c.mejora > 0 && barra("Mejora (resta)", c.mejora, "bg-verde")}
+      </div>
+      {razon && <p className="text-[14px] mt-3">{razon.valor.split("· ").slice(1).join("· ")}</p>}
+      <p className="text-[13px] text-on-surface-variant mt-2">No cambia la prioridad ni el orden: pide revisión del especialista. En el registro, 55 % de los pacientes con mediciones empeorando tuvo un deterioro en los 60 días siguientes (vs 16 % del resto).</p>
     </Caja>
   );
 }
