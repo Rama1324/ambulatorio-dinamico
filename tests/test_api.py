@@ -15,7 +15,7 @@ def fila(d, pid):
 
 def test_lista_y_exclusion():
     s, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
-    assert s == 200 and d["total"] == 409
+    assert s == 200 and sum(p["id_paciente"].startswith("PAC-HLF") for p in d["pacientes"]) == 409
     assert "PAC-HLF-00009" in [e["id_paciente"] for e in d["excluidos"]]
     assert all(k in d["pacientes"][0] for k in ("categoria", "estado_clinico", "posicion", "razones", "estado_revision"))
     assert {p["categoria"] for p in d["pacientes"]} <= {"alta", "media", "baja"}
@@ -123,6 +123,18 @@ def test_detalle_y_boxes():
     assert s == 200 and d["mediciones"]
     s, d = call("GET", "/boxes")
     assert s == 200 and d["especialidades"] and d["especialidades"][0]["sugeridos"]
+
+def test_ingresar_paciente_nuevo():
+    s, cat = call("GET", "/catalogo")
+    assert s == 200 and any(d["diagnostico_cie10"] == "I50" for d in cat["diagnosticos"])
+    s, d = call("POST", "/pacientes", body={"nombre": "Juan Pérez", "edad": 70, "sexo": "M", "diagnostico_cie10": "I50",
+                                             "prioridad_inicial": "media", "fecha_corte": "2026-10-13"})
+    assert s == 200 and d["paciente"]["categoria"] == "media" and d["paciente"]["especialidad"] == "Cardiología"
+    pid = d["id_paciente"]
+    s, r = call("POST", "/eventos", body={"id_paciente": pid, "tipo_evento": "hospitalizacion", "subtipo": "ingreso hospitalario",
+                                          "severidad": "grave", "fecha_corte": "2026-10-13"})
+    assert s == 200 and r["paciente"]["categoria"] == "alta" and r["paciente"]["riesgo_vital"]
+    assert call("POST", "/pacientes", body={"nombre": "", "edad": 70})[0] == 400
 
 def test_404():
     assert call("GET", "/nada")[0] == 404

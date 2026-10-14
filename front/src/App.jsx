@@ -55,6 +55,7 @@ export default function App() {
   const [filtroCat, setFiltroCat] = useState("todas");
   const [soloPend, setSoloPend] = useState(false);
   const [pagina, setPagina] = useState(0);
+  const [nuevo, setNuevo] = useState(false);
   const fecha = demo ? fechas[iFecha] : fechas[fechas.length - 1];
 
   const cargar = useCallback(async () => {
@@ -67,6 +68,11 @@ export default function App() {
     api.getPaciente(sel, fecha).then(setDetalle).catch(() => setDetalle(null));
   }, [sel, fecha, data]);
   useEffect(() => setPagina(0), [busca, filtroCat, soloPend, esp]);
+  // al seleccionar (p. ej. un paciente recién ingresado) saltar a la página donde está
+  useEffect(() => {
+    const i = filtrados.findIndex((p) => p.id_paciente === sel);
+    if (i >= 0) setPagina(Math.floor(i / POR_PAGINA));
+  }, [sel]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtrados = useMemo(() => {
     if (!data) return [];
@@ -169,7 +175,12 @@ export default function App() {
                   </select>
                 </Filtro>
                 <label className="flex items-center gap-2 h-9 cursor-pointer select-none"><input type="checkbox" checked={soloPend} onChange={(e) => setSoloPend(e.target.checked)} className="w-4 h-4 accent-[#0b4f8a]" />Solo pendientes de revisión</label>
+                {esApi && <button onClick={() => setNuevo(true)} className="ml-auto h-9 px-3 rounded bg-primary text-on-primary font-semibold flex items-center gap-1"><Icono n="person_add" className="text-[18px]" />Ingresar paciente</button>}
               </div>
+              {nuevo && <NuevoPaciente fecha={fecha} onCerrar={() => setNuevo(false)} onListo={async (r) => {
+                setNuevo(false); setBusca(""); setFiltroCat("todas"); setSoloPend(false); await cargar(); setSel(r.id_paciente);
+                mostrarAviso({ titulo: `${r.paciente?.nombre_fantasia} ingresado a la lista`, despues: r.paciente?.posicion, antes: "—", cat: r.paciente?.categoria });
+              }} />}
 
               <section className="bg-surface-container-lowest border border-outline-variant rounded overflow-hidden">
                 <table className="w-full text-left border-collapse text-[14px]">
@@ -241,7 +252,7 @@ export default function App() {
 
             <aside className="lg:col-span-5 xl:col-span-4 lg:sticky lg:top-4 flex flex-col gap-3 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
               {!paciente ? <Caja><p className="text-on-surface-variant">Seleccione un paciente para ver el detalle.</p></Caja> : (
-                <Ficha key={paciente.id_paciente} p={paciente} detalle={detalle} fecha={fecha} esApi={esApi} demo={demo} onCambio={cargar} onAviso={mostrarAviso}
+                <Ficha key={paciente.id_paciente} p={paciente} total={data.total} detalle={detalle} fecha={fecha} esApi={esApi} demo={demo} onCambio={cargar} onAviso={mostrarAviso}
                   onDestacar={(id) => { setDestacado(id); setTimeout(() => setDestacado(null), 3000); }} />
               )}
             </aside>
@@ -277,7 +288,9 @@ const Indicador = ({ n, t, tono, onClick }) => {
 };
 const Filtro = ({ label, children }) => <label className="flex flex-col gap-1"><span className="text-on-surface-variant">{label}</span>{children}</label>;
 
-function Ficha({ p, detalle, fecha, esApi, demo, onCambio, onAviso, onDestacar }) {
+function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso, onDestacar }) {
+  const [historia, setHistoria] = useState(null);
+  useEffect(() => { api.getHistoria(p.id_paciente, fecha).then(setHistoria).catch(() => setHistoria(null)); }, [p.id_paciente, fecha, p.categoria, p.posicion]);
   const [resumen, setResumen] = useState(null);
   const [cargando, setCargando] = useState(null);
   const [ajuste, setAjuste] = useState(null);
@@ -328,6 +341,14 @@ function Ficha({ p, detalle, fecha, esApi, demo, onCambio, onAviso, onDestacar }
           <dt className="text-on-surface-variant">Revisión</dt><dd>{p.estado_revision === "pendiente" ? "Pendiente" : p.estado_revision === "ajustado" ? "Ajustada" : "Confirmada"}</dd>
         </dl>
         {p.categoria !== p.categoria_sistema && <p className="mt-2 text-[13px] text-on-surface-variant">El sistema proponía prioridad {p.categoria_sistema}; el equipo clínico la cambió a {p.categoria}. Motivo: {p.revision?.motivo}</p>}
+      </Caja>
+
+      <Caja titulo="Cómo se decidió su lugar en la lista">
+        <Camino p={p} total={total} />
+      </Caja>
+
+      <Caja titulo="Evolución en la lista">
+        {historia ? <GraficoPosicion h={historia} /> : <p className="text-[13px] text-on-surface-variant">Cargando…</p>}
       </Caja>
 
       <Caja titulo={`Fundamento de la prioridad ${ETIQUETA[p.categoria].toLowerCase()}`}>
@@ -397,6 +418,98 @@ function Ficha({ p, detalle, fecha, esApi, demo, onCambio, onAviso, onDestacar }
   );
 }
 
+const COLOR_HEX = { alta: "#ba1a1a", media: "#8a5100", baja: "#1f6b35" };
+
+// Camino de la decisión: cada paso con su fuente (sin puntos ni pesos).
+function Camino({ p, total }) {
+  const rz = Object.fromEntries(p.razones.map((r) => [r.factor, r]));
+  const subio = rz.tabla_oficial && rz.tabla_oficial.valor.startsWith('"') && !rz.tabla_oficial.valor.includes("no supera");
+  const pasos = [{ t: "Interconsulta", v: `Prioridad ${p.prioridad_inicial}`, f: "Especialista al priorizar la SIC", cat: p.prioridad_inicial }];
+  if (p.estado_clinico === "descompensado" && rz.evento) pasos.push({ t: "Evento posterior", v: rz.evento.valor, f: "Registro clínico", icon: "emergency" });
+  if (p.estado_clinico === "estabilizado" && rz.evento) pasos.push({ t: "Evolución", v: rz.evento.valor.split(":")[0], f: "Registro clínico", icon: "trending_down" });
+  if (subio) pasos.push({ t: "Tabla de priorización HLF", v: rz.tabla_oficial.valor.split("→")[0].replaceAll('"', "").trim(), f: rz.tabla_oficial.fuente.replace("Tabla SSMSO 2025, HLF, ", "SSMSO 2025, "), cat: p.categoria_sistema });
+  else if (rz.tabla_oficial) pasos.push({ t: "Tabla de priorización HLF", v: "Sin cambio de prioridad", f: "Revisión clínica sugerida", icon: "rate_review" });
+  if (p.categoria !== p.categoria_sistema) pasos.push({ t: "Decisión clínica", v: `Prioridad ${p.categoria}`, f: p.revision?.motivo, cat: p.categoria });
+  if (p.riesgo_vital) pasos.push({ t: "Contactar hoy", v: "Riesgo vital", f: "Criterio MINSAL", icon: "call", rojo: true });
+  pasos.push({ t: "Lugar en la lista", v: `N° ${p.posicion} de ${total}`, f: p.antiguedad_mayor_1_anio ? "Más de 1 año en espera" : `${p.dias_espera} días en espera`, final: true });
+  return (
+    <div className="flex flex-wrap items-stretch gap-1">
+      {pasos.map((s, i) => (
+        <div key={i} className="flex items-center gap-1">
+          <div className={`rounded border px-2.5 py-1.5 min-w-[96px] max-w-[160px] ${s.rojo ? "bg-error text-on-error border-error" : s.final ? "bg-primary text-on-primary border-primary" : "bg-surface-container-lowest border-outline-variant"}`}
+            style={s.cat && !s.rojo && !s.final ? { borderTop: `4px solid ${COLOR_HEX[s.cat]}` } : undefined}>
+            <div className={`text-[11px] ${s.rojo || s.final ? "opacity-90" : "text-on-surface-variant"}`}>{s.icon && <Icono n={s.icon} className="text-[14px] mr-0.5" />}{s.t}</div>
+            <div className="text-[14px] font-semibold leading-tight">{s.v}</div>
+            {s.f && <div className={`text-[11px] leading-tight mt-0.5 ${s.rojo || s.final ? "opacity-80" : "text-on-surface-variant"}`}>{s.f}</div>}
+          </div>
+          {i < pasos.length - 1 && <Icono n="arrow_forward" className="text-[18px] text-outline" />}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Posición en la lista a lo largo del tiempo (N° 1 arriba). Una sola serie: sin leyenda; el color del punto es la prioridad.
+function GraficoPosicion({ h }) {
+  const [hover, setHover] = useState(null);
+  const pts = h.puntos.filter((x) => !x.excluido);
+  if (pts.length < 2) return <p className="text-[13px] text-on-surface-variant">Aún no hay suficiente historia en la lista.</p>;
+  const W = 380, H = 190, m = { l: 40, r: 12, t: 12, b: 26 };
+  const t = (f) => new Date(f + "T12:00:00").getTime();
+  const x0 = t(pts[0].fecha), x1 = t(pts[pts.length - 1].fecha);
+  const ymax = Math.max(...pts.map((p) => p.total));
+  const X = (f) => m.l + ((t(f) - x0) / (x1 - x0 || 1)) * (W - m.l - m.r);
+  const Y = (pos) => m.t + ((pos - 1) / (ymax - 1)) * (H - m.t - m.b);
+  const ticks = [1, Math.round(ymax / 2), ymax];
+  const meses = [...new Set(pts.map((p) => p.fecha.slice(0, 7)))];
+  const nombreMes = (ym) => ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"][+ym.slice(5, 7) - 1];
+  const linea = pts.map((p, i) => `${i ? "L" : "M"}${X(p.fecha).toFixed(1)},${Y(p.posicion).toFixed(1)}`).join(" ");
+  const evs = h.eventos.filter((e) => e.fecha_evento >= pts[0].fecha);
+  const hp = hover != null ? pts[hover] : null;
+  return (
+    <div className="relative">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label="Posición del paciente en la lista a lo largo del tiempo">
+        {ticks.map((v) => (
+          <g key={v}>
+            <line x1={m.l} x2={W - m.r} y1={Y(v)} y2={Y(v)} stroke="#dfe5eb" strokeWidth="1" />
+            <text x={m.l - 6} y={Y(v) + 4} textAnchor="end" fontSize="11" fill="#3d4650">N° {v}</text>
+          </g>
+        ))}
+        {meses.map((ym) => { const xx = X(`${ym}-01` < pts[0].fecha ? pts[0].fecha : `${ym}-01`); return <text key={ym} x={xx} y={H - 8} fontSize="11" fill="#3d4650" textAnchor="middle">{nombreMes(ym)}</text>; })}
+        {evs.map((e, i) => {
+          const xx = Math.min(Math.max(X(e.fecha_evento), m.l), W - m.r);
+          const grave = e.severidad === "grave" || e.subtipo.includes("descompensaci");
+          return (
+            <g key={i}>
+              <line x1={xx} x2={xx} y1={m.t} y2={H - m.b} stroke={grave ? "#ba1a1a" : "#1f6b35"} strokeWidth="1" strokeDasharray="3 3" />
+              <circle cx={xx} cy={m.t} r="4" fill={grave ? "#ba1a1a" : "#1f6b35"}><title>{fmt(e.fecha_evento)}: {e.subtipo}</title></circle>
+            </g>
+          );
+        })}
+        <path d={linea} fill="none" stroke="#0b4f8a" strokeWidth="2" strokeLinejoin="round" />
+        {pts.map((p, i) => (
+          <g key={p.fecha} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
+            <circle cx={X(p.fecha)} cy={Y(p.posicion)} r="12" fill="transparent" />
+            <circle cx={X(p.fecha)} cy={Y(p.posicion)} r={hover === i ? 6 : 4.5} fill={COLOR_HEX[p.categoria]} stroke="#fff" strokeWidth="2" />
+          </g>
+        ))}
+        {(() => { const u = pts[pts.length - 1]; return <text x={X(u.fecha) - 8} y={Y(u.posicion) + (Y(u.posicion) < 30 ? 16 : -8)} textAnchor="end" fontSize="12" fontWeight="600" fill="#1a1f24">N° {u.posicion}</text>; })()}
+      </svg>
+      {hp && (
+        <div className="absolute pointer-events-none bg-on-surface text-white text-[12px] rounded px-2 py-1 shadow"
+          style={{ left: `${(X(hp.fecha) / W) * 100}%`, top: `${(Y(hp.posicion) / H) * 100}%`, transform: "translate(-50%, -120%)" }}>
+          {fmt(hp.fecha)} · N° {hp.posicion} de {hp.total} · {ETIQUETA[hp.categoria]}{hp.riesgo_vital ? " · contactar hoy" : ""}
+        </div>
+      )}
+      <div className="flex flex-wrap gap-3 text-[12px] text-on-surface-variant mt-1">
+        {["alta", "media", "baja"].map((c) => <span key={c} className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full" style={{ background: COLOR_HEX[c] }} />Prioridad {ETIQUETA[c].toLowerCase()}</span>)}
+        <span className="flex items-center gap-1"><span className="w-3 border-t border-dashed border-error" />Descompensación</span>
+        <span className="flex items-center gap-1"><span className="w-3 border-t border-dashed border-verde" />Estabilización</span>
+      </div>
+    </div>
+  );
+}
+
 // Achica la foto en el navegador para no superar el límite de la Lambda (6 MB) y la devuelve en base64.
 function fotoABase64(archivo, lado = 1600) {
   return new Promise((ok, mal) => {
@@ -414,21 +527,123 @@ function fotoABase64(archivo, lado = 1600) {
   });
 }
 
+// Cámara en vivo dentro de la app: vista previa + botón para tomar la foto.
+function Camara({ onFoto, onCerrar }) {
+  const video = useRef(null);
+  const archivo = useRef(null);
+  const [error, setError] = useState(null);
+  const [listo, setListo] = useState(false);
+  useEffect(() => {
+    let stream;
+    (async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1920 } }, audio: false });
+        video.current.srcObject = stream;
+        await video.current.play();
+        setListo(true);
+      } catch (e) {
+        setError(e.name === "NotAllowedError" ? "No se dio permiso para usar la cámara." : "No se encontró una cámara disponible.");
+      }
+    })();
+    return () => stream?.getTracks().forEach((t) => t.stop());
+  }, []);
+  const tomar = () => {
+    const v = video.current, lado = 1600, k = Math.min(1, lado / Math.max(v.videoWidth, v.videoHeight));
+    const c = document.createElement("canvas");
+    c.width = Math.round(v.videoWidth * k); c.height = Math.round(v.videoHeight * k);
+    c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
+    onFoto(c.toDataURL("image/jpeg", 0.85).split(",")[1]);
+  };
+  const subir = async (e) => { const f = e.target.files?.[0]; if (f) onFoto(await fotoABase64(f)); };
+  return (
+    <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={onCerrar}>
+      <div className="bg-surface-container-lowest rounded max-w-2xl w-full" onClick={(e) => e.stopPropagation()}>
+        <div className="px-4 py-2.5 border-b border-outline-variant flex justify-between items-center">
+          <h2 className="font-semibold">Fotografiar documento</h2>
+          <button onClick={onCerrar} className="text-on-surface-variant"><Icono n="close" /></button>
+        </div>
+        <div className="p-4">
+          {error ? <p className="text-on-surface-variant mb-3">{error} Puede subir una imagen en su lugar.</p> : (
+            <div className="relative bg-black rounded overflow-hidden">
+              <video ref={video} playsInline muted className="w-full max-h-[60vh] object-contain" />
+              <div className="absolute inset-6 border-2 border-white/70 border-dashed rounded pointer-events-none" />
+              {!listo && <p className="absolute inset-0 flex items-center justify-center text-white">Abriendo cámara…</p>}
+            </div>
+          )}
+          <p className="text-[13px] text-on-surface-variant mt-2">Encuadre el documento completo dentro del recuadro, con buena luz.</p>
+          <div className="flex gap-2 mt-3">
+            {!error && <button disabled={!listo} onClick={tomar} className="flex-1 py-2.5 rounded bg-primary text-on-primary font-semibold flex items-center justify-center gap-1 disabled:opacity-40"><Icono n="photo_camera" />Tomar foto</button>}
+            <button onClick={() => archivo.current.click()} className="flex-1 py-2.5 rounded border border-outline-variant font-semibold">Subir imagen</button>
+            <input ref={archivo} type="file" accept="image/*" hidden onChange={subir} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NuevoPaciente({ fecha, onCerrar, onListo }) {
+  const [cat, setCat] = useState(null);
+  const [f, setF] = useState({ nombre: "", edad: "", sexo: "F", comuna: "La Florida", prevision: "FONASA B", especialidad: "", diagnostico_cie10: "", prioridad_inicial: "media", origen_derivacion: "CESFAM/APS" });
+  const [error, setError] = useState(null);
+  const [enviando, setEnviando] = useState(false);
+  useEffect(() => { api.getCatalogo().then(setCat).catch((e) => setError(e.message)); }, []);
+  const set = (k) => (e) => setF({ ...f, [k]: e.target.value, ...(k === "especialidad" ? { diagnostico_cie10: "" } : {}) });
+  const especialidades = cat ? [...new Set(cat.diagnosticos.map((d) => d.especialidad))] : [];
+  const dxs = cat ? cat.diagnosticos.filter((d) => d.especialidad === f.especialidad) : [];
+  const valido = f.nombre.trim() && f.edad !== "" && f.diagnostico_cie10;
+  const guardar = async () => {
+    setEnviando(true); setError(null);
+    try { onListo(await api.postPaciente({ ...f, edad: Number(f.edad), fecha_corte: fecha })); }
+    catch (e) { setError(e.message); setEnviando(false); }
+  };
+  const campo = "h-9 px-2 border border-outline-variant rounded bg-white w-full";
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onCerrar}>
+      <div className="bg-surface-container-lowest rounded max-w-xl w-full" onClick={(e) => e.stopPropagation()}>
+        <div className="px-4 py-2.5 border-b border-outline-variant flex justify-between items-center">
+          <h2 className="font-semibold">Ingresar interconsulta a la lista de espera</h2>
+          <button onClick={onCerrar} className="text-on-surface-variant"><Icono n="close" /></button>
+        </div>
+        <div className="p-4 grid grid-cols-2 gap-3 text-[14px]">
+          <Filtro label="Nombre del paciente"><input value={f.nombre} onChange={set("nombre")} className={campo} autoFocus /></Filtro>
+          <div className="grid grid-cols-2 gap-2">
+            <Filtro label="Edad"><input type="number" min={0} max={120} value={f.edad} onChange={set("edad")} className={campo} /></Filtro>
+            <Filtro label="Sexo"><select value={f.sexo} onChange={set("sexo")} className={campo}><option value="F">Femenino</option><option value="M">Masculino</option></select></Filtro>
+          </div>
+          <Filtro label="Comuna"><select value={f.comuna} onChange={set("comuna")} className={campo}>{cat?.comunas.map((c) => <option key={c}>{c}</option>)}</select></Filtro>
+          <Filtro label="Previsión"><select value={f.prevision} onChange={set("prevision")} className={campo}>{cat?.previsiones.map((c) => <option key={c}>{c}</option>)}</select></Filtro>
+          <Filtro label="Especialidad"><select value={f.especialidad} onChange={set("especialidad")} className={campo}><option value="">Seleccione…</option>{especialidades.map((e) => <option key={e}>{e}</option>)}</select></Filtro>
+          <Filtro label="Diagnóstico (CIE-10)"><select value={f.diagnostico_cie10} onChange={set("diagnostico_cie10")} disabled={!f.especialidad} className={campo}><option value="">Seleccione…</option>{dxs.map((d) => <option key={d.diagnostico_cie10} value={d.diagnostico_cie10}>{d.diagnostico_cie10} · {d.diagnostico_texto}</option>)}</select></Filtro>
+          <Filtro label="Prioridad asignada al revisar la SIC">
+            <div className="flex gap-1">{["alta", "media", "baja"].map((c) => (
+              <button key={c} type="button" onClick={() => setF({ ...f, prioridad_inicial: c })} className={`flex-1 h-9 rounded border font-semibold ${f.prioridad_inicial === c ? COLOR_CAT[c] : "border-outline-variant text-on-surface-variant"}`}>{ETIQUETA[c]}</button>
+            ))}</div>
+          </Filtro>
+          <Filtro label="Origen de la derivación"><select value={f.origen_derivacion} onChange={set("origen_derivacion")} className={campo}>{cat?.origenes.map((c) => <option key={c}>{c}</option>)}</select></Filtro>
+        </div>
+        {error && <p className="px-4 text-error text-[13px]">{error}</p>}
+        <div className="px-4 py-3 border-t border-outline-variant flex justify-end gap-2">
+          <button onClick={onCerrar} className="px-4 py-2 rounded border border-outline-variant font-semibold">Cancelar</button>
+          <button disabled={!valido || enviando} onClick={guardar} className="px-4 py-2 rounded bg-primary text-on-primary font-semibold disabled:opacity-40">{enviando ? "Ingresando…" : "Ingresar y priorizar"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Informe({ p, fecha, cargando, onConfirmar, onAviso }) {
   const [texto, setTexto] = useState("");
   const [res, setRes] = useState(null);
   const [leyendo, setLeyendo] = useState(false);
-  const archivo = useRef(null);
+  const [camara, setCamara] = useState(false);
   const analizar = async (body) => {
     setLeyendo(true); setRes(null);
     try { setRes(await api.postInforme(p.id_paciente, { ...body, fecha_corte: fecha })); }
     catch (e) { onAviso({ titulo: "No se pudo leer el informe: " + e.message }); }
     finally { setLeyendo(false); }
   };
-  const foto = async (e) => {
-    const f = e.target.files?.[0]; e.target.value = "";
-    if (f) analizar({ imagen_base64: await fotoABase64(f), media_type: "image/jpeg" });
-  };
+  const foto = (b64) => { setCamara(false); analizar({ imagen_base64: b64, media_type: "image/jpeg" }); };
   const ev = res?.evento;
   return (
     <Caja titulo="Registrar informe recibido">
@@ -437,9 +652,10 @@ function Informe({ p, fecha, cargando, onConfirmar, onAviso }) {
         className="w-full p-2 border border-outline-variant rounded focus:outline-none focus:border-primary resize-y text-[14px]" />
       <div className="flex gap-2 mt-2">
         <button disabled={!texto.trim() || leyendo} onClick={() => analizar({ texto })} className="flex-1 py-2 rounded bg-primary text-on-primary font-semibold disabled:opacity-40">{leyendo ? "Leyendo…" : "Revisar informe"}</button>
-        <button disabled={leyendo} onClick={() => archivo.current.click()} className="flex-1 py-2 rounded border border-outline-variant font-semibold flex items-center justify-center gap-1"><Icono n="photo_camera" className="text-[18px]" />Foto del documento</button>
-        <input ref={archivo} type="file" accept="image/*" capture="environment" hidden onChange={foto} />
+        <button disabled={leyendo} onClick={() => setCamara(true)} className="flex-1 py-2 rounded border border-outline-variant font-semibold flex items-center justify-center gap-1"><Icono n="photo_camera" className="text-[18px]" />Foto del documento</button>
       </div>
+      {camara && <Camara onFoto={foto} onCerrar={() => setCamara(false)} />}
+      {leyendo && <p className="mt-2 text-[13px] text-on-surface-variant flex items-center gap-1"><Icono n="hourglass_top" className="text-[16px] animate-spin" />Leyendo el documento…</p>}
       {res && !ev && <p className="mt-2 text-[13px] text-on-surface-variant">{res.mensaje}</p>}
       {res?.transcripcion && <details className="mt-2 text-[13px]"><summary className="cursor-pointer text-on-surface-variant">Texto leído del documento</summary><p className="whitespace-pre-wrap mt-1">{res.transcripcion}</p></details>}
       {ev && (

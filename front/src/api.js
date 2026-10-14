@@ -57,6 +57,21 @@ export async function getPaciente(id, fechaCorte) {
 
 export const postEvento = (evento) => req("POST", "/eventos", evento);
 export const postRevision = (id, body) => req("POST", `/pacientes/${id}/revision`, body);
+export async function getHistoria(id, fechaCorte) {
+  if (MODO === "api") return req("GET", `/pacientes/${id}/historia?fecha_corte=${fechaCorte}`);
+  const m = await mock();
+  const puntos = m.fechas.filter((f) => f <= fechaCorte).flatMap((f) => {
+    const c = m.cortes[f];
+    const r = c.pacientes.find((x) => x.id_paciente === id);
+    if (r) return [{ fecha: f, posicion: r.posicion, total: c.pacientes.length, categoria: r.categoria, riesgo_vital: r.riesgo_vital }];
+    return c.excluidos.some((x) => x.id_paciente === id) ? [{ fecha: f, excluido: true }] : [];
+  });
+  const eventos = (m.timeline[id]?.eventos || []).filter((e) => e.fecha_evento <= fechaCorte &&
+    (e.severidad === "grave" || e.subtipo.includes("descompensaci") || ["estabilización", "buena respuesta"].includes(e.subtipo)));
+  return { id_paciente: id, puntos, eventos };
+}
+export const getCatalogo = () => req("GET", "/catalogo");
+export const postPaciente = (body) => req("POST", "/pacientes", body);
 export const postInforme = (id, body) => req("POST", `/pacientes/${id}/informe`, body);
 export const postExplicar = (id, fechaCorte) => req("POST", `/pacientes/${id}/explicar`, { fecha_corte: fechaCorte });
 export const getBoxes = (fechaCorte, especialidad) =>

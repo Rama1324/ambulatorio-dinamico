@@ -82,17 +82,20 @@ def registros():
 
 
 def perfiles_combinados():
-    """perfiles.json + eventos nuevos + última revisión por paciente."""
+    """perfiles.json + pacientes ingresados + eventos nuevos + última revisión por paciente."""
     base = perfiles()
     regs = registros()
     eventos = [r for r in regs if r["sk"].startswith("evento#")]
     revisiones = sorted([r for r in regs if r["sk"].startswith("revision#")], key=lambda r: r["sk"])
     out = dict(base)
+    for r in regs:
+        if r["sk"] == "paciente#":
+            out[r["id_paciente"]] = json.loads(r["perfil"])
     for ev in eventos:
         pid = ev["id_paciente"]
         if pid not in out:
             continue
-        if out[pid] is base[pid]:
+        if pid in base and out[pid] is base[pid]:
             out[pid] = copy.deepcopy(base[pid])
         out[pid].setdefault("eventos_clinicos", []).append(json.loads(ev["evento"]))
     ult_rev = {r["id_paciente"]: json.loads(r["revision"]) for r in revisiones}
@@ -177,15 +180,39 @@ def detalle(pid, corte):
     }
 
 
+def historia(pid, corte):
+    """Posición y categoría del paciente cada 14 días hasta la fecha de corte (mismas reglas que la lista)."""
+    perfs, _ = perfiles_combinados()
+    if pid not in perfs:
+        return None
+    fechas, f = [], date(2026, 4, 1)
+    while f < corte:
+        fechas.append(f); f += timedelta(days=14)
+    fechas.append(corte)
+    vals, puntos = list(perfs.values()), []
+    for fc in fechas:
+        activos, excluidos = puntaje.priorizar(vals, fc)
+        r = next((x for x in activos if x["id_paciente"] == pid), None)
+        if r:
+            puntos.append({"fecha": fc.isoformat(), "posicion": r["posicion"], "total": len(activos),
+                           "categoria": r["categoria"], "riesgo_vital": r["riesgo_vital"]})
+        elif any(x["id_paciente"] == pid for x in excluidos):
+            puntos.append({"fecha": fc.isoformat(), "excluido": True})
+    eventos = [e for e in perfs[pid].get("eventos_clinicos", []) if e["fecha_evento"] <= corte.isoformat()
+               and puntaje.descompensa(e) or (puntaje.estabiliza(e) and e["fecha_evento"] <= corte.isoformat())]
+    return {"id_paciente": pid, "puntos": puntos, "eventos": eventos}
+
+
 def post_evento(body):
     t0 = time.perf_counter()
     pid = body.get("id_paciente")
-    if pid not in perfiles():
+    perfs, _ = perfiles_combinados()
+    if pid not in perfs:
         return 404, {"error": "paciente no existe"}
     if body.get("tipo_evento") not in TIPOS_EVENTO:
         return 400, {"error": f"tipo_evento debe ser uno de {sorted(TIPOS_EVENTO)}"}
     corte = date.fromisoformat(body.get("fecha_corte") or FECHA_REFERENCIA.isoformat())
-    especialidad = perfiles()[pid]["lista_espera"]["especialidad"]
+    especialidad = perfs[pid]["lista_espera"]["especialidad"]
     antes = lista(corte)
     pos_antes = next((p["posicion"] for p in antes["pacientes"] if p["id_paciente"] == pid), None)
     ev = {
@@ -204,8 +231,53 @@ def post_evento(body):
                  "posicion_despues": fila and fila["posicion"], "reevaluado_en_ms": ms, "lista": despues}
 
 
+def catalogo():
+    """Diagnósticos de la lista (especialidad, sub-especialidad, CIE-10, texto), tal como vienen en el registro."""
+    vistos = {}
+    for p in perfiles_combinados()[0].values():
+        le = p["lista_espera"]
+        vistos[le["diagnostico_cie10"]] = {"especialidad": le["especialidad"], "sub_especialidad": le["sub_especialidad"],
+                                          "diagnostico_cie10": le["diagnostico_cie10"], "diagnostico_texto": le["diagnostico_texto"]}
+    return {"diagnosticos": sorted(vistos.values(), key=lambda d: (d["especialidad"], d["diagnostico_cie10"])),
+            "comunas": sorted({p["paciente"]["comuna"] for p in perfiles().values()}),
+            "previsiones": sorted({p["paciente"]["prevision"] for p in perfiles().values()}),
+            "origenes": sorted({p["lista_espera"]["origen_derivacion"] for p in perfiles().values()})}
+
+
+def post_paciente(body):
+    """Ingresa una nueva interconsulta a la lista (la prioridad inicial la define quien prioriza la SIC)."""
+    cat = {d["diagnostico_cie10"]: d for d in catalogo()["diagnosticos"]}
+    dx = cat.get(body.get("diagnostico_cie10"))
+    nombre = (body.get("nombre") or "").strip()
+    try:
+        edad = int(body.get("edad"))
+    except (TypeError, ValueError):
+        edad = -1
+    if not nombre or not dx or body.get("prioridad_inicial") not in puntaje.ORDEN_CAT or not 0 <= edad <= 120 \
+            or body.get("sexo") not in ("F", "M"):
+        return 400, {"error": "requiere nombre, edad (0-120), sexo (F/M), diagnostico_cie10 del catálogo y prioridad_inicial (alta|media|baja)"}
+    corte = date.fromisoformat(body.get("fecha_corte") or FECHA_REFERENCIA.isoformat())
+    ingreso = body.get("fecha_ingreso_lista") or corte.isoformat()
+    pid = "PAC-NUEVO-" + uuid.uuid4().hex[:5].upper()
+    perfil = {
+        "id_paciente": pid,
+        "paciente": {"nombre_fantasia": nombre, "edad": edad, "sexo": body["sexo"], "comuna": body.get("comuna") or "La Florida",
+                     "prevision": body.get("prevision") or "FONASA B", "nivel_socioeconomico": "", "fallecido": False,
+                     "fecha_defuncion": None},
+        "lista_espera": {"id_solicitud": "IC-" + pid, "especialidad": dx["especialidad"], "sub_especialidad": dx["sub_especialidad"],
+                         "diagnostico_cie10": dx["diagnostico_cie10"], "diagnostico_texto": dx["diagnostico_texto"],
+                         "prioridad_inicial": body["prioridad_inicial"], "fecha_ingreso_lista": ingreso,
+                         "origen_derivacion": body.get("origen_derivacion") or "CESFAM/APS", "estado": "en_espera"},
+        "eventos_clinicos": [], "mediciones": [], "citaciones": [],
+    }
+    guardar({"id_paciente": pid, "sk": "paciente#", "perfil": json.dumps(perfil, ensure_ascii=False)})
+    data = lista(corte)
+    fila = next((p for p in data["pacientes"] if p["id_paciente"] == pid), None)
+    return 200, {"id_paciente": pid, "paciente": fila}
+
+
 def post_revision(pid, body):
-    if pid not in perfiles():
+    if pid not in perfiles_combinados()[0]:
         return 404, {"error": "paciente no existe"}
     accion = body.get("accion")
     if accion not in ("confirmar", "ajustar"):
@@ -347,9 +419,16 @@ def handler(event, context=None):
             return _resp(200, {})
         if method == "GET" and partes == ["pacientes"]:
             return _resp(200, lista(_fecha(qs), qs.get("especialidad") or None))
+        if method == "GET" and len(partes) == 3 and partes[0] == "pacientes" and partes[2] == "historia":
+            h = historia(partes[1], _fecha(qs))
+            return _resp(200, h) if h else _resp(404, {"error": "paciente no existe"})
         if method == "GET" and len(partes) == 2 and partes[0] == "pacientes":
             d = detalle(partes[1], _fecha(qs))
             return _resp(200, d) if d else _resp(404, {"error": "paciente no existe"})
+        if method == "POST" and partes == ["pacientes"]:
+            return _resp(*post_paciente(body))
+        if method == "GET" and partes == ["catalogo"]:
+            return _resp(200, catalogo())
         if method == "POST" and partes == ["eventos"]:
             return _resp(*post_evento(body))
         if method == "POST" and len(partes) == 3 and partes[0] == "pacientes" and partes[2] == "revision":
