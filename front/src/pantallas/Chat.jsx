@@ -58,7 +58,7 @@ export function Chat({ pacientes, fecha, onEnviado, onVerLista }) {
 
   return (
     <section aria-label="Chat de seguimiento del paciente" className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px] items-start">
-      <div className="flex flex-col bg-surface-container-lowest border-2 border-outline-variant min-h-[70vh] lg:h-[calc(100vh-220px)]">
+      <div className="flex flex-col bg-surface-container-lowest border-2 border-outline-variant h-[calc(100dvh-200px)] min-h-[440px] lg:h-[calc(100vh-220px)]">
         <div className="flex items-center gap-2 px-4 py-2.5 border-b-2 border-outline-variant flex-wrap">
           <div className="flex-1 min-w-[160px]">
             <div className="font-bold text-[17px]">{e.paciente ? e.paciente.nombre_fantasia : "Seguimiento mientras espera"}</div>

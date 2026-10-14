@@ -158,11 +158,13 @@ export default function App() {
 
       <AnimatePresence>
         {aviso && (
-          <motion.div role="status" initial={{ y: -8, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed top-4 left-1/2 -translate-x-1/2 z-[60] w-max max-w-[calc(100vw-32px)] bg-on-surface text-background px-4 py-2.5 shadow-lg text-[15px] flex flex-wrap items-center gap-2">
-            <Icono n="check_circle" className="text-[20px]" />{aviso.titulo}
-            {aviso.antes != null && <span className="opacity-90">· posición {aviso.antes} → <b>{aviso.despues}</b>{aviso.cat && ` · prioridad ${ETIQUETA[aviso.cat]}`}</span>}
-          </motion.div>
+          <div className="fixed top-4 inset-x-4 z-[60] flex justify-center pointer-events-none">
+            <motion.div role="status" initial={{ y: -8, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ opacity: 0 }}
+              className="max-w-full bg-on-surface text-background px-4 py-2.5 shadow-lg text-[15px] flex flex-wrap items-center gap-2 pointer-events-auto">
+              <Icono n="check_circle" className="text-[20px]" />{aviso.titulo}
+              {aviso.antes != null && <span className="opacity-90">· posición {aviso.antes} → <b>{aviso.despues}</b>{aviso.cat && ` · prioridad ${ETIQUETA[aviso.cat]}`}</span>}
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 
