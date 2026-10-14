@@ -273,3 +273,46 @@ def test_plantilla():
 
 def test_404():
     assert call("GET", "/nada")[0] == 404
+
+# ---------- capa dinámica: criticidad y chat del paciente ----------
+def test_criticidad_senal_temprana():
+    """00001 (PHQ-9 de 4 a 19) tiene señal temprana; 00028 (mejora) no. La señal no cambia la categoría."""
+    _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-01"})
+    p, q = fila(d, "PAC-HLF-00001"), fila(d, "PAC-HLF-00028")
+    assert p["senal_temprana"] and any(s["motivo"] == "mediciones empeorando" for s in p["revision_sugerida"])
+    assert not q["senal_temprana"] and 0 <= q["criticidad"] <= 100
+    assert any(r["factor"] == "criticidad" and "PHQ-9" in r["valor"] for r in p["razones"])
+
+def test_chat_autoreporte_por_validar_y_validar():
+    """El chat propone; la lista cambia recién cuando el equipo valida (los eventos entran a las reglas oficiales)."""
+    pid = "PAC-HLF-00028"
+    _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
+    antes = fila(d, pid)
+    s, r = call("POST", f"/pacientes/{pid}/autoreporte", body={
+        "fecha_corte": "2026-10-13", "tendencia_autoreporte": 1,
+        "eventos": [{"tipo_evento": "hospitalizacion", "subtipo": "ingreso hospitalario", "fecha_evento": "2026-10-10"}],
+        "mediciones": [{"tipo_medicion": "PHQ9", "valor": 15, "unidad": "pts"}]})
+    assert s == 200 and r["autoreporte"]["estado"] == "por_validar" and r["autoreporte"]["mediciones"][0]["fuera_de_rango"]
+    assert r["paciente"]["autoreporte"] and r["paciente"]["categoria"] == antes["categoria"]   # aún no cambia
+    s, v = call("POST", f"/pacientes/{pid}/autoreporte/validar", body={"fecha_corte": "2026-10-13"})
+    assert s == 200 and v["posicion_despues"] < v["posicion_antes"] and v["paciente"]["estado_clinico"] == "descompensado"
+    assert not v["paciente"]["autoreporte"]
+    _, det = call("GET", f"/pacientes/{pid}", {"fecha_corte": "2026-10-13"})
+    assert any(e.get("fuente") == "autoreporte" for e in det["eventos_clinicos"])
+    assert any(m.get("fuente") == "autoreporte" for m in det["mediciones"])
+
+def test_chat_bandera_roja_contactar_hoy_y_vocabulario():
+    pid = "PAC-HLF-00020"
+    s, r = call("POST", f"/pacientes/{pid}/autoreporte", body={"fecha_corte": "2026-10-13", "bandera_roja": "dolor_pecho"})
+    assert s == 200 and r["paciente"]["contactar_hoy"] and r["paciente"]["alerta_chat"]
+    assert r["paciente"]["razones"][0]["factor"] == "autoreporte"
+    s, r = call("POST", f"/pacientes/{pid}/contacto", body={"resultado": "citado", "fecha_corte": "2026-10-13"})
+    assert not r["paciente"]["contactar_hoy"]
+    s, _ = call("POST", f"/pacientes/{pid}/autoreporte", body={"eventos": [{"tipo_evento": "visita_urgencia", "subtipo": "me siento mal"}]})
+    assert s == 400
+    s, r = call("POST", f"/pacientes/{pid}/autoreporte", body={"fecha_corte": "2026-10-13", "texto_libre": "No me hospitalizaron, pero fui a urgencia por descompensación"})
+    assert s == 200 and [e["tipo_evento"] for e in r["autoreporte"]["eventos"]] == ["visita_urgencia"]
+    assert r["autoreporte"]["bandera_roja"]   # el reporte nuevo conserva la bandera del anterior pendiente
+    call("POST", f"/pacientes/{pid}/autoreporte/validar", body={"accion": "descartar", "fecha_corte": "2026-10-13"})
+    _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
+    assert not fila(d, pid)["autoreporte"]     # descartado: no reaparece el reporte reemplazado
