@@ -96,3 +96,28 @@ Cada paciente trae su motivo y la alternativa explica por qué va después, con 
 ## 7. IA (Amazon Bedrock)
 Solo: transcribir fotos de informes, extraer un evento con el vocabulario del registro (citando la frase) y
 redactar explicaciones. Nunca asigna prioridad. El equipo clínico confirma cada evento antes de recalcular.
+
+## 8. Capa dinámica (señal, NO es criterio oficial)
+No cambia la categoría ni el orden MINSAL: solo pide revisión del especialista (`revision_sugerida`) y se muestra en la ficha.
+Código: `lambda/criticidad.py`; se aplica en `app.lista()` sin tocar `puntaje.py`.
+- **Criticidad (0–100):** eventos recientes (cada uno pesa la mitad a los 60 días) + mediciones alteradas o empeorando
+  (nivel, % fuera de rango en 90 días y pendiente en 180 días) − mejora (buena respuesta, reducción de dosis).
+- **Señal temprana "mediciones empeorando":** la medición principal empeora de forma sostenida (pendiente > 0,08 / 90 días,
+  con ≥ 3 mediciones en 180 días).
+- **Por qué:** en el registro, la prioridad inicial no distingue quién se agrava (eventos graves 16 / 15 / 11 % en alta /
+  media / baja), pero la fracción de mediciones fuera de rango sube de 6 % a 28 % en los 60 días previos a un evento grave.
+- **Validación retrospectiva** (7.259 cortes quincenales, solo datos ≤ corte): la señal marca 12 % de los cortes; de ellos
+  55 % tiene un deterioro (descompensación, examen alterado, aumento de dosis u hospitalización) en los 60 días siguientes,
+  vs 16 % base (3,4 veces). **No anticipa bien los eventos graves agudos** (7 % vs 4,5 %): esos llegan sin aviso y los
+  cubren la tabla HLF y el riesgo vital. Debe recalibrarse con datos reales.
+
+## 9. Chat de seguimiento del paciente (autoreporte)
+El paciente responde un flujo guiado (vigencia, cómo se siente, urgencias, fármacos, una medición según la especialidad:
+PHQ-2/PHQ-9, dolor EVA, presión, glicemia o saturación; actividades diarias y asistencia). Todo queda **por validar**:
+- Solo se aceptan eventos y mediciones del vocabulario del registro; el texto libre se lee con las mismas palabras clave y
+  negación que los informes (`informe.por_reglas`).
+- **Bandera roja** (PHQ-9 ítem 9 > 0, dolor de pecho o falta de aire en reposo): el chat muestra SAMU 131, Salud Responde
+  600 360 7777 y *4141, y el paciente pasa a "contactar hoy" (se apaga al registrar el contacto). No cambia la categoría.
+- Al **validar**, los eventos y mediciones entran como registros con `fuente: "autoreporte"` y se aplican las reglas
+  oficiales (tabla HLF, LACE). Al **descartar**, no entran. Un reporte nuevo reemplaza al anterior pendiente sin perder datos.
+- La asistencia y el horario preferido sirven para gestionar box; no cambian la prioridad.

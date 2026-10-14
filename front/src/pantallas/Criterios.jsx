@@ -39,7 +39,15 @@ export function Criterios() {
         <p>Depresión (N°34): 30 días · Hipertensión (N°21): 45 · EPOC (N°38): 45 · Diabetes tipo 2 (N°7): 60 · Asma (N°61): 60 · Epilepsia (N°60): 60 · Artrosis de rodilla, 55 años o más (N°41): 120.</p>
       </Caja>
       <Caja titulo="Lectura automática de informes">
-        <p>Los informes escritos o fotografiados se leen automáticamente (Amazon Bedrock) solo para proponer el evento, citando la frase del documento. Ninguna prioridad cambia sin confirmación del equipo clínico. No se hacen predicciones: las alertas se basan en eventos ya registrados.</p>
+        <p>Los informes escritos o fotografiados se leen automáticamente (Amazon Bedrock) solo para proponer el evento, citando la frase del documento. Ninguna prioridad cambia sin confirmación del equipo clínico.</p>
+      </Caja>
+      <Caja titulo="Capa dinámica: señal temprana (no cambia el orden)">
+        <p className="mb-2">Además de las reglas oficiales, se calcula una <b>criticidad 0–100</b> con los eventos recientes (cada uno pesa la mitad a los 60 días) y las mediciones alteradas o empeorando. Si la medición principal empeora de forma sostenida, el paciente queda con <b>«Mediciones empeorando»</b> y se sugiere revisión del especialista.</p>
+        <p className="text-[14px] text-on-surface-variant">Validación en este registro: 55 % de los pacientes con la señal tuvo un deterioro en los 60 días siguientes, vs 16 % del resto. No anticipa los eventos graves agudos, que cubren la tabla HLF y el riesgo vital. No es un criterio oficial: debe recalibrarse con datos reales.</p>
+      </Caja>
+      <Caja titulo="Chat de seguimiento del paciente">
+        <p className="mb-2">El paciente cuenta cómo está mientras espera: urgencias, hospitalizaciones, cambios de remedios y una medición según su especialidad (PHQ-9, dolor, presión, glicemia o saturación). Todo queda <b>por validar</b>: la prioridad cambia solo cuando el equipo clínico lo valida en la ficha.</p>
+        <p className="text-[14px] text-on-surface-variant">Ante ideas de hacerse daño, dolor de pecho o falta de aire en reposo, el chat muestra SAMU 131, Salud Responde 600 360 7777 y *4141, y el paciente pasa a «Contactar hoy». El chat no diagnostica ni asigna horas.</p>
       </Caja>
     </div>
   );
