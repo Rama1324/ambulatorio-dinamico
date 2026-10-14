@@ -403,8 +403,15 @@ def boxes(corte, especialidad=None):
                     "cupos_libres_hoy": sum(a["libres"] for a in asignaciones), "vitales_sin_cupo": sin_cupo,
                     "sugeridos": [p for a in asignaciones for p in a["pacientes"]][:5]})
     cupo = {p["id_paciente"]: a["id_box"] for e in out for a in e["asignaciones"] for p in a["pacientes"]}
+    # mapa de todos los box del hospital ese día (los que no aparecen en la agenda no tienen bloque asignado)
+    del_dia = {x["id_box"]: x for x in agenda.get(dia, [])}
+    asignados = {a["id_box"]: len(a["pacientes"]) for e in out for a in e["asignaciones"]}
+    todos = sorted({x["id_box"] for filas in agenda.values() for x in filas})
+    mapa = [{"id_box": i, **({**del_dia[i], "libres": del_dia[i]["capacidad"] - del_dia[i]["usados"],
+                              "pacientes_asignados": asignados.get(i, 0)} if i in del_dia else {"especialidad": None})}
+            for i in todos]
     return {"fecha_corte": corte.isoformat(), "dia_agenda": dia, "resumen": b.get("resumen", {}), "especialidades": out,
-            "cupo_por_paciente": cupo}
+            "cupo_por_paciente": cupo, "mapa": mapa}
 
 
 # ---------- HTTP ----------

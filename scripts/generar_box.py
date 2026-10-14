@@ -31,6 +31,7 @@ agenda_dia = defaultdict(list)
 for a in agenda:
     agenda_dia[a["fecha"]].append({"id_box": a["id_box"], "especialidad": a["especialidad"],
                                    "bloque": f'{a["bloque_inicio"]}-{a["bloque_fin"]}',
-                                   "capacidad": int(a["capacidad_cupos"]), "usados": int(a["cupos_usados"])})
+                                   "capacidad": int(a["capacidad_cupos"]), "usados": int(a["cupos_usados"]),
+                                   "sobretiempo_min": int(a["minutos_sobretiempo"])})
 json.dump({"resumen": res, "especialidades": out, "agenda": agenda_dia}, open(os.path.join(D, "box.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 print(json.dumps(res, ensure_ascii=False))

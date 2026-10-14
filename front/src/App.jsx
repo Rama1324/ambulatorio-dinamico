@@ -733,6 +733,8 @@ function Hoy({ vitales, fecha, esp, setEsp, onVer, esApi }) {
   const cupo = b?.cupo_por_paciente || {};
   const conCupo = lista.filter((p) => cupo[p.id_paciente]).length;
   return (
+    <div className="flex flex-col gap-5">
+    {b?.mapa && <MapaBox mapa={b.mapa} dia={b.dia_agenda} esp={esp} setEsp={setEsp} />}
     <div className="grid gap-5 lg:grid-cols-12 items-start">
       <Caja titulo={`Contactar hoy (${lista.length})`} className="lg:col-span-4 border-l-4 border-l-error">
         <p className="text-[13px] text-on-surface-variant mb-2">Descompensación grave después de la interconsulta, sin estabilización posterior, en un diagnóstico de prioridad alta según la tabla del HLF. Llamar hoy a todos, tengan o no cupo de box.</p>
@@ -818,6 +820,49 @@ function Hoy({ vitales, fecha, esp, setEsp, onVer, esApi }) {
         ))}
       </div>
     </div>
+    </div>
+  );
+}
+
+// Mapa de todos los box del día: especialidad, cupos usados/libres y sobretiempo (agenda_box del registro).
+function MapaBox({ mapa, dia, esp, setEsp }) {
+  const activos = mapa.filter((x) => x.especialidad);
+  const libres = activos.reduce((s, x) => s + x.libres, 0);
+  const capacidad = activos.reduce((s, x) => s + x.capacidad, 0);
+  return (
+    <Caja titulo={`Box del día · ${fmt(dia)}`} accion={
+      <span className="text-[13px] text-on-surface-variant">{activos.length} de {mapa.length} box con agenda · <b className="text-hlf">{libres}</b> cupos libres de {capacidad}</span>}>
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-10 gap-2">
+        {mapa.map((x) => {
+          if (!x.especialidad) return (
+            <div key={x.id_box} className="rounded border border-dashed border-outline-variant p-2 text-on-surface-variant">
+              <div className="font-semibold text-[14px]">{x.id_box.replace("BOX-", "Box ")}</div>
+              <div className="text-[12px]">Sin agenda hoy</div>
+            </div>
+          );
+          const pct = Math.round((x.usados / x.capacidad) * 100);
+          const sel = esp === x.especialidad;
+          return (
+            <button key={x.id_box} onClick={() => setEsp(sel ? "Todas" : x.especialidad)} title={`${x.especialidad} · ${x.bloque} · ${x.usados}/${x.capacidad} cupos usados · sobretiempo ${x.sobretiempo_min} min`}
+              className={`text-left rounded border p-2 transition ${sel ? "border-primary ring-2 ring-primary/30 bg-primary/5" : "border-outline-variant hover:bg-surface-container-low"}`}>
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-[14px]">{x.id_box.replace("BOX-", "Box ")}</span>
+                <span className={`text-[12px] font-bold ${x.libres ? "text-hlf" : "text-on-surface-variant"}`}>{x.libres ? `${x.libres} libres` : "lleno"}</span>
+              </div>
+              <div className="text-[12px] text-on-surface-variant truncate">{x.especialidad}</div>
+              <div className="h-1.5 rounded bg-hlf-claro overflow-hidden mt-1.5" aria-label={`${pct}% ocupado`}>
+                <div className="h-full bg-primary" style={{ width: `${pct}%` }} />
+              </div>
+              <div className="flex justify-between text-[11px] text-on-surface-variant mt-1">
+                <span>{x.usados}/{x.capacidad} usados</span>
+                {x.sobretiempo_min > 0 && <span title="Sobretiempo del bloque">+{x.sobretiempo_min} min</span>}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      <p className="text-[12px] text-on-surface-variant mt-2">Barra azul: cupos ya usados · verde: cupos libres que se asignan abajo según la lista. Haga clic en un box para ver su especialidad.</p>
+    </Caja>
   );
 }
 
