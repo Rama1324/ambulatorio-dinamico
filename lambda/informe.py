@@ -112,7 +112,7 @@ def transcribir_foto(imagen_b64, media_type="image/jpeg"):
             messages=[{"role": "user", "content": [
                 {"image": {"format": FORMATOS.get(media_type, "jpeg"), "source": {"bytes": base64.b64decode(imagen_b64)}}},
                 {"text": PROMPT_FOTO}]}],
-            inferenceConfig={"maxTokens": 1500, "temperature": 0},
+            inferenceConfig={"maxTokens": 1500},  # los modelos Claude recientes no aceptan 'temperature'
         )
         return r["output"]["message"]["content"][0]["text"].strip(), "bedrock"
     except Exception as e:
@@ -133,7 +133,7 @@ def extraer(texto):
                 modelId=model_id,
                 system=[{"text": PROMPT.format(vocab=vocab)}],
                 messages=[{"role": "user", "content": [{"text": texto}]}],
-                inferenceConfig={"maxTokens": 300, "temperature": 0},
+                inferenceConfig={"maxTokens": 300},
             )
             crudo = r["output"]["message"]["content"][0]["text"]
             ev = validar(json.loads(crudo[crudo.find("{"): crudo.rfind("}") + 1]), texto)

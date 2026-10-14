@@ -65,7 +65,7 @@ def explicar(paciente):
             modelId=model_id,
             system=[{"text": PROMPT_SISTEMA}],
             messages=[{"role": "user", "content": [{"text": "Datos del paciente:\n" + json.dumps(_datos(paciente), ensure_ascii=False)}]}],
-            inferenceConfig={"maxTokens": 300, "temperature": 0.2},
+            inferenceConfig={"maxTokens": 300},  # los modelos Claude recientes no aceptan 'temperature'
         )
         texto = r["output"]["message"]["content"][0]["text"].strip()
         if "validación clínica" not in texto:
