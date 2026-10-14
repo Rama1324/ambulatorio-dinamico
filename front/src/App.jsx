@@ -79,8 +79,8 @@ export default function App() {
     if (!data) return [];
     const q = busca.trim().toLowerCase();
     return data.pacientes.filter((p) =>
-      (filtroCat === "todas" || (filtroCat === "vital" ? p.riesgo_vital : p.categoria === filtroCat)) &&
-      (!soloPend || p.estado_revision === "pendiente") &&
+      (filtroCat === "todas" || (filtroCat === "vital" ? p.contactar_hoy : filtroCat === "revisar" ? p.revision_sugerida?.length > 0 : p.categoria === filtroCat)) &&
+      (!soloPend || p.estado_revision === "pendiente" || p.estado_revision === "requiere_revision") &&
       (!q || p.nombre_fantasia.toLowerCase().includes(q) || p.id_paciente.toLowerCase().includes(q) || p.diagnostico_texto.toLowerCase().includes(q)));
   }, [data, busca, filtroCat, soloPend]);
 
@@ -90,9 +90,10 @@ export default function App() {
   if (!data) return <div className="p-10 text-lg">{error ? `No se pudo cargar la lista: ${error}` : "Cargando lista de espera…"}</div>;
   const paciente = sel && data.pacientes.find((p) => p.id_paciente === sel);
   const vitales = data.pacientes.filter((p) => p.riesgo_vital);
+  const porContactar = vitales.filter((p) => p.contactar_hoy);
   const altas = data.pacientes.filter((p) => p.categoria === "alta").length;
   const gesVenc = data.pacientes.filter((p) => p.ges?.vencida).length;
-  const pendientes = data.pacientes.filter((p) => p.estado_revision === "pendiente" && p.estado_clinico === "descompensado").length;
+  const pendientes = data.pacientes.filter((p) => p.revision_sugerida?.length > 0).length;
   const pag = filtrados.slice(pagina * POR_PAGINA, (pagina + 1) * POR_PAGINA);
   const paginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA));
 
@@ -117,7 +118,7 @@ export default function App() {
           </div>
         </div>
         <nav className="max-w-[1400px] mx-auto px-6 flex gap-6 text-[14px]">
-          {[["hoy", "Hoy", vitales.length], ["lista", "Lista de espera", null], ["cargar", "Cargar datos", null], ["criterios", "Criterios de priorización", null]].map(([k, t, n]) => (
+          {[["hoy", "Hoy", porContactar.length], ["lista", "Lista de espera", null], ["indicadores", "Indicadores", null], ["cargar", "Cargar datos", null], ["criterios", "Criterios", null]].map(([k, t, n]) => (
             <button key={k} onClick={() => setVista(k)}
               className={`py-2.5 border-b-2 -mb-px ${vista === k ? "border-primary text-primary font-semibold" : "border-transparent text-on-surface-variant hover:text-on-surface"}`}>
               {t}{n ? <span className="ml-1.5 px-1.5 rounded-full bg-error text-on-error text-[12px] font-semibold">{n}</span> : null}
@@ -154,14 +155,15 @@ export default function App() {
 
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
           <Indicador n={data.total} t="Pacientes en espera" />
-          <Indicador n={vitales.length} t="Contactar hoy" tono="rojo" onClick={() => setVista("hoy")} />
+          <Indicador n={porContactar.length} t={`Contactar hoy (de ${vitales.length} con riesgo vital)`} tono={porContactar.length ? "rojo" : null} onClick={() => setVista("hoy")} />
           <Indicador n={altas} t="Prioridad alta" />
-          <Indicador n={pendientes} t="Descompensados sin revisar" tono={pendientes ? "ambar" : null} onClick={() => { setVista("lista"); setSoloPend(true); setFiltroCat("todas"); }} />
+          <Indicador n={pendientes} t="Requieren revisión del especialista" tono={pendientes ? "ambar" : null} onClick={() => { setVista("lista"); setFiltroCat("revisar"); setSoloPend(false); }} />
           <Indicador n={gesVenc} t="Garantías GES vencidas" />
         </div>
 
         {vista === "hoy" && <Hoy vitales={vitales} fecha={fecha} esp={esp} setEsp={setEsp} onVer={abrir} esApi={esApi} />}
         {vista === "criterios" && <Criterios />}
+        {vista === "indicadores" && <Indicadores fecha={fecha} esApi={esApi} data={data} />}
         {vista === "cargar" && <CargarDatos esApi={esApi} onListo={async (r) => {
           await cargar();
           mostrarAviso({ titulo: `Datos cargados: ${r.resumen.pacientes_nuevos} pacientes nuevos, ${r.resumen.pacientes_actualizados} actualizados, ${r.resumen.eventos} eventos` });
@@ -178,7 +180,7 @@ export default function App() {
                 </Filtro>
                 <Filtro label="Prioridad">
                   <select value={filtroCat} onChange={(e) => setFiltroCat(e.target.value)} className="h-9 px-2 border border-outline-variant rounded bg-white">
-                    <option value="todas">Todas</option><option value="vital">Contactar hoy</option><option value="alta">Alta</option><option value="media">Media</option><option value="baja">Baja</option>
+                    <option value="todas">Todas</option><option value="vital">Contactar hoy</option><option value="revisar">Requieren revisión</option><option value="alta">Alta</option><option value="media">Media</option><option value="baja">Baja</option>
                   </select>
                 </Filtro>
                 <label className="flex items-center gap-2 h-9 cursor-pointer select-none"><input type="checkbox" checked={soloPend} onChange={(e) => setSoloPend(e.target.checked)} className="w-4 h-4 accent-[#0f69b4]" />Solo pendientes de revisión</label>
@@ -220,8 +222,11 @@ export default function App() {
                             </td>
                             <td className="py-2.5 px-2 align-top">
                               <div className="flex flex-wrap gap-1">
-                                {p.riesgo_vital && <Marca tono="rojo">Contactar hoy</Marca>}
+                                {p.contactar_hoy && <Marca tono="rojo">Contactar hoy</Marca>}
+                                {p.riesgo_vital && !p.contactar_hoy && <Marca tono="azul" title={p.contacto?.texto}>Contactado</Marca>}
                                 {!p.riesgo_vital && p.estado_clinico === "descompensado" && <Marca tono="rojo">Descompensado</Marca>}
+                                {p.revision_sugerida?.length > 0 && <Marca tono="ambar" title={[...new Set(p.revision_sugerida.map((s) => s.motivo))].join(" · ")}>Revisar</Marca>}
+                                {p.grupo_proteccion && <Marca tono="azul">{p.grupo_proteccion}</Marca>}
                                 {p.estado_clinico === "estabilizado" && <Marca>Estabilizado</Marca>}
                                 {p.ges?.vencida && <Marca tono="azul" title={`GES N°${p.ges.problema}: plazo ${p.ges.plazo_dias} días`}>GES vencida</Marca>}
                                 {p.riesgo_inasistencia && <Marca tono="ambar" title="2 inasistencias consecutivas (causal 8)">2 inasistencias</Marca>}
@@ -233,6 +238,7 @@ export default function App() {
                             <td className="py-2.5 px-3 align-top text-right whitespace-nowrap">{p.dias_espera} días{p.antiguedad_mayor_1_anio && <div className="text-[12px] text-on-surface-variant">más de 1 año</div>}</td>
                             <td className="py-2.5 px-3 align-top text-[13px] whitespace-nowrap">
                               {p.estado_revision === "pendiente" ? <span className="text-on-surface-variant">Pendiente</span>
+                                : p.estado_revision === "requiere_revision" ? <span className="text-ambar font-semibold" title={p.revision_vencida_por}><Icono n="update" className="text-[16px]" /> Revisar de nuevo</span>
                                 : <span className="text-verde font-semibold"><Icono n="check" className="text-[16px]" /> {p.estado_revision === "ajustado" ? "Ajustada" : "Confirmada"}</span>}
                             </td>
                           </motion.tr>
@@ -254,9 +260,16 @@ export default function App() {
 
               {data.excluidos.length > 0 && (
                 <details className="bg-surface-container-lowest border border-outline-variant rounded">
-                  <summary className="px-4 py-2.5 cursor-pointer text-[14px] font-semibold">Egresados de la lista por fallecimiento ({data.excluidos.length})</summary>
+                  <summary className="px-4 py-2.5 cursor-pointer text-[14px] font-semibold">
+                    Egresados de la lista ({data.excluidos.length}): {data.excluidos.filter((e) => e.motivo === "fallecido").length} por fallecimiento · {data.excluidos.filter((e) => e.motivo === "atendido").length} atendidos
+                  </summary>
                   <ul className="px-4 pb-3 text-[13px] text-on-surface-variant">
-                    {data.excluidos.map((e) => <li key={e.id_paciente} className="py-1 border-t border-outline-variant/60">{e.id_paciente} · fallecimiento {fmt(e.fecha_defuncion)} · causal de egreso 9</li>)}
+                    {[...data.excluidos].sort((a, b) => (b.fecha || "").localeCompare(a.fecha || "")).map((e) => (
+                      <li key={e.id_paciente} className="py-1 border-t border-outline-variant/60 flex justify-between gap-2">
+                        <span>{e.nombre_fantasia || e.id_paciente} · {e.especialidad}</span>
+                        <span>{e.motivo === "fallecido" ? `Fallecimiento ${fmt(e.fecha)} · causal 9` : `Atendido en consulta nueva ${fmt(e.fecha)}`}</span>
+                      </li>
+                    ))}
                   </ul>
                 </details>
               )}
@@ -305,6 +318,7 @@ function Novedad({ p, fecha, onListo, onAviso }) {
       const body = { tipo, fecha_corte: fecha, fecha: v.fecha };
       if (tipo === "comorbilidad") Object.assign(body, v.condicion.startsWith("cie:") ? { cie10: v.condicion.slice(4) } : { condicion: v.condicion });
       if (tipo === "diagnostico") body.cie10 = v.cie10;
+      if (tipo === "riesgo") Object.assign(body, { grupo_proteccion: (v.grupo ?? p.grupo_proteccion) || null, acg: (v.acg ?? p.acg) || null });
       const r = await api.postNovedad(p.id_paciente, body);
       setTipo(null); onListo(r);
     } catch (e) { onAviso({ titulo: "No se pudo registrar: " + e.message }); } finally { setEnviando(false); }
@@ -322,6 +336,7 @@ function Novedad({ p, fecha, onListo, onAviso }) {
       <div className="flex flex-wrap gap-2">
         {btn("comorbilidad", "add_circle", "Condición / comorbilidad")}
         {btn("diagnostico", "edit_note", "Cambiar diagnóstico")}
+        {btn("riesgo", "shield_person", "Grupo protección / ACG")}
         {btn("atendido", "how_to_reg", "Atendido")}
         {btn("fallecimiento", "heart_minus", "Fallecimiento", true)}
       </div>
@@ -352,6 +367,23 @@ function Novedad({ p, fecha, onListo, onAviso }) {
           </select>
           <p className="text-[13px] text-on-surface-variant">Se vuelve a aplicar la tabla del HLF, el puntaje LACE y la garantía GES del nuevo diagnóstico. Si cambia la especialidad, el paciente pasa a esa lista.</p>
           <button disabled={!v.cie10 || enviando} onClick={enviar} className="w-full py-2 rounded bg-primary text-on-primary font-semibold disabled:opacity-40">Cambiar y recalcular</button>
+        </div>
+      )}
+
+      {tipo === "riesgo" && (
+        <div className="mt-3 space-y-2 text-[14px]">
+          <Filtro label="Grupo de especial protección (MINSAL, criterio 2 de orden)">
+            <select value={v.grupo ?? p.grupo_proteccion ?? ""} onChange={(e) => setV({ ...v, grupo: e.target.value })} className={campo}>
+              <option value="">Ninguno</option>{cat?.grupos_proteccion.map((g) => <option key={g}>{g}</option>)}
+            </select>
+          </Filtro>
+          <Filtro label="Estratificación de riesgo ACG (ficha Rayen)">
+            <select value={v.acg ?? p.acg ?? ""} onChange={(e) => setV({ ...v, acg: e.target.value })} className={campo}>
+              <option value="">Sin dato</option>{cat?.acg.map((a) => <option key={a.nivel} value={a.nivel}>{a.nivel} · {a.texto}</option>)}
+            </select>
+          </Filtro>
+          <p className="text-[13px] text-on-surface-variant">El grupo de protección ordena dentro de la misma prioridad (MINSAL Ord. 536/2025). El ACG se muestra como dato de riesgo del SSMSO.</p>
+          <button disabled={enviando} onClick={enviar} className="w-full py-2 rounded bg-primary text-on-primary font-semibold disabled:opacity-40">Guardar y recalcular</button>
         </div>
       )}
 
@@ -562,9 +594,10 @@ function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso, onDes
     await onCambio(); onDestacar(p.id_paciente);
     onAviso({ titulo: `${origen}. Lista actualizada`, antes: r.posicion_antes, despues: r.posicion_despues, cat: r.paciente?.categoria });
   });
-  const confirmar = () => correr("rev", async () => { await api.postRevision(p.id_paciente, { accion: "confirmar" }); await onCambio(); onAviso({ titulo: "Prioridad confirmada" }); });
+  const [tab, setTab] = useState("resumen");
+  const confirmar = () => correr("rev", async () => { await api.postRevision(p.id_paciente, { accion: "confirmar", fecha_corte: fecha }); await onCambio(); onAviso({ titulo: "Prioridad confirmada" }); });
   const guardarAjuste = () => correr("rev", async () => {
-    await api.postRevision(p.id_paciente, { accion: "ajustar", categoria_ajustada: ajuste.categoria, motivo: ajuste.motivo });
+    await api.postRevision(p.id_paciente, { accion: "ajustar", categoria_ajustada: ajuste.categoria, motivo: ajuste.motivo, fecha_corte: fecha });
     setAjuste(null); await onCambio(); onAviso({ titulo: "Cambio de prioridad registrado" });
   });
   const pedirResumen = () => correr("ia", async () => setResumen(await api.postExplicar(p.id_paciente, fecha)));
@@ -586,22 +619,37 @@ function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso, onDes
           </div>
           <Prioridad cat={p.categoria} />
         </div>
-        {p.riesgo_vital && <div className="mt-3 p-2.5 rounded bg-error-container text-on-error-container text-[14px] flex gap-2"><Icono n="warning" className="text-[20px]" /><span><b>Contactar hoy.</b> Evaluar derivación a urgencia según criterio médico.</span></div>}
+        {p.contactar_hoy && <div className="mt-3 p-2.5 rounded bg-error-container text-on-error-container text-[14px] flex gap-2"><Icono n="call" className="text-[20px]" /><span><b>Contactar hoy.</b> Evaluar sobrecupo o derivación a urgencia según criterio médico.</span></div>}
+        {p.riesgo_vital && !p.contactar_hoy && p.contacto && <div className="mt-3 p-2.5 rounded bg-hlf-claro text-hlf text-[14px] flex gap-2"><Icono n="task_alt" className="text-[20px]" /><span><b>{p.contacto.texto}</b> · {p.contacto.usuario}{p.contacto.nota && ` · ${p.contacto.nota}`}</span></div>}
+        {p.estado_revision === "requiere_revision" && <div className="mt-2 p-2.5 rounded bg-ambar-container text-ambar text-[14px] flex gap-2"><Icono n="rate_review" className="text-[20px]" /><span><b>Requiere nueva revisión:</b> {p.revision_vencida_por} después de la última revisión.</span></div>}
+        {p.estado_revision === "pendiente" && p.revision_sugerida?.length > 0 && <div className="mt-2 p-2.5 rounded bg-ambar-container/60 text-ambar text-[14px] flex gap-2"><Icono n="rate_review" className="text-[20px]" /><span><b>Revisión sugerida:</b> {[...new Set(p.revision_sugerida.map((s) => s.motivo))].join(" · ")}</span></div>}
         <dl className="mt-3 grid grid-cols-[130px_1fr] gap-y-1 text-[14px]">
           <dt className="text-on-surface-variant">Especialidad</dt><dd>{p.especialidad}</dd>
           <dt className="text-on-surface-variant">Diagnóstico</dt><dd>{p.diagnostico_cie10} · {p.diagnostico_texto}</dd>
           <dt className="text-on-surface-variant">Ingreso a lista</dt><dd>{fmt(p.fecha_ingreso_lista)} ({p.dias_espera} días)</dd>
           <dt className="text-on-surface-variant">Prioridad inicial</dt><dd className="capitalize">{p.prioridad_inicial}</dd>
-          <dt className="text-on-surface-variant">N° en la lista</dt><dd>{p.posicion}</dd>
-          <dt className="text-on-surface-variant">Revisión</dt><dd>{p.estado_revision === "pendiente" ? "Pendiente" : p.estado_revision === "ajustado" ? "Ajustada" : "Confirmada"}</dd>
+          <dt className="text-on-surface-variant">N° en la lista</dt><dd>{p.posicion} de {total}</dd>
+          <dt className="text-on-surface-variant">Revisión</dt><dd><EstadoRevision p={p} /></dd>
+          {(p.grupo_proteccion || p.acg) && <><dt className="text-on-surface-variant">Riesgo social</dt><dd>{[p.grupo_proteccion && `Grupo ${p.grupo_proteccion}`, p.acg && `ACG ${p.acg}`].filter(Boolean).join(" · ")}</dd></>}
+          {p.comorbilidades?.length > 0 && <><dt className="text-on-surface-variant">Comorbilidades</dt><dd>{p.comorbilidades.map((c) => c.nombre).join(", ")}</dd></>}
         </dl>
         {p.categoria !== p.categoria_sistema && <p className="mt-2 text-[13px] text-on-surface-variant">El sistema proponía prioridad {p.categoria_sistema}; el equipo clínico la cambió a {p.categoria}. Motivo: {p.revision?.motivo}</p>}
       </Caja>
 
+      <div className="flex border-b border-outline-variant bg-surface-container-lowest rounded-t text-[14px] sticky top-0 z-10">
+        {[["resumen", "Resumen"], ["puntaje", "Puntaje"], ["registrar", "Registrar"], ["historia", "Historia"]].map(([k, t]) => (
+          <button key={k} onClick={() => setTab(k)} className={`flex-1 py-2 border-b-2 -mb-px ${tab === k ? "border-primary text-primary font-semibold" : "border-transparent text-on-surface-variant"}`}>{t}</button>
+        ))}
+      </div>
+
+      {tab === "resumen" && <>
       <Caja titulo="Cómo se decidió su lugar en la lista">
         <Camino p={p} total={total} />
       </Caja>
+      {esApi && p.riesgo_vital && <Contacto p={p} fecha={fecha} onListo={async (r) => { await onCambio(); onAviso({ titulo: `${p.nombre_fantasia}: ${r.contacto.texto}` }); }} onAviso={onAviso} />}
+      </>}
 
+      {tab === "puntaje" && <>
       <Caja titulo="Puntaje de riesgo clínico (LACE)">
         <BoletaLace lace={p.lace} />
       </Caja>
@@ -621,8 +669,9 @@ function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso, onDes
           ))}
         </ul>
       </Caja>
+      </>}
 
-      {esApi ? (
+      {tab === "resumen" && (esApi ? (
         <>
           <Caja titulo="Decisión clínica">
             <div className="flex gap-2">
@@ -640,20 +689,24 @@ function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso, onDes
             )}
           </Caja>
 
+          <Caja titulo="Resumen para el equipo" accion={<button onClick={pedirResumen} disabled={cargando} className="text-[13px] text-primary font-semibold disabled:opacity-50">{cargando === "ia" ? "Redactando…" : resumen ? "Actualizar" : "Generar"}</button>}>
+            {resumen ? <>
+              <p className="text-[14px] leading-relaxed">{resumen.explicacion_ia}</p>
+              <p className="text-[12px] text-on-surface-variant mt-2">Texto redactado automáticamente a partir del fundamento ({resumen.fuente === "bedrock" ? "Amazon Bedrock" : "plantilla"}). No modifica la prioridad.</p>
+            </> : <p className="text-[13px] text-on-surface-variant">Redacta en lenguaje simple el fundamento, por ejemplo para contactar al paciente.</p>}
+          </Caja>
+        </>
+      ) : <Caja><p className="text-on-surface-variant text-[13px]">Sin conexión al servidor: se muestra la lista precalculada. Registrar decisiones requiere la API.</p></Caja>)}
+
+      {tab === "registrar" && (esApi ? (
+        <>
+          <Informe p={p} fecha={fecha} cargando={cargando} onConfirmar={(ev) => registrarEvento(ev, "Evento del informe registrado")} onAviso={onAviso} />
+
           <Novedad p={p} fecha={fecha} onListo={async (r) => {
             await onCambio();
             onAviso(r.en_lista ? { titulo: `Registrado: ${r.mensaje}`, despues: r.paciente?.posicion, antes: p.posicion, cat: r.paciente?.categoria }
               : { titulo: `${p.nombre_fantasia}: ${r.mensaje}` });
           }} onAviso={onAviso} />
-
-          <Informe p={p} fecha={fecha} cargando={cargando} onConfirmar={(ev) => registrarEvento(ev, "Evento del informe registrado")} onAviso={onAviso} />
-
-          <Caja titulo="Resumen para el equipo" accion={<button onClick={pedirResumen} disabled={cargando} className="text-[13px] text-primary font-semibold disabled:opacity-50">{cargando === "ia" ? "Redactando…" : resumen ? "Actualizar" : "Generar"}</button>}>
-            {resumen ? <>
-              <p className="text-[14px] leading-relaxed">{resumen.explicacion_ia}</p>
-              <p className="text-[12px] text-on-surface-variant mt-2">Texto redactado automáticamente a partir del fundamento ({resumen.fuente === "bedrock" ? "Amazon Bedrock" : "plantilla"}). No modifica la prioridad.</p>
-            </> : <p className="text-[13px] text-on-surface-variant">Redacta en lenguaje simple el fundamento de arriba, por ejemplo para contactar al paciente.</p>}
-          </Caja>
 
           {demo && (
             <Caja titulo="Simular evento (demostración)" className="border-ambar/50">
@@ -666,9 +719,9 @@ function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso, onDes
             </Caja>
           )}
         </>
-      ) : <Caja><p className="text-on-surface-variant text-[13px]">Sin conexión al servidor: se muestra la lista precalculada. Registrar informes y decisiones requiere la API.</p></Caja>}
+      ) : <Caja><p className="text-on-surface-variant text-[13px]">Registrar informes y novedades requiere conexión al servidor.</p></Caja>)}
 
-      <Caja titulo="Historia mientras espera">
+      {tab === "historia" && <Caja titulo="Historia mientras espera">
         <ol className="text-[14px]">
           {timeline.map((x, i) => (
             <li key={i} className={`grid grid-cols-[88px_1fr] gap-2 py-1.5 border-b border-outline-variant/50 ${x.nuevo ? "bg-ambar-container/50" : ""}`}>
@@ -678,8 +731,96 @@ function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso, onDes
           ))}
           {!detalle && <li className="text-on-surface-variant">Cargando…</li>}
         </ol>
-      </Caja>
+      </Caja>}
     </>
+  );
+}
+
+// KPIs fijados por el hospital: reevaluación < 72 h tras un evento · concordancia con experto kappa ≥ 0,70 · cobertura 100%.
+function Indicadores({ fecha, esApi, data }) {
+  const [k, setK] = useState(null);
+  const [err, setErr] = useState(null);
+  useEffect(() => { if (esApi) api.getKpis(fecha).then(setK).catch((e) => setErr(e.message)); }, [fecha, esApi, data]);
+  if (!esApi) return <Caja><p className="text-on-surface-variant">Los indicadores requieren conexión al servidor.</p></Caja>;
+  if (err) return <Caja><p className="text-error">{err}</p></Caja>;
+  if (!k) return <p className="text-on-surface-variant">Calculando indicadores…</p>;
+  const kap = k.concordancia.kappa;
+  const Kpi = ({ titulo, valor, meta, ok, detalle, pct }) => (
+    <section className={`bg-surface-container-lowest border rounded p-4 border-l-4 ${ok === null ? "border-l-outline" : ok ? "border-l-hlf" : "border-l-ambar"} border-outline-variant`}>
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="font-semibold text-[15px]">{titulo}</h3>
+        <span className={`text-[12px] font-semibold rounded px-2 py-0.5 ${ok === null ? "bg-surface-container text-on-surface-variant" : ok ? "bg-hlf-claro text-hlf" : "bg-ambar-container text-ambar"}`}>
+          {ok === null ? "Sin datos suficientes" : ok ? "Cumple" : "Bajo la meta"}</span>
+      </div>
+      <div className="text-[32px] font-bold text-primary-container mt-1">{valor}</div>
+      <div className="text-[13px] text-on-surface-variant">Meta del hospital: {meta}</div>
+      {pct != null && <div className="h-2 rounded bg-surface-container-high overflow-hidden mt-2"><div className="h-full bg-hlf" style={{ width: `${Math.max(0, Math.min(100, pct))}%` }} /></div>}
+      <p className="text-[13px] mt-2">{detalle}</p>
+    </section>
+  );
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="grid gap-4 md:grid-cols-3">
+        <Kpi titulo="Cobertura con criterio común" valor={`${k.cobertura.pct}%`} meta="100% de la lista" ok={k.cobertura.pct === 100} pct={k.cobertura.pct}
+          detalle={`${k.cobertura.evaluados} de ${k.cobertura.en_espera} pacientes evaluados con: ${k.cobertura.criterio}.`} />
+        <Kpi titulo="Reevaluación tras un evento" valor={k.reevaluacion.eventos_registrados ? `${k.reevaluacion.reevaluados_menos_72h}/${k.reevaluacion.eventos_registrados}` : "Inmediata"}
+          meta="< 72 horas" ok={true} pct={100} detalle={k.reevaluacion.detalle} />
+        <Kpi titulo="Concordancia con el especialista (kappa)" valor={kap == null ? "—" : kap.toFixed(2).replace(".", ",")} meta="kappa ≥ 0,70"
+          ok={!k.concordancia.suficiente ? null : kap >= k.concordancia.meta} pct={kap == null ? null : kap * 100}
+          detalle={`${k.concordancia.acuerdos} acuerdos en ${k.concordancia.revisiones} revisiones (confirmar = acuerdo; cambiar prioridad = desacuerdo). ${k.concordancia.suficiente ? "" : "Se necesitan al menos 10 revisiones para un valor confiable."}`} />
+      </div>
+      <div className="grid gap-4 md:grid-cols-3">
+        <Caja titulo="Alertas de riesgo vital">
+          <div className="text-[14px] space-y-1">
+            <div className="flex justify-between"><span>Pacientes con riesgo vital</span><b>{k.alertas.riesgo_vital}</b></div>
+            <div className="flex justify-between"><span>Ya contactados</span><b className="text-hlf">{k.alertas.contactados}</b></div>
+            <div className="flex justify-between"><span>Pendientes de contacto</span><b className={k.alertas.pendientes ? "text-error" : ""}>{k.alertas.pendientes}</b></div>
+          </div>
+        </Caja>
+        <Caja titulo="Revisión del especialista">
+          <div className="text-[14px] space-y-1">
+            <div className="flex justify-between"><span>Pacientes que requieren revisión</span><b className="text-ambar">{k.alertas.revision_sugerida}</b></div>
+            <p className="text-[12px] text-on-surface-variant">Descompensaciones, exámenes alterados o aumentos de dosis posteriores a la interconsulta o a la última revisión.</p>
+          </div>
+        </Caja>
+        <Caja titulo="Egresos de la lista">
+          <div className="text-[14px] space-y-1">
+            <div className="flex justify-between"><span>Por fallecimiento (causal 9)</span><b>{k.egresos.fallecidos}</b></div>
+            <div className="flex justify-between"><span>Atendidos en consulta nueva</span><b>{k.egresos.atendidos}</b></div>
+          </div>
+        </Caja>
+      </div>
+      <p className="text-[12px] text-on-surface-variant">Kappa de Cohen entre la prioridad que propone el sistema y la decisión del especialista al revisar (Alta / Media / Baja). Indicadores al {fmt(k.fecha_corte)}.</p>
+    </div>
+  );
+}
+
+function EstadoRevision({ p }) {
+  if (p.estado_revision === "requiere_revision") return <span className="text-ambar font-semibold">Requiere nueva revisión</span>;
+  if (p.estado_revision === "pendiente") return <span className="text-on-surface-variant">Pendiente{p.revision_sugerida?.length ? " · revisión sugerida" : ""}</span>;
+  return <span className="text-verde font-semibold">{p.estado_revision === "ajustado" ? "Ajustada" : "Confirmada"}{p.revision?.usuario && ` · ${p.revision.usuario}`}</span>;
+}
+
+// Registro del contacto con un paciente 'contactar hoy': reconoce la alerta con un resultado (evita la fatiga de alertas).
+function Contacto({ p, fecha, onListo, onAviso }) {
+  const [nota, setNota] = useState("");
+  const [enviando, setEnviando] = useState(null);
+  const enviar = async (resultado) => {
+    setEnviando(resultado);
+    try { onListo(await api.postContacto(p.id_paciente, { resultado, nota, fecha_corte: fecha })); setNota(""); }
+    catch (e) { onAviso({ titulo: "No se pudo registrar: " + e.message }); } finally { setEnviando(null); }
+  };
+  const ops = [["citado", "Citado (sobrecupo)", "bg-primary text-on-primary"], ["derivado_urgencia", "Derivado a urgencia", "bg-error text-on-error"],
+    ["se_mantiene", "Se mantiene en lista", "border border-outline-variant"], ["no_contesta", "No contesta", "border border-outline-variant"]];
+  return (
+    <Caja titulo="Registrar contacto">
+      {p.contacto && <p className="text-[13px] mb-2">Último: <b>{p.contacto.texto}</b> · {p.contacto.usuario}</p>}
+      <input value={nota} onChange={(e) => setNota(e.target.value)} placeholder="Nota (opcional): p. ej. hora citada, quién contestó" className="w-full h-9 px-2 border border-outline-variant rounded mb-2 text-[14px]" />
+      <div className="grid grid-cols-2 gap-2 text-[13px]">
+        {ops.map(([k, t, c]) => <button key={k} disabled={enviando} onClick={() => enviar(k)} className={`py-2 rounded font-semibold disabled:opacity-50 ${c}`}>{enviando === k ? "…" : t}</button>)}
+      </div>
+      <p className="text-[12px] text-on-surface-variant mt-2">Al registrar el contacto la alerta "contactar hoy" se apaga (salvo "no contesta"). El paciente sigue priorizado.</p>
+    </Caja>
   );
 }
 
@@ -728,7 +869,9 @@ function Camino({ p, total }) {
   if (subio) pasos.push({ t: "Tabla de priorización HLF", v: rz.tabla_oficial.valor.split("→")[0].replaceAll('"', "").trim(), f: rz.tabla_oficial.fuente.replace("Tabla SSMSO 2025, HLF, ", "SSMSO 2025, "), cat: p.categoria_sistema });
   else if (rz.tabla_oficial) pasos.push({ t: "Tabla de priorización HLF", v: "Sin cambio de prioridad", f: "Revisión clínica sugerida", icon: "rate_review" });
   if (p.categoria !== p.categoria_sistema) pasos.push({ t: "Decisión clínica", v: `Prioridad ${p.categoria}`, f: p.revision?.motivo, cat: p.categoria });
-  if (p.riesgo_vital) pasos.push({ t: "Contactar hoy", v: "Riesgo vital", f: "Criterio MINSAL", icon: "call", rojo: true });
+  if (p.riesgo_vital) pasos.push(p.contactar_hoy ? { t: "Contactar hoy", v: "Riesgo vital", f: "Criterio MINSAL", icon: "call", rojo: true }
+    : { t: "Riesgo vital", v: "Contactado", f: p.contacto?.texto, icon: "task_alt", cat: "alta" });
+  if (p.grupo_proteccion) pasos.push({ t: "Grupo de especial protección", v: p.grupo_proteccion, f: "MINSAL criterio 2", icon: "shield_person" });
   pasos.push({ t: "Lugar en la lista", v: `N° ${p.posicion} de ${total}`, f: p.antiguedad_mayor_1_anio ? "Más de 1 año en espera" : `${p.dias_espera} días en espera`, final: true });
   return (
     <div className="flex flex-wrap items-stretch gap-1">
@@ -882,7 +1025,7 @@ function Camara({ onFoto, onCerrar }) {
 
 function NuevoPaciente({ fecha, onCerrar, onListo }) {
   const [cat, setCat] = useState(null);
-  const [f, setF] = useState({ nombre: "", edad: "", sexo: "F", comuna: "La Florida", prevision: "FONASA B", especialidad: "", diagnostico_cie10: "", prioridad_inicial: "media", origen_derivacion: "CESFAM/APS" });
+  const [f, setF] = useState({ nombre: "", edad: "", sexo: "F", comuna: "La Florida", prevision: "FONASA B", especialidad: "", diagnostico_cie10: "", prioridad_inicial: "media", origen_derivacion: "CESFAM/APS", grupo_proteccion: "", acg: "" });
   const [error, setError] = useState(null);
   const [enviando, setEnviando] = useState(false);
   useEffect(() => { api.getCatalogo().then(setCat).catch((e) => setError(e.message)); }, []);
@@ -919,6 +1062,8 @@ function NuevoPaciente({ fecha, onCerrar, onListo }) {
             ))}</div>
           </Filtro>
           <Filtro label="Origen de la derivación"><select value={f.origen_derivacion} onChange={set("origen_derivacion")} className={campo}>{cat?.origenes.map((c) => <option key={c}>{c}</option>)}</select></Filtro>
+          <Filtro label="Grupo de especial protección"><select value={f.grupo_proteccion} onChange={set("grupo_proteccion")} className={campo}><option value="">Ninguno</option>{cat?.grupos_proteccion.map((g) => <option key={g}>{g}</option>)}</select></Filtro>
+          <Filtro label="Riesgo ACG (si se conoce)"><select value={f.acg} onChange={set("acg")} className={campo}><option value="">Sin dato</option>{cat?.acg.map((a) => <option key={a.nivel} value={a.nivel}>{a.nivel} · {a.texto}</option>)}</select></Filtro>
         </div>
         {error && <p className="px-4 text-error text-[13px]">{error}</p>}
         <div className="px-4 py-3 border-t border-outline-variant flex justify-end gap-2">
@@ -983,15 +1128,17 @@ function Hoy({ vitales, fecha, esp, setEsp, onVer, esApi }) {
     api.getBoxes(fecha, esp === "Todas" ? null : esp).then(setB).catch((e) => setErr(e.message));
   }, [fecha, esp, esApi]);
 
-  const lista = vitales.filter((p) => esp === "Todas" || p.especialidad === esp);
+  const todos = vitales.filter((p) => esp === "Todas" || p.especialidad === esp);
+  const lista = [...todos.filter((p) => p.contactar_hoy), ...todos.filter((p) => !p.contactar_hoy)];
+  const pendientes = todos.filter((p) => p.contactar_hoy).length;
   const cupo = b?.cupo_por_paciente || {};
   const conCupo = lista.filter((p) => cupo[p.id_paciente]).length;
   return (
     <div className="flex flex-col gap-5">
     {b?.mapa && <MapaBox mapa={b.mapa} dia={b.dia_agenda} esp={esp} setEsp={setEsp} />}
     <div className="grid gap-5 lg:grid-cols-12 items-start">
-      <Caja titulo={`Contactar hoy (${lista.length})`} className="lg:col-span-4 border-l-4 border-l-error">
-        <p className="text-[13px] text-on-surface-variant mb-2">Descompensación grave después de la interconsulta, sin estabilización posterior, en un diagnóstico de prioridad alta según la tabla del HLF. Llamar hoy a todos, tengan o no cupo de box.</p>
+      <Caja titulo={`Contactar hoy (${pendientes} pendiente${pendientes !== 1 ? "s" : ""} de ${todos.length})`} className="lg:col-span-4 border-l-4 border-l-error">
+        <p className="text-[13px] text-on-surface-variant mb-2">Descompensación grave después de la interconsulta, sin estabilización posterior, en un diagnóstico de prioridad alta según la tabla del HLF. Llamar hoy a todos, tengan o no cupo de box; abra el paciente para registrar el contacto.</p>
         {b && lista.length > 0 && (
           <div className="flex gap-2 mb-3 text-[13px]">
             <span className="flex-1 rounded bg-hlf-claro text-hlf px-2 py-1"><b>{conCupo}</b> con cupo de box hoy</span>
@@ -1001,7 +1148,7 @@ function Hoy({ vitales, fecha, esp, setEsp, onVer, esApi }) {
         {lista.length === 0 && <p className="text-on-surface-variant">Sin pacientes en esta condición{esp !== "Todas" && ` en ${esp}`}.</p>}
         <ul className="divide-y divide-outline-variant/60">
           {lista.map((p) => (
-            <li key={p.id_paciente}>
+            <li key={p.id_paciente} className={p.contactar_hoy ? "" : "opacity-70"}>
               <button onClick={() => onVer(p.id_paciente)} className="w-full text-left py-2 hover:bg-surface-container-low">
                 <div className="flex items-start justify-between gap-2">
                   <div className="font-semibold">{p.nombre_fantasia} <span className="font-normal text-on-surface-variant text-[13px]">· {p.edad} años · N° {p.posicion}</span></div>
@@ -1010,7 +1157,9 @@ function Hoy({ vitales, fecha, esp, setEsp, onVer, esApi }) {
                     : <span className="shrink-0 text-[12px] rounded bg-error-container text-on-error-container px-1.5 py-px font-semibold">Sin cupo hoy</span>)}
                 </div>
                 <div className="text-[13px] text-on-surface-variant">{p.especialidad} · {p.diagnostico_texto}</div>
-                {b && !cupo[p.id_paciente] && <div className="text-[12px] text-error">Evaluar sobrecupo o derivación a urgencia según criterio médico</div>}
+                {p.contactar_hoy
+                  ? (b && !cupo[p.id_paciente] && <div className="text-[12px] text-error">Pendiente de contacto · evaluar sobrecupo o derivación a urgencia</div>)
+                  : <div className="text-[12px] text-hlf font-semibold flex items-center gap-1"><Icono n="task_alt" className="text-[14px]" />{p.contacto?.texto}</div>}
               </button>
             </li>
           ))}

@@ -24,8 +24,8 @@ def test_orden_minsal():
     """Categoría primero; dentro de la categoría, > 1 año en lista primero y luego orden de llegada."""
     _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
     orden = {"alta": 3, "media": 2, "baja": 1}
-    claves = [(-orden[p["categoria"]], not p["riesgo_vital"], -p["lace"]["total"], not p["antiguedad_mayor_1_anio"],
-               -p["dias_espera"]) for p in d["pacientes"]]
+    claves = [(-orden[p["categoria"]], not p["riesgo_vital"], -p["lace"]["total"], not p["grupo_proteccion"],
+               not p["antiguedad_mayor_1_anio"], -p["dias_espera"]) for p in d["pacientes"]]
     assert claves == sorted(claves)
 
 def test_lace_00002():
@@ -199,6 +199,73 @@ def test_novedades_comorbilidad_diagnostico_fallecimiento():
     assert s == 200 and not r["en_lista"]
     _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
     assert pid in [e["id_paciente"] for e in d["excluidos"]] and pid not in [x["id_paciente"] for x in d["pacientes"]]
+
+def _otro(d, **cond):
+    usados = {"PAC-HLF-00001", "PAC-HLF-00002", "PAC-HLF-00020", "PAC-HLF-00028", "PAC-HLF-00003"}
+    return next(p for p in d["pacientes"] if p["id_paciente"].startswith("PAC-HLF") and p["id_paciente"] not in usados
+                and p["estado_revision"] == "pendiente" and all(p[k] == v for k, v in cond.items()))
+
+def test_bug_ajuste_no_tapa_descompensacion_posterior():
+    """Un ajuste a 'baja' no puede ocultar una hospitalización registrada después."""
+    _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
+    p = _otro(d, diagnostico_cie10="I50", categoria="media", estado_clinico="sin_cambios")
+    pid = p["id_paciente"]
+    call("POST", f"/pacientes/{pid}/revision", body={"accion": "ajustar", "categoria_ajustada": "baja", "motivo": "estable", "fecha_corte": "2026-10-13"})
+    _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
+    assert fila(d, pid)["categoria"] == "baja" and fila(d, pid)["estado_revision"] == "ajustado"
+    call("POST", "/eventos", body={"id_paciente": pid, "tipo_evento": "hospitalizacion", "subtipo": "ingreso hospitalario",
+                                   "severidad": "grave", "fecha_corte": "2026-10-13"})
+    _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
+    q = fila(d, pid)
+    assert q["categoria"] == "alta" and q["estado_revision"] == "requiere_revision" and q["revision_sugerida"]
+
+def test_bug_contacto_apaga_alerta():
+    _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
+    p = next(x for x in d["pacientes"] if x["contactar_hoy"] and x["id_paciente"] != "PAC-HLF-00002")
+    s, r = call("POST", f"/pacientes/{p['id_paciente']}/contacto", body={"resultado": "no_contesta", "fecha_corte": "2026-10-13"})
+    assert s == 200 and r["paciente"]["contactar_hoy"]          # no contesta: la alerta sigue
+    s, r = call("POST", f"/pacientes/{p['id_paciente']}/contacto", body={"resultado": "citado", "fecha_corte": "2026-10-13"})
+    assert not r["paciente"]["contactar_hoy"] and r["paciente"]["riesgo_vital"]   # reconocida, sigue priorizado
+
+def test_bug_atendido_respeta_fecha_de_corte():
+    import json as _j
+    perfs = app.perfiles()
+    p = next(x for x in perfs.values() if x["lista_espera"]["estado"] == "atendido")
+    fa = app.puntaje.fecha_atencion(p)
+    antes = (date.fromisoformat(fa) - __import__("datetime").timedelta(days=1)).isoformat()
+    _, d1 = call("GET", "/pacientes", {"fecha_corte": antes})
+    _, d2 = call("GET", "/pacientes", {"fecha_corte": fa})
+    if p["lista_espera"]["fecha_ingreso_lista"] <= antes:
+        assert p["id_paciente"] in [x["id_paciente"] for x in d1["pacientes"]]
+    assert any(e["id_paciente"] == p["id_paciente"] and e["motivo"] == "atendido" for e in d2["excluidos"])
+
+def test_bug_negacion_en_informe():
+    s, d = call("POST", "/pacientes/PAC-HLF-00003/informe", body={"texto": "Evaluado en urgencia, se descarta hospitalización. Alta a domicilio."})
+    assert d["evento"] is None or d["evento"]["tipo_evento"] != "hospitalizacion"
+    s, d = call("POST", "/pacientes/PAC-HLF-00003/informe", body={"texto": "Paciente sin hospitalizaciones previas. Hoy se hospitaliza por disnea."})
+    assert d["evento"]["tipo_evento"] == "hospitalizacion" and "Hoy se hospitaliza" in d["evento"]["evidencia"]
+
+def test_revision_sugerida_deterioro_00001():
+    # antes de la confirmación de test_revision (fecha_corte 13-10): las señales piden revisión
+    _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-01"})
+    motivos = {s["motivo"] for s in fila(d, "PAC-HLF-00001")["revision_sugerida"]}
+    assert {"examen alterado", "aumento de dosis"} <= motivos
+
+def test_kpis_y_kappa():
+    s, k = call("GET", "/kpis", {"fecha_corte": "2026-10-13"})
+    assert s == 200 and k["cobertura"]["pct"] == 100.0 and k["concordancia"]["revisiones"] >= 1
+    assert k["concordancia"]["kappa"] is None or -1 <= k["concordancia"]["kappa"] <= 1
+    assert app._kappa([("alta", "alta"), ("baja", "baja"), ("media", "media")]) == 1.0
+
+def test_grupo_proteccion_ordena_despues_de_lace():
+    _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
+    baja = [x for x in d["pacientes"] if x["categoria"] == "baja" and not x["riesgo_vital"] and x["lace"]["total"] == 0
+            and x["estado_revision"] == "pendiente" and x["id_paciente"].startswith("PAC-HLF")]
+    ultimo = baja[-1]
+    call("POST", f"/pacientes/{ultimo['id_paciente']}/novedad", body={"tipo": "riesgo", "grupo_proteccion": "PRAIS", "acg": "G3"})
+    _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
+    q = fila(d, ultimo["id_paciente"])
+    assert q["grupo_proteccion"] == "PRAIS" and q["acg"] == "G3" and q["posicion"] < ultimo["posicion"]
 
 def test_plantilla():
     r = app.handler({"requestContext": {"http": {"method": "GET"}}, "rawPath": "/plantillas/lista_espera"})

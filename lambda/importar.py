@@ -20,7 +20,7 @@ from xml.etree import ElementTree as ET
 TABLAS = {
     "pacientes": {"nombre": "Pacientes", "requeridas": ["id_paciente", "edad", "sexo"],
                   "campos": ["id_paciente", "nombre_fantasia", "edad", "sexo", "comuna", "prevision", "nivel_socioeconomico",
-                             "fallecido", "fecha_defuncion"]},
+                             "fallecido", "fecha_defuncion", "grupo_proteccion", "acg"]},
     "lista_espera": {"nombre": "Lista de espera", "requeridas": ["id_paciente", "diagnostico_cie10", "prioridad_inicial", "fecha_ingreso_lista"],
                      "campos": ["id_paciente", "id_solicitud", "especialidad", "sub_especialidad", "diagnostico_cie10", "diagnostico_texto",
                                 "prioridad_inicial", "fecha_ingreso_lista", "origen_derivacion", "estado"]},
@@ -45,6 +45,8 @@ SINONIMOS = {
     "nivel_socioeconomico": ["nse", "nivel_socio_economico"],
     "fallecido": ["falleci", "defuncion", "fallecido_si_no"],
     "fecha_defuncion": ["fecha_fallecimiento", "f_defuncion", "fecha_muerte"],
+    "grupo_proteccion": ["grupo_especial", "grupo_especial_proteccion", "prais", "programa_proteccion"],
+    "acg": ["estratificacion", "estratificacion_acg", "riesgo_acg", "acg_riesgo", "grupo_riesgo"],
     "id_solicitud": ["sic", "id_sic", "interconsulta", "n_interconsulta", "folio", "id_ic"],
     "especialidad": ["especialidad_destino", "servicio", "esp"],
     "sub_especialidad": ["subespecialidad", "sub_esp"],
@@ -92,6 +94,10 @@ VOCAB = {
                     "cancelo": "cancelo", "cancelada": "cancelo"},
     "estado": {"en_espera": "en_espera", "espera": "en_espera", "citado": "citado", "atendido": "atendido",
                "egresado": "egresado", "fallecido": "fallecido"},
+    "grupo_proteccion": {"prais": "PRAIS", "si": "PRAIS", "nna": "NNA bajo protección del Estado", "nna_bajo_proteccion_del_estado":
+                         "NNA bajo protección del Estado", "mejor_ninez": "NNA bajo protección del Estado", "sename": "NNA bajo protección del Estado",
+                         "valech": "Valech", "rettig": "Rettig"},
+    "acg": {"g0": "G0", "g1": "G1", "g2": "G2", "g3": "G3", "0": "G0", "1": "G1", "2": "G2", "3": "G3"},
 }
 SI = {"si", "s", "true", "verdadero", "1", "x", "yes"}
 NO = {"no", "n", "false", "falso", "0", "", "none"}
@@ -225,6 +231,8 @@ CONVERSORES = {
     "sexo": lambda v: a_vocab("sexo", v), "prioridad_inicial": lambda v: a_vocab("prioridad_inicial", v),
     "tipo_evento": lambda v: a_vocab("tipo_evento", v), "severidad": lambda v: a_vocab("severidad", v),
     "estado_cita": lambda v: a_vocab("estado_cita", v), "estado": lambda v: a_vocab("estado", v),
+    "grupo_proteccion": lambda v: None if norm(v) in NO else a_vocab("grupo_proteccion", v),
+    "acg": lambda v: a_vocab("acg", str(int(v)) if isinstance(v, float) else v),
     "id_paciente": a_id_paciente,
     "diagnostico_cie10": lambda v: str(v).strip().upper().split(".")[0][:3],
 }
@@ -411,7 +419,7 @@ def combinar(datos, existentes, catalogo):
 def plantilla_csv(tabla):
     """Encabezados + una fila de ejemplo, separados por ';' para que Excel en español los abra en columnas."""
     ejemplos = {
-        "pacientes": ["PAC-0001", "Juan Pérez", "64", "M", "La Florida", "FONASA B", "medio", "no", ""],
+        "pacientes": ["PAC-0001", "Juan Pérez", "64", "M", "La Florida", "FONASA B", "medio", "no", "", "PRAIS", "G3"],
         "lista_espera": ["PAC-0001", "IC-0001", "Cardiología", "Cardiología adulto", "I50", "Insuficiencia cardíaca", "media",
                          "15-03-2026", "CESFAM/APS", "en_espera"],
         "eventos_clinicos": ["PAC-0001", "EV-0001", "02-10-2026", "hospitalizacion", "ingreso hospitalario", "grave", "Descompensación IC"],

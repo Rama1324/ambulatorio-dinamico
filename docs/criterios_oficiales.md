@@ -51,6 +51,27 @@ Validación en el dataset (cortes mensuales feb–jul 2026, evento = urgencia, h
 n = 2.297): LACE 0 → 11,0% · 1 → 13,5% · 2 → 14,4% · 3 → 16,7% · 4–5 → 50% (n = 6). AUC 0,54 (original: 0,68–0,71).
 Gradiente en la dirección esperada pero débil: datos sintéticos; recalibrar con datos reales del HLF.
 
+## 2c. Revisión clínica, alertas y trazabilidad
+- **Una revisión vale hasta el próximo evento.** Si después de confirmar o ajustar llega una descompensación, un examen
+  alterado o un aumento de dosis, el ajuste deja de aplicarse y el paciente queda en "requiere nueva revisión".
+  (Evita que un ajuste a "baja" oculte una hospitalización posterior.)
+- **Revisión sugerida** (no cambia el orden): examen alterado y aumento de dosis — las señales que el documento de proceso
+  del HLF dice que el especialista no ve al priorizar la SIC — y descompensaciones sin fila oficial en la tabla.
+- **"Contactar hoy" se reconoce** registrando el contacto (citado, derivado a urgencia, se mantiene, no contesta). Solo
+  "no contesta" mantiene la alerta. Las alertas repetidas sobre el mismo paciente bajan su aceptación ~30% por alerta
+  (Ancker et al., BMC Med Inform Decis Mak 2017), por eso cada alerta se puede cerrar con un motivo registrado.
+- **Grupos de especial protección** (PRAIS, NNA bajo protección del Estado, Valech, Rettig): criterio 2 de MINSAL, ordena
+  después del criterio médico. **ACG G0–G3** (estratificación SSMSO, ficha Rayen): se muestra, no reordena.
+- **Lectura de informes con negación** estilo NegEx (Chapman 2001; adaptaciones al español NegEx-MES / SpRadNeg):
+  "se descarta hospitalización" no se propone como hospitalización.
+- **Atendidos** salen de la lista desde la fecha de su consulta nueva (no antes), igual que los fallecidos desde su
+  fecha de defunción: se respeta la fecha de corte.
+
+## 2d. KPIs del hospital (pestaña Indicadores)
+Cobertura con criterio común (100%), reevaluación tras un evento (< 72 h: es inmediata) y concordancia con el especialista:
+kappa de Cohen entre la categoría propuesta y la decisión al revisar (confirmar = acuerdo; cambiar = desacuerdo).
+Meta kappa ≥ 0,70; se informa como suficiente desde 10 revisiones.
+
 ## 3. Orden dentro de la categoría
 MINSAL Ord. C N°536 (21-03-2025), recogido en el Manual de Gestión de la Demanda SSMSO 2025 (RE 2679), pág. 13:
 1. Criterio médico (categoría, riesgo vital y puntaje LACE).

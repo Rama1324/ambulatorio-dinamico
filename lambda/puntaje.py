@@ -127,6 +127,29 @@ def estabiliza(ev):
     return ev.get("tipo_evento") == "control_aps" and ev.get("subtipo") in ("estabilización", "buena respuesta")
 
 
+def senal_revision(ev):
+    """Señal de deterioro que no cambia la categoría pero pide revisión del especialista (planteamiento del HLF:
+    exámenes alterados y cambios en el tratamiento farmacológico que el especialista no ve al priorizar la SIC)."""
+    if ev.get("tipo_evento") == "examen_alterado":
+        return "examen alterado"
+    if ev.get("tipo_evento") == "cambio_farmaco" and "aument" in (ev.get("subtipo") or "").lower():
+        return "aumento de dosis"
+    return None
+
+
+GRUPOS_PROTECCION = {"PRAIS", "NNA bajo protección del Estado", "Valech", "Rettig"}  # MINSAL Ord. 536/2025, criterio 2
+ACG_NIVELES = {"G0": "sin clasificación", "G1": "bajo riesgo", "G2": "riesgo intermedio", "G3": "alto riesgo"}  # SSMSO (PDF HLF §4)
+
+
+def fecha_atencion(perfil):
+    """Fecha en que se resolvió la SIC: registrada por el equipo o la primera cita a la que asistió."""
+    le = perfil["lista_espera"]
+    if le.get("fecha_atencion"):
+        return le["fecha_atencion"]
+    asistio = sorted(c["fecha_cita"] for c in perfil.get("citaciones", []) if c["estado_cita"] == "asistio")
+    return asistio[0] if asistio else None
+
+
 def inasistencias_consecutivas(citas):
     """Máximo de inasistencias en citas consecutivas (causal 8: 'dos inasistencias consecutivas').
     Cualquier otra cita entre medio (asistió, reprogramó, canceló) corta la racha."""
@@ -140,10 +163,14 @@ def inasistencias_consecutivas(citas):
 def puntuar(perfil, corte):
     pac, le = perfil["paciente"], perfil["lista_espera"]
     if pac.get("fallecido") and pac.get("fecha_defuncion") and d(pac["fecha_defuncion"]) <= corte:
-        return {"id_paciente": perfil["id_paciente"], "excluido": True, "motivo": "fallecido", "razones": []}
+        return {"id_paciente": perfil["id_paciente"], "excluido": True, "motivo": "fallecido", "fecha": pac["fecha_defuncion"], "razones": []}
     ingreso = d(le["fecha_ingreso_lista"])
     if ingreso > corte:
         return None  # aún no ingresaba a la lista
+    if le.get("estado") == "atendido":  # sale de la lista solo desde la fecha de atención (principio de fecha de corte)
+        fa = fecha_atencion(perfil)
+        if not fa or d(fa) <= corte:
+            return {"id_paciente": perfil["id_paciente"], "excluido": True, "motivo": "atendido", "fecha": fa, "razones": []}
 
     cie = le["diagnostico_cie10"]
     inicial = le["prioridad_inicial"]
@@ -215,6 +242,24 @@ def puntuar(perfil, corte):
                         (f" — VENCIDA hace {dias_espera - ges[2]} días" if vencida else ""),
                         "fuente": f"auge.minsal.cl, problema de salud N°{ges[0]}"})
 
+    # Señales que piden revisión del especialista (no cambian el orden): fecha y momento de registro para compararlas
+    # con la última revisión clínica.
+    senales = [{"motivo": senal_revision(e), "fecha": e["fecha_evento"], "registrado": e.get("registrado")}
+               for e in eventos if senal_revision(e)]
+    if estado == "descompensado" and not fila:
+        senales.append({"motivo": "descompensación sin fila oficial en la tabla HLF", "fecha": ult_desc["fecha_evento"],
+                        "registrado": ult_desc.get("registrado")})
+    if estado == "descompensado" and fila:
+        senales.append({"motivo": "descompensación (prioridad ajustada por tabla HLF)", "fecha": ult_desc["fecha_evento"],
+                        "registrado": ult_desc.get("registrado")})
+
+    grupo = pac.get("grupo_proteccion") if pac.get("grupo_proteccion") in GRUPOS_PROTECCION else None
+    if grupo:
+        razones.append({"factor": "grupo_proteccion", "valor": grupo, "fuente": "MINSAL Ord. 536/2025, criterio 2: grupos de especial protección"})
+    acg = pac.get("acg") if pac.get("acg") in ACG_NIVELES else None
+    if acg:
+        razones.append({"factor": "acg", "valor": f"{acg} · {ACG_NIVELES[acg]}", "fuente": "Estratificación de riesgo ACG (SSMSO, ficha Rayen)"})
+
     citas = [c for c in perfil.get("citaciones", []) if d(c["fecha_cita"]) <= corte]
     no_show = sum(1 for c in citas if c["estado_cita"] == "no_asistio")
     consecutivas = inasistencias_consecutivas(citas)
@@ -229,21 +274,22 @@ def puntuar(perfil, corte):
 
     return {"id_paciente": perfil["id_paciente"], "excluido": False, "categoria": categoria,
             "estado_clinico": estado, "riesgo_vital": riesgo_vital, "lace": lace, "antiguedad_mayor_1_anio": antiguo, "dias_espera": dias_espera,
-            "ges": ges_info, "medicion_alerta": medicion_alerta,
+            "ges": ges_info, "medicion_alerta": medicion_alerta, "senales": senales, "grupo_proteccion": grupo, "acg": acg,
+            "fecha_descompensacion": ult_desc["fecha_evento"] if estado == "descompensado" else None,
+            "registro_descompensacion": ult_desc.get("registrado") if estado == "descompensado" else None,
             "riesgo_inasistencia": consecutivas >= 2, "no_shows": no_show, "razones": razones}
 
 
 def clave_orden(r, categoria=None):
-    """MINSAL: criterio médico (categoría, riesgo vital, puntaje LACE) → (grupos de protección: sin datos)
+    """MINSAL Ord. 536/2025: criterio médico (categoría, riesgo vital, puntaje LACE) → grupos de especial protección
     → antigüedad > 1 año → orden de llegada."""
     return (-ORDEN_CAT[categoria or r["categoria"]], not r["riesgo_vital"], -r["lace"]["total"],
-            not r["antiguedad_mayor_1_anio"], -r["dias_espera"], r["id_paciente"])
+            not r.get("grupo_proteccion"), not r["antiguedad_mayor_1_anio"], -r["dias_espera"], r["id_paciente"])
 
 
 def priorizar(perfiles, corte, especialidad=None):
     out = []
     for p in perfiles:
-        if p["lista_espera"]["estado"] == "atendido": continue
         if especialidad and p["lista_espera"]["especialidad"] != especialidad: continue
         r = puntuar(p, corte)
         if r: out.append(r)

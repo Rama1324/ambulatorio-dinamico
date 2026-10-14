@@ -40,6 +40,7 @@ Tu única tarea es extraer UN evento clínico del texto, usando SOLO este vocabu
 Responde SOLO un JSON: {{"tipo_evento": "...", "subtipo": "...", "fecha_evento": "AAAA-MM-DD o null",
 "evidencia": "frase textual copiada del informe que respalda el evento"}}.
 Si el texto no describe ninguno de esos eventos responde {{"tipo_evento": null}}.
+Un hallazgo negado o descartado ("se descarta hospitalización", "no requiere ingreso", "niega consultas en urgencia") NO es un evento.
 No inventes datos, no diagnostiques, no asignes prioridad."""
 
 
@@ -58,10 +59,24 @@ def _fecha(texto):
     return f"{m.group(6)}-{int(m.group(5)):02d}-{int(m.group(4)):02d}"
 
 
+# Disparadores de negación en español (estilo NegEx, Chapman 2001; adaptaciones NegEx-MES / SpRadNeg): si aparecen en las
+# palabras previas al término dentro de la misma frase, el hallazgo está negado ("se descarta hospitalización").
+NEGACION = re.compile(r"\b(no|sin|niega|negativo|negativa|descarta|descartad[oa]|se\s+descarta|ausencia\s+de|no\s+presenta|"
+                      r"no\s+requiere|no\s+amerita|no\s+se|tampoco|ni|evita|evitar|sin\s+necesidad\s+de)\b", re.IGNORECASE)
+VENTANA_NEGACION = 6  # palabras previas
+
+
+def _negado(texto, inicio):
+    frase_ini = max(texto.rfind(".", 0, inicio), texto.rfind("\n", 0, inicio), texto.rfind(";", 0, inicio)) + 1
+    previas = texto[frase_ini:inicio].split()[-VENTANA_NEGACION:]
+    return bool(NEGACION.search(" ".join(previas)))
+
+
 def por_reglas(texto):
     for patron, tipo, subtipo in PATRONES:
-        m = re.search(patron, texto, re.IGNORECASE)
-        if m:
+        for m in re.finditer(patron, texto, re.IGNORECASE):
+            if _negado(texto, m.start()):
+                continue
             return {"tipo_evento": tipo, "subtipo": subtipo, "severidad": SUBTIPOS[tipo][subtipo],
                     "fecha_evento": _fecha(texto), "evidencia": _frase(texto, m.start(), m.end())}
     return None
