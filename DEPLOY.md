@@ -15,7 +15,7 @@ ambulatorio/
 Terminal 1 (raíz del proyecto):
 ```powershell
 python scripts/generar_box.py data          # crea data/box.json (una vez)
-pip install pytest; python -m pytest -q tests   # deben pasar 9 tests
+pip install pytest; python -m pytest -q tests   # deben pasar 33 tests
 $env:LOCAL="1"; $env:DATA_DIR="data"; python lambda/local_server.py
 ```
 Terminal 2:
@@ -25,6 +25,8 @@ cd front
 npm install
 npm run dev
 ```
+En macOS / Linux: `LOCAL=1 DATA_DIR=data python3 lambda/local_server.py` y `echo "VITE_API_URL=http://localhost:3001" > front/.env.local`.
+
 Abrir http://localhost:5173 → debe decir **"API conectada"**. Probar: elegir paciente → Explicar con IA → Simular evento → Confirmar → pestaña Uso de box.
 (Sin `.env.local` el front corre en modo mock: solo lectura.)
 

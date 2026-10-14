@@ -39,8 +39,9 @@ Pacientes de demo: 00002 (salta del puesto 312 al 18 tras urgencia + hospitaliza
 4. Una revisión clínica vale hasta el próximo evento. "Contactar hoy" se apaga registrando el contacto.
 
 ## Estado actual — todo funciona en local, falta deploy
-- 30 tests (`python -m pytest -q tests`). API: pacientes, eventos, informe (texto/foto), revisión, contacto, novedad, historia, box, KPIs, importar Excel/CSV, plantillas.
-- Front: Hoy (contactar hoy + mapa de box + asignación de cupos), Lista, ficha en pestañas, Indicadores (kappa), Cargar datos, Criterios.
+- 33 tests (`python -m pytest -q tests`). API: pacientes, eventos, informe (texto/foto), revisión, contacto, novedad, historia, box, KPIs, importar Excel/CSV, plantillas, autoreporte del chat (crear / validar).
+- Front: Hoy (contactar hoy + mapa de box + asignación de cupos), Chat del paciente, Lista, ficha en pestañas, Indicadores (kappa), Cargar datos, Criterios. Responsive (barra inferior en móvil), tema claro/oscuro (tokens en `front/src/styles/tokens.css`).
+- Capa dinámica (`lambda/criticidad.py`): criticidad + señal temprana por tendencia de mediciones. **No cambia la categoría ni el orden**; solo pide revisión. El chat propone datos "por validar"; el equipo clínico valida o descarta.
 
 ## Pendiente
 1. Push a GitHub y deploy en AWS (DEPLOY.md) con Model ID de Bedrock.

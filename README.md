@@ -18,13 +18,15 @@ ambulatorio-dinamico/
 ├── lambda/                API (una Lambda Python, sin dependencias externas)
 │   ├── app.py             rutas HTTP, revisiones, contactos, box, KPIs, importación
 │   ├── puntaje.py         motor de priorización (reglas oficiales + LACE)
+│   ├── criticidad.py      capa dinámica: señal temprana por tendencia de mediciones (no cambia el orden)
 │   ├── informe.py         lectura de informes / fotos (Bedrock) con negación
 │   ├── explicar.py        resumen para el equipo (Bedrock o plantilla)
 │   ├── importar.py        Excel/CSV → formato del sistema (sin librerías)
 │   └── local_server.py    corre la API en localhost:3001 sin AWS
-├── front/                 React + Vite + Tailwind (pantallas Hoy, Lista, Indicadores, Cargar datos, Criterios)
-│   └── src/               App.jsx (interfaz), api.js (llamadas), mock.json (demo sin API)
-├── tests/test_api.py      30 pruebas de punta a punta
+├── front/                 React + Vite + Tailwind, responsive (barra inferior en móvil, tema claro/oscuro)
+│   └── src/               App.jsx (navegación) · pantallas/ (Hoy, Chat, Lista, Ficha, Cargar datos, Indicadores,
+│                          Criterios) · components/ · lib/ (chatFlujo.js, constantes) · styles/tokens.css · api.js · mock.json
+├── tests/test_api.py      33 pruebas de punta a punta
 ├── scripts/               generar_box.py (agenda de box) · generar_mock.py (datos de demo del front)
 ├── docs/                  criterios_oficiales.md (todas las fuentes) · arquitectura.md · prompts_bedrock.md
 ├── data/                  perfiles.json, box.json y CSV (NO van a git)

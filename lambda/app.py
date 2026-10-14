@@ -7,6 +7,8 @@ Rutas (ver contrato.md):
   POST /pacientes/{id}/revision
   POST /pacientes/{id}/informe   (lee texto libre y propone un evento; no guarda)
   POST /pacientes/{id}/explicar
+  POST /pacientes/{id}/autoreporte           (chat del paciente: guarda datos por validar; no cambia la prioridad)
+  POST /pacientes/{id}/autoreporte/validar   (el equipo valida o descarta → los eventos y mediciones entran al cálculo)
   GET  /boxes?especialidad=X&fecha_corte=...
 
 Modo local: LOCAL=1 y DATA_DIR=ruta a data/ (lee perfiles.json y box.json, guarda en memoria).
@@ -19,6 +21,7 @@ import time
 import uuid
 from datetime import date, datetime, timedelta, timezone
 
+import criticidad
 import puntaje
 import explicar
 import importar
@@ -124,6 +127,13 @@ def perfiles_combinados():
         e = json.loads(ev["evento"])
         if not any(x.get("id_evento") == e["id_evento"] for x in out[pid].setdefault("eventos_clinicos", [])):
             out[pid]["eventos_clinicos"].append(e)
+    for r in regs:
+        if not r["sk"].startswith("medicion#") or r["id_paciente"] not in out:
+            continue
+        pid = r["id_paciente"]
+        if pid in base and out[pid] is base[pid]:
+            out[pid] = copy.deepcopy(base[pid])
+        out[pid].setdefault("mediciones", []).append(json.loads(r["medicion"]))
     ult_rev = {r["id_paciente"]: json.loads(r["revision"]) for r in revisiones}
     return out, ult_rev
 
@@ -210,8 +220,16 @@ def lista(corte, especialidad=None, perfs=None, revs=None):
     ant, _ = puntaje.priorizar(vals, corte - timedelta(days=14), especialidad)
     pos_ant = {r["id_paciente"]: r["posicion"] for r in ant}
     cont = contactos()
-    pacientes = [_enriquecer(r, perfs[r["id_paciente"]], revs.get(r["id_paciente"]), pos_ant.get(r["id_paciente"]), corte,
-                             cont.get(r["id_paciente"])) for r in activos]
+    auto = autoreportes_pendientes(corte)
+    pacientes = []
+    for r in activos:
+        crit = criticidad.calcular(perfs[r["id_paciente"]], corte)
+        if crit["senal_temprana"]:
+            r["senales"] = r.get("senales", []) + [{"motivo": "mediciones empeorando", "fecha": crit["fecha_senal"], "registrado": None}]
+        p = _enriquecer(r, perfs[r["id_paciente"]], revs.get(r["id_paciente"]), pos_ant.get(r["id_paciente"]), corte,
+                        cont.get(r["id_paciente"]))
+        _capa_dinamica(p, crit, auto.get(r["id_paciente"]), cont.get(r["id_paciente"]))
+        pacientes.append(p)
     # el equipo clínico decide: si ajustó la categoría, esa manda en el orden (mismos criterios MINSAL)
     pacientes.sort(key=puntaje.clave_orden)
     for i, p in enumerate(pacientes, 1):
@@ -221,6 +239,36 @@ def lista(corte, especialidad=None, perfs=None, revs=None):
             "especialidad": perfs[r["id_paciente"]]["lista_espera"].get("especialidad"),
             "fecha_defuncion": perfs[r["id_paciente"]]["paciente"].get("fecha_defuncion")} for r in excluidos]
     return {"fecha_corte": corte.isoformat(), "total": len(pacientes), "pacientes": pacientes, "excluidos": exc}
+
+
+def _capa_dinamica(p, crit, ar, contacto):
+    """Criticidad (señal, no cambia el orden) y autoreporte del chat pendiente de validar."""
+    p["criticidad"] = crit["criticidad"]
+    p["senal_temprana"] = crit["senal_temprana"]
+    p["criticidad_detalle"] = crit["componentes"]
+    if crit["razon"]:
+        p["razones"].append({"factor": "criticidad", "valor": f'{crit["criticidad"]}/100 · {crit["razon"]}', "fuente": criticidad.FUENTE})
+    p["autoreporte"] = ar
+    p["alerta_chat"] = False
+    if ar and ar.get("bandera_roja"):
+        reconocida = contacto and contacto["resultado"] != "no_contesta" and contacto["fecha"] >= ar["fecha"]
+        p["alerta_chat"] = True
+        if not reconocida:
+            p["contactar_hoy"] = True
+        p["razones"].insert(0, {"factor": "autoreporte", "valor": f'Bandera roja en el chat: {ar["bandera_roja"]} (por validar)',
+                                "fuente": "Autoreporte del paciente (chat de seguimiento)"})
+
+
+def autoreportes_pendientes(corte):
+    """Último autoreporte del chat por paciente que el equipo aún no valida ni descarta (fecha de corte ≥ la del reporte)."""
+    regs = registros()
+    cerrados = {json.loads(r["revision_autoreporte"])["id_autoreporte"] for r in regs if r["sk"].startswith("autoreporte_rev#")}
+    out = {}
+    for r in sorted((r for r in regs if r["sk"].startswith("autoreporte#")), key=lambda r: r["sk"]):
+        a = json.loads(r["autoreporte"])
+        if a["id_autoreporte"] not in cerrados and a["fecha_corte"] <= corte.isoformat():
+            out[r["id_paciente"]] = a
+    return out
 
 
 def detalle(pid, corte):
@@ -487,6 +535,9 @@ def kpis(corte):
         "alertas": {"riesgo_vital": len(vitales), "contactados": sum(not p["contactar_hoy"] for p in vitales),
                     "pendientes": sum(p["contactar_hoy"] for p in vitales),
                     "revision_sugerida": sum(bool(p["revision_sugerida"]) for p in data["pacientes"])},
+        "capa_dinamica": {"senal_temprana": sum(p["senal_temprana"] for p in data["pacientes"]),
+                          "chat_por_validar": sum(bool(p["autoreporte"]) for p in data["pacientes"]),
+                          "alertas_chat": sum(p["alerta_chat"] for p in data["pacientes"])},
         "egresos": {"fallecidos": sum(e["motivo"] == "fallecido" for e in data["excluidos"]),
                     "atendidos": sum(e["motivo"] == "atendido" for e in data["excluidos"])},
     }
@@ -617,6 +668,95 @@ def boxes(corte, especialidad=None):
 
 
 # ---------- HTTP ----------
+BANDERAS_ROJAS = {"ideacion_suicida": "ideas de hacerse daño (PHQ-9 ítem 9)", "dolor_pecho": "dolor de pecho en reposo o con poco esfuerzo",
+                  "disnea_reposo": "falta de aire en reposo"}
+
+
+def post_autoreporte(pid, body):
+    """Chat de seguimiento: guarda lo que reporta el paciente como 'por validar'. Solo vocabulario del registro."""
+    perfs = perfiles_combinados()[0]
+    if pid not in perfs:
+        return 404, {"error": "paciente no existe"}
+    corte = date.fromisoformat(body.get("fecha_corte") or FECHA_REFERENCIA.isoformat())
+    eventos = []
+    for e in body.get("eventos", []):
+        if e.get("tipo_evento") not in informe.SUBTIPOS or e.get("subtipo") not in informe.SUBTIPOS[e["tipo_evento"]]:
+            return 400, {"error": f"evento fuera del vocabulario del registro: {e.get('tipo_evento')} / {e.get('subtipo')}"}
+        eventos.append({"tipo_evento": e["tipo_evento"], "subtipo": e["subtipo"], "severidad": informe.SUBTIPOS[e["tipo_evento"]][e["subtipo"]],
+                        "fecha_evento": e.get("fecha_evento") or corte.isoformat(), "evidencia": e.get("evidencia", "")})
+    texto = (body.get("texto_libre") or "").strip()
+    if texto:
+        ev = informe.por_reglas(texto)  # mismas palabras clave y negación que la lectura de informes
+        if ev and not any(x["tipo_evento"] == ev["tipo_evento"] and x["subtipo"] == ev["subtipo"] for x in eventos):
+            ev["fecha_evento"] = ev.get("fecha_evento") or corte.isoformat()
+            eventos.append(ev)
+    mediciones = []
+    for m in body.get("mediciones", []):
+        t = m.get("tipo_medicion")
+        try:
+            v = float(m.get("valor"))
+        except (TypeError, ValueError):
+            v = None
+        if t not in importar.RANGOS or v is None:
+            return 400, {"error": f"medición no válida: {t} = {m.get('valor')}"}
+        lo, hi = importar.RANGOS[t]
+        mediciones.append({"tipo_medicion": t, "valor": v, "unidad": m.get("unidad", ""), "fuera_de_rango": not (lo <= v <= hi),
+                           "fecha_medicion": m.get("fecha_medicion") or corte.isoformat()})
+    bandera = body.get("bandera_roja")
+    if bandera and bandera not in BANDERAS_ROJAS:
+        return 400, {"error": f"bandera_roja debe ser una de {sorted(BANDERAS_ROJAS)}"}
+    # Un reporte nuevo reemplaza al anterior aún pendiente y conserva lo que ese traía (nada se pierde sin validar).
+    previo = autoreportes_pendientes(corte).get(pid)
+    if previo:
+        eventos = previo["eventos"] + eventos
+        mediciones = previo["mediciones"] + mediciones
+    a = {"id_autoreporte": "AR-" + uuid.uuid4().hex[:8].upper(), "fecha_corte": corte.isoformat(),
+         "fecha": datetime.now(timezone.utc).isoformat(timespec="microseconds"), "fuente": "autoreporte", "estado": "por_validar",
+         "eventos": eventos, "mediciones": mediciones,
+         "bandera_roja": BANDERAS_ROJAS.get(bandera) if bandera else (previo or {}).get("bandera_roja"),
+         "tendencia_autoreporte": body.get("tendencia_autoreporte"), "limitacion_funcional": body.get("limitacion_funcional"),
+         "egreso_propuesto": bool(body.get("egreso_propuesto")), "confirma_asistencia": body.get("confirma_asistencia"),
+         "preferencia_horario": body.get("preferencia_horario"), "resumen": body.get("resumen", [])[:12]}
+    if previo:
+        rev = {"id_autoreporte": previo["id_autoreporte"], "accion": "reemplazado", "por": a["id_autoreporte"], "fecha": a["fecha"]}
+        guardar({"id_paciente": pid, "sk": f"autoreporte_rev#{a['fecha']}", "revision_autoreporte": json.dumps(rev, ensure_ascii=False)})
+    guardar({"id_paciente": pid, "sk": f"autoreporte#{a['fecha']}", "autoreporte": json.dumps(a, ensure_ascii=False)})
+    fila = next((p for p in lista(corte)["pacientes"] if p["id_paciente"] == pid), None)
+    return 200, {"id_paciente": pid, "autoreporte": a, "paciente": fila}
+
+
+def post_validar_autoreporte(pid, body):
+    """El equipo clínico valida (los datos entran al cálculo como eventos/mediciones) o descarta el autoreporte."""
+    t0 = time.perf_counter()
+    accion = body.get("accion", "validar")
+    if accion not in ("validar", "descartar"):
+        return 400, {"error": "accion debe ser 'validar' o 'descartar'"}
+    corte = date.fromisoformat(body.get("fecha_corte") or FECHA_REFERENCIA.isoformat())
+    a = autoreportes_pendientes(corte).get(pid)
+    if not a or (body.get("id_autoreporte") and body["id_autoreporte"] != a["id_autoreporte"]):
+        return 404, {"error": "no hay un autoreporte pendiente para este paciente"}
+    antes = lista(corte)
+    pos_antes = next((p["posicion"] for p in antes["pacientes"] if p["id_paciente"] == pid), None)
+    ahora = datetime.now(timezone.utc).isoformat(timespec="microseconds")
+    usuario = body.get("usuario", "equipo clínico")
+    if accion == "validar":
+        for e in a["eventos"]:
+            ev = {"id_evento": "EV-CHAT-" + uuid.uuid4().hex[:6].upper(), "fecha_evento": e["fecha_evento"], "tipo_evento": e["tipo_evento"],
+                  "subtipo": e["subtipo"], "severidad": e["severidad"],
+                  "detalle": "Autoreporte del paciente (chat), validado" + (f': "{e["evidencia"]}"' if e.get("evidencia") else ""),
+                  "fuente": "autoreporte", "registrado": ahora, "usuario": usuario}
+            guardar({"id_paciente": pid, "sk": f"evento#{ev['fecha_evento']}#{ev['id_evento']}", "evento": json.dumps(ev, ensure_ascii=False)})
+        for i, m in enumerate(a["mediciones"]):
+            guardar({"id_paciente": pid, "sk": f"medicion#{m['fecha_medicion']}#{a['id_autoreporte']}#{i}",
+                     "medicion": json.dumps({**m, "fuente": "autoreporte"}, ensure_ascii=False)})
+    rev = {"id_autoreporte": a["id_autoreporte"], "accion": accion, "usuario": usuario, "fecha": ahora}
+    guardar({"id_paciente": pid, "sk": f"autoreporte_rev#{ahora}", "revision_autoreporte": json.dumps(rev, ensure_ascii=False)})
+    despues = lista(corte)
+    fila = next((p for p in despues["pacientes"] if p["id_paciente"] == pid), None)
+    return 200, {"revision": rev, "paciente": fila, "posicion_antes": pos_antes, "posicion_despues": fila and fila["posicion"],
+                 "reevaluado_en_ms": round((time.perf_counter() - t0) * 1000)}
+
+
 CORS = {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "content-type",
         "Access-Control-Allow-Methods": "GET,POST,OPTIONS", "Content-Type": "application/json"}
 
@@ -660,6 +800,10 @@ def handler(event, context=None):
             return _resp(*post_revision(partes[1], body))
         if method == "POST" and len(partes) == 3 and partes[0] == "pacientes" and partes[2] == "contacto":
             return _resp(*post_contacto(partes[1], body))
+        if method == "POST" and len(partes) == 3 and partes[0] == "pacientes" and partes[2] == "autoreporte":
+            return _resp(*post_autoreporte(partes[1], body))
+        if method == "POST" and len(partes) == 4 and partes[0] == "pacientes" and partes[2:] == ["autoreporte", "validar"]:
+            return _resp(*post_validar_autoreporte(partes[1], body))
         if method == "GET" and partes == ["kpis"]:
             return _resp(200, kpis(_fecha(qs)))
         if method == "POST" and len(partes) == 3 and partes[0] == "pacientes" and partes[2] == "novedad":

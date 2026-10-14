@@ -42,6 +42,11 @@ Fecha de referencia del dataset: 2026-10-13. Todo cálculo usa una `fecha_corte`
 - `ges`: `null` o `{"problema": 34, "nombre": "Depresión", "plazo_dias": 30, "vencida": true}`.
 - `razones[].factor`: `prioridad_inicial | evento | tabla_oficial | dias_espera | ges | medicion`. Cada razón trae su `fuente`.
 - `estado_revision`: `pendiente | confirmado | ajustado`.
+- Campos de la capa dinámica (no cambian el orden; ver `docs/criterios_oficiales.md` §8–9):
+  `criticidad` (0–100), `senal_temprana` (bool, agrega "mediciones empeorando" a `revision_sugerida`),
+  `criticidad_detalle` (`eventos`, `mediciones`, `mejora`, `tendencia`, `fuera_de_rango_90d`),
+  `autoreporte` (último reporte del chat por validar o `null`) y `alerta_chat` (bandera roja del chat → `contactar_hoy`).
+  `razones[].factor` suma `criticidad` y `autoreporte`.
 
 ## Endpoints
 | Método | Ruta | Qué hace |
@@ -61,6 +66,8 @@ Fecha de referencia del dataset: 2026-10-13. Todo cálculo usa una `fecha_corte`
 | POST | `/pacientes/{id}/revision` | `{"accion":"confirmar"}` o `{"accion":"ajustar","categoria_ajustada":"alta|media|baja","motivo":"..."}` |
 | POST | `/pacientes/{id}/explicar` | Bedrock redacta `explicacion_ia` desde `razones` |
 | GET | `/boxes?fecha_corte=AAAA-MM-DD` | Ocupación de box por especialidad + pacientes sugeridos para cupos libres |
+| POST | `/pacientes/{id}/autoreporte` | Chat del paciente: `eventos[]`, `mediciones[]`, `bandera_roja` (`ideacion_suicida` · `dolor_pecho` · `disnea_reposo`), `texto_libre`, `tendencia_autoreporte`, `limitacion_funcional`, `egreso_propuesto`, `confirma_asistencia`, `preferencia_horario`, `resumen[]`. Queda **por validar**; no cambia la prioridad |
+| POST | `/pacientes/{id}/autoreporte/validar` | `{"accion":"validar"\|"descartar"}`: al validar, sus eventos y mediciones entran al cálculo con `fuente: "autoreporte"`. Responde como `POST /eventos` (`posicion_antes`, `posicion_despues`, `paciente`) |
 | GET | `/health` | `{ok, pacientes}` para verificar el deploy |
 
 ## Respuesta POST /pacientes/{id}/informe
