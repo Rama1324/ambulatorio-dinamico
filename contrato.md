@@ -3,87 +3,82 @@
 Fuente de datos: `perfiles.json` (500 pacientes, ya consolidado) en S3. **Nunca en el repo.**
 Fecha de referencia del dataset: 2026-10-13. Todo cálculo usa una `fecha_corte`: solo registros con fecha ≤ corte.
 
-## Reglas de negocio
-- `estado = atendido` → no aparece en la lista.
-- Fallecido con `fecha_defuncion <= corte` → sale de la lista y va a `excluidos` (control de exclusión).
-- El puntaje lo calculan **reglas** (`lambda/puntaje.py`). Bedrock **solo explica**: nunca decide la prioridad.
-- El médico confirma o ajusta. Toda confirmación queda registrada (trazabilidad).
-- Las inasistencias **no bajan la prioridad clínica**: generan la bandera `riesgo_inasistencia` para la gestión de box.
+## Reglas de negocio (todas con fuente; detalle en `docs/criterios_oficiales.md`)
+- **Categoría** `alta | media | baja`: parte de `prioridad_inicial` (la que asignó el especialista a la SIC). Si después de la SIC
+  hay un evento de descompensación o severidad grave, sube a la fila "descompensada / no controlada" de la
+  **Tabla SSMSO 2025 del HLF** (págs. 84–111). El sistema **nunca baja** una categoría: eso lo hace el equipo clínico con motivo.
+- **Orden** (MINSAL Ord. 536/2025): categoría → (grupos de especial protección: sin datos) → antigüedad > 1 año → orden de llegada.
+- **Banderas** (no cambian el orden): `ges.vencida` (garantía GES, auge.minsal.cl) · `riesgo_inasistencia` = 2 inasistencias
+  consecutivas, posible causal 8 · `medicion_alerta` = última medición fuera de rango.
+- `estado = atendido` → no aparece. Fallecido con `fecha_defuncion <= corte` → `excluidos` (causal 9).
+- No hay puntaje numérico ni pesos: el LLM (Bedrock) **solo** explica, transcribe fotos y extrae eventos de informes.
 
 ## Objeto Paciente (respuesta de la API)
 ```json
 {
-  "id_paciente": "PAC-HLF-00002",
-  "nombre_fantasia": "Paciente Violeta 002",
-  "edad": 49,
-  "sexo": "M",
-  "comuna": "Puente Alto",
-  "especialidad": "Cardiología",
-  "diagnostico_cie10": "I20",
-  "diagnostico_texto": "Angina de pecho",
-  "prioridad_inicial": "baja",
-  "fecha_ingreso_lista": "2025-11-08",
-  "dias_espera": 275,
-  "puntaje": 59.6,
+  "id_paciente": "PAC-HLF-00002", "nombre_fantasia": "Paciente Violeta 002", "edad": 49, "sexo": "M", "comuna": "Puente Alto",
+  "especialidad": "Cardiología", "diagnostico_cie10": "I20", "diagnostico_texto": "Angina de pecho",
+  "prioridad_inicial": "baja", "fecha_ingreso_lista": "2025-11-08", "dias_espera": 275,
   "categoria": "alta",
-  "posicion": 18,
-  "posicion_anterior": 312,
-  "riesgo_inasistencia": false,
+  "categoria_sistema": "alta",
+  "estado_clinico": "descompensado",
+  "antiguedad_mayor_1_anio": false,
+  "ges": null,
+  "medicion_alerta": true,
+  "posicion": 41, "posicion_anterior": 313,
+  "riesgo_inasistencia": false, "no_shows": 0,
   "razones": [
-    {"factor": "prioridad_inicial", "valor": "baja", "puntos": 5},
-    {"factor": "dias_espera", "valor": 275, "puntos": 11.3},
-    {"factor": "evento", "valor": "hospitalizacion: ingreso hospitalario (2026-08-06)", "puntos": 22},
-    {"factor": "evento", "valor": "visita_urgencia: triage ESI 2 (2026-07-20)", "puntos": 18},
-    {"factor": "mediciones_fuera_rango", "valor": "1/3 últimas", "puntos": 3.3}
+    {"factor": "prioridad_inicial", "valor": "baja (asignada por el especialista al priorizar la SIC)", "fuente": "Priorización de la SIC (CUD / Thalamus)"},
+    {"factor": "evento", "valor": "hospitalizacion: ingreso hospitalario (grave, 2026-08-06)", "fuente": "Registro clínico posterior a la SIC"},
+    {"factor": "tabla_oficial", "valor": "\"Angina inestable\" → prioridad alta", "fuente": "Tabla SSMSO 2025, HLF, pág. 85"},
+    {"factor": "dias_espera", "valor": "275 días en lista", "fuente": "MINSAL Ord. 536/2025: antigüedad > 1 año"}
   ],
-  "explicacion_ia": "Texto generado por Bedrock a partir de 'razones' (null hasta que se pida)",
+  "explicacion_ia": null,
   "estado_revision": "pendiente"
 }
 ```
-`categoria`: critica ≥70 · alta 50–69 · media 30–49 · baja <30
-`estado_revision`: pendiente | confirmado | ajustado
+- `categoria` = la vigente (si el equipo ajustó, la ajustada). `categoria_sistema` = la que proponen las reglas.
+- `estado_clinico`: `sin_cambios | descompensado | estabilizado` (eventos posteriores al ingreso a la lista).
+- `ges`: `null` o `{"problema": 34, "nombre": "Depresión", "plazo_dias": 30, "vencida": true}`.
+- `razones[].factor`: `prioridad_inicial | evento | tabla_oficial | dias_espera | ges | medicion`. Cada razón trae su `fuente`.
+- `estado_revision`: `pendiente | confirmado | ajustado`.
 
 ## Endpoints
 | Método | Ruta | Qué hace |
 |---|---|---|
 | GET | `/pacientes?especialidad=X&fecha_corte=AAAA-MM-DD` | Lista priorizada + `excluidos` |
 | GET | `/pacientes/{id}` | Perfil completo con línea de tiempo (eventos, mediciones, citas) |
-| POST | `/pacientes/{id}/explicar` | Bedrock genera `explicacion_ia` desde `razones` |
-| POST | `/eventos` | Agrega un evento (body = objeto evento) → recalcula → devuelve la lista nueva |
-| POST | `/pacientes/{id}/revision` | Médico confirma o ajusta. Body: `{"accion":"confirmar"|"ajustar","puntaje_ajustado":n,"motivo":"..."}` |
+| POST | `/pacientes/{id}/informe` | Lee un informe (`texto` o `imagen_base64` + `media_type`) y **propone** un evento. No guarda nada |
+| POST | `/eventos` | Agrega un evento confirmado → recalcula → devuelve la lista nueva |
+| POST | `/pacientes/{id}/revision` | `{"accion":"confirmar"}` o `{"accion":"ajustar","categoria_ajustada":"alta|media|baja","motivo":"..."}` |
+| POST | `/pacientes/{id}/explicar` | Bedrock redacta `explicacion_ia` desde `razones` |
 | GET | `/boxes?fecha_corte=AAAA-MM-DD` | Ocupación de box por especialidad + pacientes sugeridos para cupos libres |
 | GET | `/health` | `{ok, pacientes}` para verificar el deploy |
 
-Respuesta de GET `/pacientes`:
+## Respuesta POST /pacientes/{id}/informe
 ```json
-{ "fecha_corte": "2026-10-13", "total": 409, "pacientes": [ ... ], "excluidos": [ {"id_paciente": "PAC-HLF-00009", "motivo": "fallecido"} ] }
+{ "id_paciente": "PAC-HLF-00020", "fuente": "bedrock | reglas", "transcripcion": "texto leído de la foto o null",
+  "evento": {"tipo_evento": "hospitalizacion", "subtipo": "ingreso hospitalario", "severidad": "grave",
+             "fecha_evento": "2026-10-12", "evidencia": "Se hospitaliza en cardiología"},
+  "categoria_actual": "media", "categoria_propuesta": "alta",
+  "razones_propuestas": [{"factor": "tabla_oficial", "valor": "\"Angina inestable\" → prioridad alta", "fuente": "Tabla SSMSO 2025, HLF, pág. 85"}] }
 ```
+Si no se detecta evento: `"evento": null` y `"mensaje"`. Leer fotos requiere `MODEL_ID` (Bedrock con visión).
+Para confirmar, el front envía ese `evento` a `POST /eventos`.
 
 ## Respuesta POST /eventos
 ```json
-{ "evento": {...}, "paciente": { ...objeto Paciente... }, "posicion_antes": 26, "posicion_despues": 4,
-  "reevaluado_en_ms": 6, "lista": { ...misma forma que GET /pacientes... } }
+{ "evento": {...}, "paciente": { ...objeto Paciente... }, "posicion_antes": 231, "posicion_despues": 49,
+  "reevaluado_en_ms": 11, "lista": { ...misma forma que GET /pacientes, sin filtro de especialidad... } }
 ```
-Body opcional extra: `fecha_corte` (default 2026-10-13); `fecha_evento` default = fecha_corte.
-
-## Respuesta POST /pacientes/{id}/explicar
-```json
-{ "id_paciente": "PAC-HLF-00002", "explicacion_ia": "texto", "fuente": "bedrock" }
-```
-`fuente` = `plantilla` si Bedrock no está configurado o falla.
-
-## Objeto Evento (POST /eventos)
-```json
-{ "id_paciente": "PAC-HLF-00020", "fecha_evento": "2026-10-14", "tipo_evento": "visita_urgencia",
-  "subtipo": "triage ESI 2", "severidad": "grave", "detalle": "triage ESI 2 (Cardiología)" }
-```
+Body: `id_paciente`, `tipo_evento`, `subtipo`, `severidad`, `detalle` y opcionales `fecha_corte` (default 2026-10-13), `fecha_evento` (default = fecha_corte).
 `tipo_evento`: cambio_farmaco · control_aps · examen_alterado · hospitalizacion · visita_urgencia
 
 ## Pacientes de demo (del dataset)
 | ID | Historia | Qué muestra |
 |---|---|---|
-| PAC-HLF-00002 | baja → urgencia ESI 2 + hospitalización | Salta del puesto 312 al 18 |
-| PAC-HLF-00001 | PHQ-9 sube de 4 a 19 | Deterioro progresivo |
-| PAC-HLF-00028 | buena respuesta + reducción de dosis | Baja al final |
-| PAC-HLF-00020 | 2 inasistencias | Bandera de riesgo de inasistencia |
-| PAC-HLF-00009 | fallece 2026-09-08 | Sale de la lista |
+| PAC-HLF-00002 | Angina, baja → urgencia ESI 2 (20-jul) + hospitalización | Puesto 313 → 45: pasa a Alta por "Angina inestable" (pág. 85) y se mantiene |
+| PAC-HLF-00001 | Depresión, PHQ-9 de 4 a 19 | Alta desde el inicio; GES N°34 vencida; medición fuera de rango |
+| PAC-HLF-00028 | Buena respuesta + reducción de dosis | Estabilizado al fondo; el sistema no la baja solo |
+| PAC-HLF-00020 | 2 inasistencias consecutivas | Bandera causal 8 sin bajar su prioridad |
+| PAC-HLF-00009 | Fallece 2026-09-08 | Sale de la lista (causal 9) |

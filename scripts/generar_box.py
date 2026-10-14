@@ -26,5 +26,11 @@ tc = sum(v["cupos_totales"] for v in out.values()); tu = sum(v["cupos_usados"] f
 res = {"periodo": f'{min(a["fecha"] for a in agenda)} a {max(a["fecha"] for a in agenda)}',
        "cupos_totales": tc, "cupos_usados": tu, "cupos_libres": tc - tu, "ocupacion_pct": round(tu / tc * 100, 1),
        "citas": len(citas), "inasistencias": sum(1 for c in citas if c["estado_cita"] == "no_asistio")}
-json.dump({"resumen": res, "especialidades": out}, open(os.path.join(D, "box.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+# agenda diaria por box (para asignar los cupos libres de un día a pacientes de la lista)
+agenda_dia = defaultdict(list)
+for a in agenda:
+    agenda_dia[a["fecha"]].append({"id_box": a["id_box"], "especialidad": a["especialidad"],
+                                   "bloque": f'{a["bloque_inicio"]}-{a["bloque_fin"]}',
+                                   "capacidad": int(a["capacidad_cupos"]), "usados": int(a["cupos_usados"])})
+json.dump({"resumen": res, "especialidades": out, "agenda": agenda_dia}, open(os.path.join(D, "box.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 print(json.dumps(res, ensure_ascii=False))

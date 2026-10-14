@@ -32,31 +32,32 @@ export async function getPacientes(fechaCorte, especialidad) {
     if (especialidad) q.set("especialidad", especialidad);
     return req("GET", `/pacientes?${q}`);
   }
+  // mock.json lo genera scripts/generar_mock.py con el mismo motor de reglas que la API
   const m = await mock();
   const corte = m.cortes[fechaCorte] || m.cortes[m.fechas[m.fechas.length - 1]];
   const idx = m.fechas.indexOf(fechaCorte);
-  const ant = idx > 0 ? Object.fromEntries(m.cortes[m.fechas[idx - 1]].pacientes.map((r) => [r.id, r.pos])) : {};
+  const ant = idx > 0 ? Object.fromEntries(m.cortes[m.fechas[idx - 1]].pacientes.map((r) => [r.id_paciente, r.posicion])) : {};
   let pacientes = corte.pacientes.map((r) => ({
-    ...m.pacientes[r.id], puntaje: r.p, categoria: r.c, posicion: r.pos, posicion_anterior: ant[r.id] ?? null,
-    riesgo_inasistencia: r.ri, razones: r.r, estado_revision: "pendiente",
+    ...m.pacientes[r.id_paciente], ...r, posicion_anterior: ant[r.id_paciente] ?? null, estado_revision: "pendiente",
   }));
   if (especialidad) pacientes = pacientes.filter((p) => p.especialidad === especialidad);
-  return { fecha_corte: fechaCorte, total: pacientes.length, pacientes,
-           excluidos: corte.excluidos.map((id) => ({ id_paciente: id, motivo: "fallecido" })) };
+  return { fecha_corte: fechaCorte, total: pacientes.length, pacientes, excluidos: corte.excluidos };
 }
 
 export async function getPaciente(id, fechaCorte) {
   if (MODO === "api") return req("GET", `/pacientes/${id}?fecha_corte=${fechaCorte}`);
   const m = await mock();
-  const p = m.pacientes[id];
+  const t = m.timeline[id];
   return {
-    eventos_clinicos: p.eventos.filter((e) => e.fecha_evento <= fechaCorte),
-    mediciones: p.mediciones.filter((x) => x.fecha_medicion <= fechaCorte),
-    citaciones: [],
+    eventos_clinicos: t.eventos.filter((e) => e.fecha_evento <= fechaCorte),
+    mediciones: t.mediciones.filter((x) => x.fecha_medicion <= fechaCorte),
+    citaciones: t.citaciones.filter((c) => c.fecha_cita <= fechaCorte),
   };
 }
 
 export const postEvento = (evento) => req("POST", "/eventos", evento);
 export const postRevision = (id, body) => req("POST", `/pacientes/${id}/revision`, body);
+export const postInforme = (id, body) => req("POST", `/pacientes/${id}/informe`, body);
 export const postExplicar = (id, fechaCorte) => req("POST", `/pacientes/${id}/explicar`, { fecha_corte: fechaCorte });
-export const getBoxes = (fechaCorte) => req("GET", `/boxes?fecha_corte=${fechaCorte}`);
+export const getBoxes = (fechaCorte, especialidad) =>
+  req("GET", `/boxes?${new URLSearchParams({ fecha_corte: fechaCorte, ...(especialidad ? { especialidad } : {}) })}`);

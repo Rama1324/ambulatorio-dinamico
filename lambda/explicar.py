@@ -13,19 +13,11 @@ Redactas para un gestor de salud y el equipo clínico.
 
 Reglas estrictas:
 - Usa SOLO los datos entregados. No inventes síntomas, exámenes, fechas ni diagnósticos.
-- No decides la prioridad ni recomiendas tratamientos: explicas por qué el sistema propone ese puntaje.
+- No decides la prioridad ni recomiendas tratamientos: explicas por qué el sistema propone esa categoría.
 - Máximo 3 frases cortas, en español de Chile, sin markdown ni viñetas.
-- Menciona las 1–3 señales que más pesan (con su fecha si la hay) y si la tendencia es de deterioro, estabilidad o mejora.
+- Menciona el evento que cambió la categoría (con su fecha) y la fuente oficial que se aplicó, si las hay.
 - Termina siempre con: "Propuesta sujeta a validación clínica."
 """
-
-NOMBRES = {
-    "prioridad_inicial": "prioridad inicial",
-    "dias_espera": "días en espera",
-    "plazo_vencido": "plazo clínico vencido",
-    "mediciones_fuera_rango": "mediciones fuera de rango",
-    "edad": "edad",
-}
 
 
 def _datos(p):
@@ -34,8 +26,8 @@ def _datos(p):
         "especialidad": p.get("especialidad"),
         "diagnostico": f'{p.get("diagnostico_cie10")} {p.get("diagnostico_texto")}',
         "prioridad_inicial": p.get("prioridad_inicial"),
-        "puntaje": p.get("puntaje"),
         "categoria": p.get("categoria"),
+        "estado_clinico": p.get("estado_clinico"),
         "posicion_actual": p.get("posicion"),
         "posicion_hace_14_dias": p.get("posicion_anterior"),
         "riesgo_inasistencia": p.get("riesgo_inasistencia"),
@@ -44,22 +36,20 @@ def _datos(p):
 
 
 def plantilla(p):
-    razones = sorted([r for r in p.get("razones", []) if r["factor"] != "prioridad_inicial"],
-                     key=lambda r: -abs(r["puntos"]))[:3]
-    partes = []
-    for r in razones:
-        nombre = r["valor"] if r["factor"] == "evento" else f'{NOMBRES.get(r["factor"], r["factor"])}: {r["valor"]}'
-        partes.append(f'{nombre} ({"+" if r["puntos"] >= 0 else ""}{r["puntos"]} pts)')
-    ant, act = p.get("posicion_anterior"), p.get("posicion")
-    mov = ""
-    if ant and act:
-        mov = f" Subió {ant - act} puestos en 14 días." if ant > act else (f" Bajó {act - ant} puestos en 14 días." if act > ant else "")
-    texto = (f'Prioridad {p.get("categoria")} ({p.get("puntaje")} pts) para {p.get("diagnostico_texto")}, '
-             f'con prioridad inicial {p.get("prioridad_inicial")}. Principales factores: {"; ".join(partes) or "sin señales registradas"}.'
-             f'{mov}')
+    rz = {r["factor"]: r for r in p.get("razones", [])}
+    partes = [f'Prioridad {p.get("categoria")} para {p.get("diagnostico_texto")} '
+              f'(inicial {p.get("prioridad_inicial")}).']
+    if "evento" in rz:
+        partes.append(f'Evento posterior a la interconsulta: {rz["evento"]["valor"]}.')
+    if "tabla_oficial" in rz:
+        partes.append(f'Según {rz["tabla_oficial"]["fuente"]}: {rz["tabla_oficial"]["valor"]}.')
+    if p.get("antiguedad_mayor_1_anio"):
+        partes.append("Lleva más de 1 año en lista (criterio MINSAL).")
+    if "ges" in rz and (p.get("ges") or {}).get("vencida"):
+        partes.append(f'{rz["ges"]["valor"]}.')
     if p.get("riesgo_inasistencia"):
-        texto += " Tiene inasistencias previas: confirmar asistencia por teléfono."
-    return texto + " Propuesta sujeta a validación clínica."
+        partes.append("Tiene 2 inasistencias consecutivas: confirmar asistencia por teléfono.")
+    return " ".join(partes) + " Propuesta sujeta a validación clínica."
 
 
 def explicar(paciente):

@@ -5,6 +5,7 @@ Rutas (ver contrato.md):
   GET  /pacientes/{id}?fecha_corte=...
   POST /eventos
   POST /pacientes/{id}/revision
+  POST /pacientes/{id}/informe   (lee texto libre y propone un evento; no guarda)
   POST /pacientes/{id}/explicar
   GET  /boxes?especialidad=X&fecha_corte=...
 
@@ -20,6 +21,7 @@ from datetime import date, datetime, timedelta, timezone
 
 import puntaje
 import explicar
+import informe
 
 LOCAL = os.environ.get("LOCAL") == "1"
 FECHA_REFERENCIA = date(2026, 10, 13)
@@ -117,8 +119,13 @@ def _enriquecer(r, perfil, revision, pos_ant):
         "prioridad_inicial": le["prioridad_inicial"],
         "fecha_ingreso_lista": le["fecha_ingreso_lista"],
         "dias_espera": r["dias_espera"],
-        "puntaje": r["puntaje"],
         "categoria": r["categoria"],
+        "categoria_sistema": r["categoria"],
+        "estado_clinico": r["estado_clinico"],
+        "riesgo_vital": r["riesgo_vital"],
+        "antiguedad_mayor_1_anio": r["antiguedad_mayor_1_anio"],
+        "ges": r["ges"],
+        "medicion_alerta": r["medicion_alerta"],
         "posicion": r.get("posicion"),
         "posicion_anterior": pos_ant,
         "riesgo_inasistencia": r["riesgo_inasistencia"],
@@ -130,8 +137,8 @@ def _enriquecer(r, perfil, revision, pos_ant):
     if revision:
         out["estado_revision"] = revision["accion"] == "ajustar" and "ajustado" or "confirmado"
         out["revision"] = revision
-        if revision.get("puntaje_ajustado") is not None:
-            out["puntaje_ajustado"] = revision["puntaje_ajustado"]
+        if revision.get("categoria_ajustada"):
+            out["categoria"] = revision["categoria_ajustada"]  # el equipo clínico decide
     return out
 
 
@@ -143,8 +150,8 @@ def lista(corte, especialidad=None, perfs=None, revs=None):
     ant, _ = puntaje.priorizar(vals, corte - timedelta(days=14), especialidad)
     pos_ant = {r["id_paciente"]: r["posicion"] for r in ant}
     pacientes = [_enriquecer(r, perfs[r["id_paciente"]], revs.get(r["id_paciente"]), pos_ant.get(r["id_paciente"])) for r in activos]
-    # el equipo clínico decide: si ajustó el puntaje, ese valor manda en el orden
-    pacientes.sort(key=lambda p: -(p["puntaje_ajustado"] if p.get("puntaje_ajustado") is not None else p["puntaje"]))
+    # el equipo clínico decide: si ajustó la categoría, esa manda en el orden (mismos criterios MINSAL)
+    pacientes.sort(key=puntaje.clave_orden)
     for i, p in enumerate(pacientes, 1):
         p["posicion"] = i
     exc = [{"id_paciente": r["id_paciente"], "motivo": r["motivo"],
@@ -179,7 +186,7 @@ def post_evento(body):
         return 400, {"error": f"tipo_evento debe ser uno de {sorted(TIPOS_EVENTO)}"}
     corte = date.fromisoformat(body.get("fecha_corte") or FECHA_REFERENCIA.isoformat())
     especialidad = perfiles()[pid]["lista_espera"]["especialidad"]
-    antes = lista(corte, especialidad)
+    antes = lista(corte)
     pos_antes = next((p["posicion"] for p in antes["pacientes"] if p["id_paciente"] == pid), None)
     ev = {
         "id_evento": "EV-DEMO-" + uuid.uuid4().hex[:6].upper(),
@@ -190,7 +197,7 @@ def post_evento(body):
         "detalle": body.get("detalle") or f'{body.get("subtipo", body["tipo_evento"])} ({especialidad})',
     }
     guardar({"id_paciente": pid, "sk": f"evento#{ev['fecha_evento']}#{ev['id_evento']}", "evento": json.dumps(ev, ensure_ascii=False)})
-    despues = lista(corte, especialidad)
+    despues = lista(corte)
     fila = next((p for p in despues["pacientes"] if p["id_paciente"] == pid), None)
     ms = round((time.perf_counter() - t0) * 1000)
     return 200, {"evento": ev, "paciente": fila, "posicion_antes": pos_antes,
@@ -203,12 +210,45 @@ def post_revision(pid, body):
     accion = body.get("accion")
     if accion not in ("confirmar", "ajustar"):
         return 400, {"error": "accion debe ser 'confirmar' o 'ajustar'"}
-    if accion == "ajustar" and (body.get("puntaje_ajustado") is None or not body.get("motivo")):
-        return 400, {"error": "ajustar requiere puntaje_ajustado y motivo"}
-    rev = {"accion": accion, "puntaje_ajustado": body.get("puntaje_ajustado"), "motivo": body.get("motivo"),
+    if accion == "ajustar" and (body.get("categoria_ajustada") not in puntaje.ORDEN_CAT or not body.get("motivo")):
+        return 400, {"error": "ajustar requiere categoria_ajustada (alta|media|baja) y motivo"}
+    rev = {"accion": accion, "categoria_ajustada": body.get("categoria_ajustada") if accion == "ajustar" else None,
+           "motivo": body.get("motivo"),
            "usuario": body.get("usuario", "equipo clínico"), "fecha": datetime.now(timezone.utc).isoformat(timespec="seconds")}
     guardar({"id_paciente": pid, "sk": f"revision#{rev['fecha']}", "revision": json.dumps(rev, ensure_ascii=False)})
     return 200, {"id_paciente": pid, "revision": rev}
+
+
+def post_informe(pid, body):
+    """Lee un informe en texto libre y PROPONE un evento. No guarda nada: el equipo clínico confirma con POST /eventos."""
+    perfs, _ = perfiles_combinados()
+    if pid not in perfs:
+        return 404, {"error": "paciente no existe"}
+    texto = (body.get("texto") or "").strip()
+    transcripcion = None
+    if not texto and body.get("imagen_base64"):  # foto de un informe en papel
+        texto, motivo = informe.transcribir_foto(body["imagen_base64"], body.get("media_type", "image/jpeg"))
+        if not texto:
+            return 200, {"id_paciente": pid, "evento": None, "fuente": None, "mensaje": motivo}
+        transcripcion = texto
+    if not texto:
+        return 400, {"error": "falta 'texto' o 'imagen_base64' del informe"}
+    corte = date.fromisoformat(body.get("fecha_corte") or FECHA_REFERENCIA.isoformat())
+    ev, fuente = informe.extraer(texto)
+    if not ev:
+        return 200, {"id_paciente": pid, "evento": None, "fuente": fuente, "transcripcion": transcripcion,
+                     "mensaje": "No encontré en el informe un evento del registro (urgencia, hospitalización, examen alterado, "
+                                "cambio de fármaco o control APS). Puedes registrarlo manualmente."}
+    if not ev.get("fecha_evento") or ev["fecha_evento"] > corte.isoformat():
+        ev["fecha_evento"] = corte.isoformat()
+    antes = puntaje.puntuar(perfs[pid], corte)
+    sim = copy.deepcopy(perfs[pid])
+    sim.setdefault("eventos_clinicos", []).append({**ev, "id_evento": "EV-PREVIEW", "detalle": ev["evidencia"]})
+    despues = puntaje.puntuar(sim, corte)
+    return 200, {"id_paciente": pid, "evento": ev, "fuente": fuente, "transcripcion": transcripcion,
+                 "categoria_actual": antes and antes.get("categoria"),
+                 "categoria_propuesta": despues and despues.get("categoria"),
+                 "razones_propuestas": despues and [r for r in despues["razones"] if r["factor"] == "tabla_oficial"]}
 
 
 def post_explicar(pid, corte):
@@ -219,23 +259,71 @@ def post_explicar(pid, corte):
     return 200, {"id_paciente": pid, "explicacion_ia": texto, "fuente": fuente}
 
 
+def _motivo(p):
+    """Por qué este paciente va primero, en una frase y con su fuente."""
+    rz = {r["factor"]: r for r in p["razones"]}
+    if p["categoria"] != p["categoria_sistema"]:
+        return f'prioridad {p["categoria"]} ajustada por el equipo clínico: {p["revision"].get("motivo")}'
+    if p["riesgo_vital"]:
+        return f'RIESGO VITAL — {rz["riesgo_vital"]["valor"]}'
+    tabla = rz.get("tabla_oficial", {}).get("valor", "")
+    if p["estado_clinico"] == "descompensado" and tabla.startswith('"') and "no supera" not in tabla:
+        return f'{rz["evento"]["valor"]} → {tabla} ({rz["tabla_oficial"]["fuente"]})'
+    extra = " y lleva más de 1 año en lista" if p["antiguedad_mayor_1_anio"] else ""
+    if p["estado_clinico"] == "descompensado":
+        extra += f'; evento reciente para revisión clínica ({rz["evento"]["valor"]})'
+    return f'prioridad {p["categoria"]}{extra}'
+
+
+def _diferencia(a, b):
+    """Por qué b va después de a, usando los mismos criterios de orden (MINSAL Ord. 536/2025)."""
+    if a["categoria"] != b["categoria"]:
+        return f'{b["nombre_fantasia"]} está en prioridad {b["categoria"]}; {a["nombre_fantasia"]} en {a["categoria"]}'
+    if a["riesgo_vital"] != b["riesgo_vital"]:
+        return f'misma prioridad, pero {a["nombre_fantasia"]} tiene alerta de riesgo vital'
+    if a["antiguedad_mayor_1_anio"] != b["antiguedad_mayor_1_anio"]:
+        return f'misma prioridad, pero {a["nombre_fantasia"]} lleva más de 1 año en lista (criterio MINSAL)'
+    dif = a["dias_espera"] - b["dias_espera"]
+    return (f'misma prioridad {a["categoria"]}; {b["nombre_fantasia"]} lleva {dif} día{"s" if dif != 1 else ""} menos '
+            f'en lista (orden de llegada)' if dif else "misma prioridad y misma fecha de ingreso")
+
+
+def _fila_box(p):
+    return {"id_paciente": p["id_paciente"], "nombre_fantasia": p["nombre_fantasia"], "posicion": p["posicion"],
+            "categoria": p["categoria"], "diagnostico_texto": p["diagnostico_texto"], "dias_espera": p["dias_espera"],
+            "riesgo_inasistencia": p["riesgo_inasistencia"], "riesgo_vital": p["riesgo_vital"], "motivo": _motivo(p),
+            "accion": "contactar hoy y evaluar derivación a urgencia" if p["riesgo_vital"]
+            else "confirmar asistencia por teléfono (2 inasistencias seguidas)" if p["riesgo_inasistencia"] else "citar"}
+
+
 def boxes(corte, especialidad=None):
     b = box_data()
     data = lista(corte)
-    sugerencias = {}
+    cola = {}
     for p in data["pacientes"]:
-        sugerencias.setdefault(p["especialidad"], []).append(p)
+        cola.setdefault(p["especialidad"], []).append(p)
+    agenda = b.get("agenda", {})
+    dia = max((f for f in agenda if f <= corte.isoformat()), default=None)  # último día hábil con agenda ≤ corte
     out = []
     for esp, info in sorted(b.get("especialidades", {}).items()):
         if especialidad and esp != especialidad:
             continue
-        libres_dia = info.get("cupos_libres_promedio_dia", 0)
-        top = sugerencias.get(esp, [])[: max(1, round(libres_dia))]
-        out.append({**info, "especialidad": esp,
-                    "sugeridos": [{"id_paciente": p["id_paciente"], "nombre_fantasia": p["nombre_fantasia"],
-                                   "puntaje": p["puntaje"], "categoria": p["categoria"],
-                                   "accion": "confirmar por teléfono" if p["riesgo_inasistencia"] else "citar"} for p in top]})
-    return {"fecha_corte": corte.isoformat(), "resumen": b.get("resumen", {}), "especialidades": out}
+        pendientes = list(cola.get(esp, []))
+        asignaciones = []
+        for bx in sorted((x for x in agenda.get(dia, []) if x["especialidad"] == esp), key=lambda x: x["id_box"]):
+            libres = bx["capacidad"] - bx["usados"]
+            pacientes = [pendientes.pop(0) for _ in range(min(libres, len(pendientes)))]
+            asignaciones.append({**bx, "libres": libres, "pacientes": [_fila_box(p) for p in pacientes]})
+        # alternativa: el siguiente de la lista, por si alguien no confirma; y por qué va después del último citado
+        ultimo = next((a["pacientes"][-1] for a in reversed(asignaciones) if a["pacientes"]), None)
+        alt = pendientes[0] if pendientes else None
+        alternativa = None
+        if alt:
+            ref = next(p for p in cola[esp] if p["id_paciente"] == ultimo["id_paciente"]) if ultimo else None
+            alternativa = {**_fila_box(alt), "por_que_despues": _diferencia(ref, alt) if ref else None}
+        out.append({**info, "especialidad": esp, "dia_agenda": dia, "asignaciones": asignaciones, "alternativa": alternativa,
+                    "sugeridos": [p for a in asignaciones for p in a["pacientes"]][:5]})
+    return {"fecha_corte": corte.isoformat(), "dia_agenda": dia, "resumen": b.get("resumen", {}), "especialidades": out}
 
 
 # ---------- HTTP ----------
@@ -266,6 +354,8 @@ def handler(event, context=None):
             return _resp(*post_evento(body))
         if method == "POST" and len(partes) == 3 and partes[0] == "pacientes" and partes[2] == "revision":
             return _resp(*post_revision(partes[1], body))
+        if method == "POST" and len(partes) == 3 and partes[0] == "pacientes" and partes[2] == "informe":
+            return _resp(*post_informe(partes[1], body))
         if method == "POST" and len(partes) == 3 and partes[0] == "pacientes" and partes[2] == "explicar":
             return _resp(*post_explicar(partes[1], _fecha({**qs, **body})))
         if method == "GET" and partes == ["boxes"]:
