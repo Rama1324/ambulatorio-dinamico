@@ -7,28 +7,28 @@
     <title>Ambulatorio Dinámico — Hospital Clínico Dra. Eloísa Díaz La Florida</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
     <script src="https://cdn.tailwindcss.com/3.4.16"></script>
     <script>
       tailwind.config = {
         theme: { extend: {
           colors: {
-            "primary": "#004c60", "primary-container": "#0a657e", "on-primary": "#ffffff",
+            "primary": "#0b4f8a", "primary-container": "#1565a8", "on-primary": "#ffffff",
             "secondary": "#4a607a", "secondary-container": "#c8dffe", "on-secondary-container": "#4d637d",
             "tertiary": "#5128a6", "tertiary-fixed": "#e9ddff", "on-tertiary-fixed": "#23005c", "on-tertiary-fixed-variant": "#522aa7",
             "error": "#ba1a1a", "error-container": "#ffdad6", "on-error": "#ffffff", "on-error-container": "#93000a",
-            "background": "#f6faff", "surface": "#f6faff", "on-surface": "#141d23", "on-surface-variant": "#3f484c",
-            "surface-container-lowest": "#ffffff", "surface-container-low": "#ebf5fe", "surface-container": "#e6eff8",
-            "surface-container-high": "#e0e9f2", "outline": "#70787d", "outline-variant": "#bfc8cd",
+            "background": "#f3f5f7", "surface": "#f3f5f7", "on-surface": "#1a1f24", "on-surface-variant": "#3d4650",
+            "surface-container-lowest": "#ffffff", "surface-container-low": "#f1f5f9", "surface-container": "#e9eef3",
+            "surface-container-high": "#dfe5eb", "outline": "#6b7580", "outline-variant": "#cfd6dd",
             "ambar": "#8a5100", "ambar-container": "#ffddb8", "verde": "#1f6b35", "verde-container": "#c4efcc"
           },
-          fontFamily: { head: ["Space Grotesk"], mono: ["JetBrains Mono"] },
+          fontFamily: { sans: ["Source Sans 3", "system-ui", "sans-serif"] },
         } },
       };
     </script>
   </head>
-  <body class="bg-background text-on-surface font-mono text-[12px] antialiased">
+  <body class="bg-background text-on-surface font-sans text-[14px] antialiased [font-variant-numeric:tabular-nums]">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
