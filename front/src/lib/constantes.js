@@ -21,4 +21,4 @@ export const TIPO_EVENTO = { visita_urgencia: "Urgencia", hospitalizacion: "Hosp
 export const POR_PAGINA = 25;
 
 export const fmt = (iso) => (iso ? iso.slice(0, 10).split("-").reverse().join("-") : "");
-export const COLOR_HEX = { alta: "#ba1a1a", media: "#8a5100", baja: "#1f6b35" };
+export const COLOR_HEX = { alta: "rgb(var(--c-error))", media: "rgb(var(--c-ambar))", baja: "rgb(var(--c-verde))" };

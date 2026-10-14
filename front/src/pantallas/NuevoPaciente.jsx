@@ -18,7 +18,7 @@ export function NuevoPaciente({ fecha, onCerrar, onListo }) {
     try { onListo(await api.postPaciente({ ...f, edad: Number(f.edad), fecha_corte: fecha })); }
     catch (e) { setError(e.message); setEnviando(false); }
   };
-  const campo = "h-9 px-2 border border-outline-variant rounded bg-white w-full";
+  const campo = "h-11 px-2 border border-outline-variant rounded bg-surface-container-lowest w-full";
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onCerrar}>
       <div className="bg-surface-container-lowest rounded max-w-xl w-full" onClick={(e) => e.stopPropagation()}>
@@ -38,14 +38,14 @@ export function NuevoPaciente({ fecha, onCerrar, onListo }) {
           <Filtro label="Diagnóstico (CIE-10)"><select value={f.diagnostico_cie10} onChange={set("diagnostico_cie10")} disabled={!f.especialidad} className={campo}><option value="">Seleccione…</option>{dxs.map((d) => <option key={d.diagnostico_cie10} value={d.diagnostico_cie10}>{d.diagnostico_cie10} · {d.diagnostico_texto}</option>)}</select></Filtro>
           <Filtro label="Prioridad asignada al revisar la SIC">
             <div className="flex gap-1">{["alta", "media", "baja"].map((c) => (
-              <button key={c} type="button" onClick={() => setF({ ...f, prioridad_inicial: c })} className={`flex-1 h-9 rounded border font-semibold ${f.prioridad_inicial === c ? COLOR_CAT[c] : "border-outline-variant text-on-surface-variant"}`}>{ETIQUETA[c]}</button>
+              <button key={c} type="button" onClick={() => setF({ ...f, prioridad_inicial: c })} className={`flex-1 h-11 rounded border font-semibold ${f.prioridad_inicial === c ? COLOR_CAT[c] : "border-outline-variant text-on-surface-variant"}`}>{ETIQUETA[c]}</button>
             ))}</div>
           </Filtro>
           <Filtro label="Origen de la derivación"><select value={f.origen_derivacion} onChange={set("origen_derivacion")} className={campo}>{cat?.origenes.map((c) => <option key={c}>{c}</option>)}</select></Filtro>
           <Filtro label="Grupo de especial protección"><select value={f.grupo_proteccion} onChange={set("grupo_proteccion")} className={campo}><option value="">Ninguno</option>{cat?.grupos_proteccion.map((g) => <option key={g}>{g}</option>)}</select></Filtro>
           <Filtro label="Riesgo ACG (si se conoce)"><select value={f.acg} onChange={set("acg")} className={campo}><option value="">Sin dato</option>{cat?.acg.map((a) => <option key={a.nivel} value={a.nivel}>{a.nivel} · {a.texto}</option>)}</select></Filtro>
         </div>
-        {error && <p className="px-4 text-error text-[13px]">{error}</p>}
+        {error && <p className="px-4 text-error text-[14px]">{error}</p>}
         <div className="px-4 py-3 border-t border-outline-variant flex justify-end gap-2">
           <button onClick={onCerrar} className="px-4 py-2 rounded border border-outline-variant font-semibold">Cancelar</button>
           <button disabled={!valido || enviando} onClick={guardar} className="px-4 py-2 rounded bg-primary text-on-primary font-semibold disabled:opacity-40">{enviando ? "Ingresando…" : "Ingresar y priorizar"}</button>

@@ -43,7 +43,7 @@ export function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="text-[18px] font-semibold">{p.nombre_fantasia}</div>
-            <div className="text-[13px] text-on-surface-variant">{p.edad} años · {p.sexo === "F" ? "Femenino" : "Masculino"} · {p.comuna} · {p.id_paciente}</div>
+            <div className="text-[14px] text-on-surface-variant">{p.edad} años · {p.sexo === "F" ? "Femenino" : "Masculino"} · {p.comuna} · {p.id_paciente}</div>
           </div>
           <Prioridad cat={p.categoria} />
         </div>
@@ -61,7 +61,7 @@ export function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso
           {(p.grupo_proteccion || p.acg) && <><dt className="text-on-surface-variant">Riesgo social</dt><dd>{[p.grupo_proteccion && `Grupo ${p.grupo_proteccion}`, p.acg && `ACG ${p.acg}`].filter(Boolean).join(" · ")}</dd></>}
           {p.comorbilidades?.length > 0 && <><dt className="text-on-surface-variant">Comorbilidades</dt><dd>{p.comorbilidades.map((c) => c.nombre).join(", ")}</dd></>}
         </dl>
-        {p.categoria !== p.categoria_sistema && <p className="mt-2 text-[13px] text-on-surface-variant">El sistema proponía prioridad {p.categoria_sistema}; el equipo clínico la cambió a {p.categoria}. Motivo: {p.revision?.motivo}</p>}
+        {p.categoria !== p.categoria_sistema && <p className="mt-2 text-[14px] text-on-surface-variant">El sistema proponía prioridad {p.categoria_sistema}; el equipo clínico la cambió a {p.categoria}. Motivo: {p.revision?.motivo}</p>}
       </Caja>
 
       <div className="flex border-b border-outline-variant bg-surface-container-lowest rounded-t text-[14px] sticky top-0 z-10">
@@ -83,16 +83,16 @@ export function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso
       </Caja>
 
       <Caja titulo="Evolución en la lista">
-        {historia ? <GraficoPosicion h={historia} /> : <p className="text-[13px] text-on-surface-variant">Cargando…</p>}
+        {historia ? <GraficoPosicion h={historia} /> : <p className="text-[14px] text-on-surface-variant">Cargando…</p>}
       </Caja>
 
       <Caja titulo={`Fundamento de la prioridad ${ETIQUETA[p.categoria].toLowerCase()}`}>
         <ul className="space-y-2.5 text-[14px]">
           {p.razones.map((r, i) => (
             <li key={i} className={r.factor === "tabla_oficial" || r.factor === "riesgo_vital" ? "pl-2 border-l-4 border-error" : "pl-2 border-l-4 border-outline-variant"}>
-              <div className="text-[12px] text-on-surface-variant">{FACTOR[r.factor] || r.factor}</div>
+              <div className="text-[13px] text-on-surface-variant">{FACTOR[r.factor] || r.factor}</div>
               <div>{r.valor}</div>
-              <div className="text-[12px] text-on-surface-variant italic">Fuente: {r.fuente}</div>
+              <div className="text-[13px] text-on-surface-variant italic">Fuente: {r.fuente}</div>
             </li>
           ))}
         </ul>
@@ -108,23 +108,23 @@ export function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso
             </div>
             {ajuste && (
               <div className="mt-3 flex flex-col gap-2">
-                <select value={ajuste.categoria} onChange={(e) => setAjuste({ ...ajuste, categoria: e.target.value })} className="h-9 px-2 border border-outline-variant rounded bg-white">
+                <select value={ajuste.categoria} onChange={(e) => setAjuste({ ...ajuste, categoria: e.target.value })} className="h-11 px-2 border border-outline-variant rounded bg-surface-container-lowest">
                   {Object.entries(ETIQUETA).map(([k, v]) => <option key={k} value={k}>Prioridad {v.toLowerCase()}</option>)}
                 </select>
-                <input placeholder="Motivo clínico (obligatorio)" value={ajuste.motivo} onChange={(e) => setAjuste({ ...ajuste, motivo: e.target.value })} className="h-9 px-2 border border-outline-variant rounded" />
+                <input placeholder="Motivo clínico (obligatorio)" value={ajuste.motivo} onChange={(e) => setAjuste({ ...ajuste, motivo: e.target.value })} className="h-11 px-2 border border-outline-variant rounded" />
                 <button disabled={!ajuste.motivo} onClick={guardarAjuste} className="py-2 rounded bg-primary text-on-primary font-semibold disabled:opacity-40">Guardar cambio</button>
               </div>
             )}
           </Caja>
 
-          <Caja titulo="Resumen para el equipo" accion={<button onClick={pedirResumen} disabled={cargando} className="text-[13px] text-primary font-semibold disabled:opacity-50">{cargando === "ia" ? "Redactando…" : resumen ? "Actualizar" : "Generar"}</button>}>
+          <Caja titulo="Resumen para el equipo" accion={<button onClick={pedirResumen} disabled={cargando} className="text-[14px] text-primary font-semibold disabled:opacity-50">{cargando === "ia" ? "Redactando…" : resumen ? "Actualizar" : "Generar"}</button>}>
             {resumen ? <>
               <p className="text-[14px] leading-relaxed">{resumen.explicacion_ia}</p>
-              <p className="text-[12px] text-on-surface-variant mt-2">Texto redactado automáticamente a partir del fundamento ({resumen.fuente === "bedrock" ? "Amazon Bedrock" : "plantilla"}). No modifica la prioridad.</p>
-            </> : <p className="text-[13px] text-on-surface-variant">Redacta en lenguaje simple el fundamento, por ejemplo para contactar al paciente.</p>}
+              <p className="text-[13px] text-on-surface-variant mt-2">Texto redactado automáticamente a partir del fundamento ({resumen.fuente === "bedrock" ? "Amazon Bedrock" : "plantilla"}). No modifica la prioridad.</p>
+            </> : <p className="text-[14px] text-on-surface-variant">Redacta en lenguaje simple el fundamento, por ejemplo para contactar al paciente.</p>}
           </Caja>
         </>
-      ) : <Caja><p className="text-on-surface-variant text-[13px]">Sin conexión al servidor: se muestra la lista precalculada. Registrar decisiones requiere la API.</p></Caja>)}
+      ) : <Caja><p className="text-on-surface-variant text-[14px]">Sin conexión al servidor: se muestra la lista precalculada. Registrar decisiones requiere la API.</p></Caja>)}
 
       {tab === "registrar" && (esApi ? (
         <>
@@ -139,21 +139,21 @@ export function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso
           {demo && (
             <Caja titulo="Simular evento (demostración)" className="border-ambar/50">
               <div className="flex gap-2">
-                <select value={tipoEv} onChange={(e) => setTipoEv(e.target.value)} className="flex-1 h-9 px-2 border border-outline-variant rounded bg-white">
+                <select value={tipoEv} onChange={(e) => setTipoEv(e.target.value)} className="flex-1 h-11 px-2 border border-outline-variant rounded bg-surface-container-lowest">
                   {Object.entries(EVENTOS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                 </select>
-                <button onClick={() => registrarEvento(EVENTOS[tipoEv], "Evento simulado")} disabled={cargando} className="px-4 rounded bg-ambar text-white font-semibold disabled:opacity-50">Simular</button>
+                <button onClick={() => registrarEvento(EVENTOS[tipoEv], "Evento simulado")} disabled={cargando} className="px-4 rounded bg-ambar text-background font-semibold disabled:opacity-50">Simular</button>
               </div>
             </Caja>
           )}
         </>
-      ) : <Caja><p className="text-on-surface-variant text-[13px]">Registrar informes y novedades requiere conexión al servidor.</p></Caja>)}
+      ) : <Caja><p className="text-on-surface-variant text-[14px]">Registrar informes y novedades requiere conexión al servidor.</p></Caja>)}
 
       {tab === "historia" && <Caja titulo="Historia mientras espera">
         <ol className="text-[14px]">
           {timeline.map((x, i) => (
             <li key={i} className={`grid grid-cols-[88px_1fr] gap-2 py-1.5 border-b border-outline-variant/50 ${x.nuevo ? "bg-ambar-container/50" : ""}`}>
-              <span className="text-on-surface-variant text-[13px]">{fmt(x.f)}</span>
+              <span className="text-on-surface-variant text-[14px]">{fmt(x.f)}</span>
               <span className={x.rojo ? "text-error font-semibold" : x.ambar ? "text-ambar" : ""}>{x.t}{x.d && <span className="text-on-surface-variant font-normal"> · {x.d}</span>}</span>
             </li>
           ))}
@@ -177,12 +177,12 @@ function Contacto({ p, fecha, onListo, onAviso }) {
     ["se_mantiene", "Se mantiene en lista", "border border-outline-variant"], ["no_contesta", "No contesta", "border border-outline-variant"]];
   return (
     <Caja titulo="Registrar contacto">
-      {p.contacto && <p className="text-[13px] mb-2">Último: <b>{p.contacto.texto}</b> · {p.contacto.usuario}</p>}
-      <input value={nota} onChange={(e) => setNota(e.target.value)} placeholder="Nota (opcional): p. ej. hora citada, quién contestó" className="w-full h-9 px-2 border border-outline-variant rounded mb-2 text-[14px]" />
-      <div className="grid grid-cols-2 gap-2 text-[13px]">
+      {p.contacto && <p className="text-[14px] mb-2">Último: <b>{p.contacto.texto}</b> · {p.contacto.usuario}</p>}
+      <input value={nota} onChange={(e) => setNota(e.target.value)} placeholder="Nota (opcional): p. ej. hora citada, quién contestó" className="w-full h-11 px-2 border border-outline-variant rounded mb-2 text-[14px]" />
+      <div className="grid grid-cols-2 gap-2 text-[14px]">
         {ops.map(([k, t, c]) => <button key={k} disabled={enviando} onClick={() => enviar(k)} className={`py-2 rounded font-semibold disabled:opacity-50 ${c}`}>{enviando === k ? "…" : t}</button>)}
       </div>
-      <p className="text-[12px] text-on-surface-variant mt-2">Al registrar el contacto la alerta "contactar hoy" se apaga (salvo "no contesta"). El paciente sigue priorizado.</p>
+      <p className="text-[13px] text-on-surface-variant mt-2">Al registrar el contacto la alerta "contactar hoy" se apaga (salvo "no contesta"). El paciente sigue priorizado.</p>
     </Caja>
   );
 }
@@ -199,7 +199,7 @@ function BoletaLace({ lace }) {
               <td className="py-1.5 w-8"><span className="inline-flex w-6 h-6 items-center justify-center rounded bg-primary/10 text-primary font-bold">{x.letra}</span></td>
               <td className="py-1.5">
                 <div>{x.nombre}</div>
-                <div className="text-[12px] text-on-surface-variant">{x.valor}</div>
+                <div className="text-[13px] text-on-surface-variant">{x.valor}</div>
               </td>
               <td className="py-1.5 w-28">
                 <div className="h-2 rounded bg-surface-container-high overflow-hidden"><div className="h-full bg-primary" style={{ width: `${(x.puntos / max[x.letra]) * 100}%` }} /></div>
@@ -213,7 +213,7 @@ function BoletaLace({ lace }) {
           </tr>
         </tbody>
       </table>
-      <p className="text-[12px] text-on-surface-variant mt-2">
+      <p className="text-[13px] text-on-surface-variant mt-2">
         Puntos según {lace.fuente}. Ordena a los pacientes dentro de la misma prioridad (más puntos, antes). L queda en 0 porque el registro no trae los días de estada.
       </p>
     </div>
@@ -240,9 +240,9 @@ function Camino({ p, total }) {
         <div key={i} className="flex items-center gap-1">
           <div className={`rounded border px-2.5 py-1.5 min-w-[96px] max-w-[160px] ${s.rojo ? "bg-error text-on-error border-error" : s.final ? "bg-primary text-on-primary border-primary" : "bg-surface-container-lowest border-outline-variant"}`}
             style={s.cat && !s.rojo && !s.final ? { borderTop: `4px solid ${COLOR_HEX[s.cat]}` } : undefined}>
-            <div className={`text-[11px] ${s.rojo || s.final ? "opacity-90" : "text-on-surface-variant"}`}>{s.icon && <Icono n={s.icon} className="text-[14px] mr-0.5" />}{s.t}</div>
+            <div className={`text-[12px] ${s.rojo || s.final ? "opacity-90" : "text-on-surface-variant"}`}>{s.icon && <Icono n={s.icon} className="text-[14px] mr-0.5" />}{s.t}</div>
             <div className="text-[14px] font-semibold leading-tight">{s.v}</div>
-            {s.f && <div className={`text-[11px] leading-tight mt-0.5 ${s.rojo || s.final ? "opacity-80" : "text-on-surface-variant"}`}>{s.f}</div>}
+            {s.f && <div className={`text-[12px] leading-tight mt-0.5 ${s.rojo || s.final ? "opacity-80" : "text-on-surface-variant"}`}>{s.f}</div>}
           </div>
           {i < pasos.length - 1 && <Icono n="arrow_forward" className="text-[18px] text-outline" />}
         </div>
@@ -255,7 +255,7 @@ function Camino({ p, total }) {
 function GraficoPosicion({ h }) {
   const [hover, setHover] = useState(null);
   const pts = h.puntos.filter((x) => !x.excluido);
-  if (pts.length < 2) return <p className="text-[13px] text-on-surface-variant">Aún no hay suficiente historia en la lista.</p>;
+  if (pts.length < 2) return <p className="text-[14px] text-on-surface-variant">Aún no hay suficiente historia en la lista.</p>;
   const W = 380, H = 190, m = { l: 40, r: 12, t: 12, b: 26 };
   const t = (f) => new Date(f + "T12:00:00").getTime();
   const x0 = t(pts[0].fecha), x1 = t(pts[pts.length - 1].fecha);
@@ -273,37 +273,37 @@ function GraficoPosicion({ h }) {
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label="Posición del paciente en la lista a lo largo del tiempo">
         {ticks.map((v) => (
           <g key={v}>
-            <line x1={m.l} x2={W - m.r} y1={Y(v)} y2={Y(v)} stroke="#dfe5eb" strokeWidth="1" />
-            <text x={m.l - 6} y={Y(v) + 4} textAnchor="end" fontSize="11" fill="#3d4650">N° {v}</text>
+            <line x1={m.l} x2={W - m.r} y1={Y(v)} y2={Y(v)} className="stroke-outline-variant" strokeWidth="1" />
+            <text x={m.l - 6} y={Y(v) + 4} textAnchor="end" fontSize="11" className="fill-on-surface-variant">N° {v}</text>
           </g>
         ))}
-        {meses.map((ym) => { const xx = X(`${ym}-01` < pts[0].fecha ? pts[0].fecha : `${ym}-01`); return <text key={ym} x={xx} y={H - 8} fontSize="11" fill="#3d4650" textAnchor="middle">{nombreMes(ym)}</text>; })}
+        {meses.map((ym) => { const xx = X(`${ym}-01` < pts[0].fecha ? pts[0].fecha : `${ym}-01`); return <text key={ym} x={xx} y={H - 8} fontSize="11" className="fill-on-surface-variant" textAnchor="middle">{nombreMes(ym)}</text>; })}
         {evs.map((e, i) => {
           const xx = Math.min(Math.max(X(e.fecha_evento), m.l), W - m.r);
           const grave = e.severidad === "grave" || e.subtipo.includes("descompensaci");
           return (
             <g key={i}>
-              <line x1={xx} x2={xx} y1={m.t} y2={H - m.b} stroke={grave ? "#ba1a1a" : "#1f6b35"} strokeWidth="1" strokeDasharray="3 3" />
-              <circle cx={xx} cy={m.t} r="4" fill={grave ? "#ba1a1a" : "#1f6b35"}><title>{fmt(e.fecha_evento)}: {e.subtipo}</title></circle>
+              <line x1={xx} x2={xx} y1={m.t} y2={H - m.b} className={grave ? "stroke-error" : "stroke-verde"} strokeWidth="1" strokeDasharray="3 3" />
+              <circle cx={xx} cy={m.t} r="4" className={grave ? "fill-error" : "fill-verde"}><title>{fmt(e.fecha_evento)}: {e.subtipo}</title></circle>
             </g>
           );
         })}
-        <path d={linea} fill="none" stroke="#0f69b4" strokeWidth="2" strokeLinejoin="round" />
+        <path d={linea} fill="none" className="stroke-primary" strokeWidth="2" strokeLinejoin="round" />
         {pts.map((p, i) => (
           <g key={p.fecha} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
             <circle cx={X(p.fecha)} cy={Y(p.posicion)} r="12" fill="transparent" />
-            <circle cx={X(p.fecha)} cy={Y(p.posicion)} r={hover === i ? 6 : 4.5} fill={COLOR_HEX[p.categoria]} stroke="#fff" strokeWidth="2" />
+            <circle cx={X(p.fecha)} cy={Y(p.posicion)} r={hover === i ? 6 : 4.5} style={{ fill: COLOR_HEX[p.categoria] }} className="stroke-surface-container-lowest" strokeWidth="2" />
           </g>
         ))}
-        {(() => { const u = pts[pts.length - 1]; return <text x={X(u.fecha) - 8} y={Y(u.posicion) + (Y(u.posicion) < 30 ? 16 : -8)} textAnchor="end" fontSize="12" fontWeight="600" fill="#1a1f24">N° {u.posicion}</text>; })()}
+        {(() => { const u = pts[pts.length - 1]; return <text x={X(u.fecha) - 8} y={Y(u.posicion) + (Y(u.posicion) < 30 ? 16 : -8)} textAnchor="end" fontSize="12" fontWeight="600" className="fill-on-surface">N° {u.posicion}</text>; })()}
       </svg>
       {hp && (
-        <div className="absolute pointer-events-none bg-on-surface text-white text-[12px] rounded px-2 py-1 shadow"
+        <div className="absolute pointer-events-none bg-on-surface text-background text-[13px] rounded px-2 py-1 shadow"
           style={{ left: `${(X(hp.fecha) / W) * 100}%`, top: `${(Y(hp.posicion) / H) * 100}%`, transform: "translate(-50%, -120%)" }}>
           {fmt(hp.fecha)} · N° {hp.posicion} de {hp.total} · {ETIQUETA[hp.categoria]}{hp.riesgo_vital ? " · contactar hoy" : ""}
         </div>
       )}
-      <div className="flex flex-wrap gap-3 text-[12px] text-on-surface-variant mt-1">
+      <div className="flex flex-wrap gap-3 text-[13px] text-on-surface-variant mt-1">
         {["alta", "media", "baja"].map((c) => <span key={c} className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full" style={{ background: COLOR_HEX[c] }} />Prioridad {ETIQUETA[c].toLowerCase()}</span>)}
         <span className="flex items-center gap-1"><span className="w-3 border-t border-dashed border-error" />Descompensación</span>
         <span className="flex items-center gap-1"><span className="w-3 border-t border-dashed border-verde" />Estabilización</span>
@@ -372,7 +372,7 @@ function Camara({ onFoto, onCerrar }) {
               {!listo && <p className="absolute inset-0 flex items-center justify-center text-white">Abriendo cámara…</p>}
             </div>
           )}
-          <p className="text-[13px] text-on-surface-variant mt-2">Encuadre el documento completo dentro del recuadro, con buena luz.</p>
+          <p className="text-[14px] text-on-surface-variant mt-2">Encuadre el documento completo dentro del recuadro, con buena luz.</p>
           <div className="flex gap-2 mt-3">
             {!error && <button disabled={!listo} onClick={tomar} className="flex-1 py-2.5 rounded bg-primary text-on-primary font-semibold flex items-center justify-center gap-1 disabled:opacity-40"><Icono n="photo_camera" />Tomar foto</button>}
             <button onClick={() => archivo.current.click()} className="flex-1 py-2.5 rounded border border-outline-variant font-semibold">Subir imagen</button>
@@ -399,7 +399,7 @@ function Informe({ p, fecha, cargando, onConfirmar, onAviso }) {
   const ev = res?.evento;
   return (
     <Caja titulo="Registrar informe recibido">
-      <p className="text-[13px] text-on-surface-variant mb-2">Epicrisis, DAU de urgencia o nota clínica. Se propone el evento y usted confirma antes de actualizar la lista.</p>
+      <p className="text-[14px] text-on-surface-variant mb-2">Epicrisis, DAU de urgencia o nota clínica. Se propone el evento y usted confirma antes de actualizar la lista.</p>
       <textarea rows={3} value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Ej.: Consulta en urgencia por dolor torácico en reposo. Se hospitaliza en cardiología."
         className="w-full p-2 border border-outline-variant rounded focus:outline-none focus:border-primary resize-y text-[14px]" />
       <div className="flex gap-2 mt-2">
@@ -407,21 +407,21 @@ function Informe({ p, fecha, cargando, onConfirmar, onAviso }) {
         <button disabled={leyendo} onClick={() => setCamara(true)} className="flex-1 py-2 rounded border border-outline-variant font-semibold flex items-center justify-center gap-1"><Icono n="photo_camera" className="text-[18px]" />Foto del documento</button>
       </div>
       {camara && <Camara onFoto={foto} onCerrar={() => setCamara(false)} />}
-      {leyendo && <p className="mt-2 text-[13px] text-on-surface-variant flex items-center gap-1"><Icono n="hourglass_top" className="text-[16px] animate-spin" />Leyendo el documento…</p>}
-      {res && !ev && <p className="mt-2 text-[13px] text-on-surface-variant">{res.mensaje}</p>}
-      {res?.transcripcion && <details className="mt-2 text-[13px]"><summary className="cursor-pointer text-on-surface-variant">Texto leído del documento</summary><p className="whitespace-pre-wrap mt-1">{res.transcripcion}</p></details>}
+      {leyendo && <p className="mt-2 text-[14px] text-on-surface-variant flex items-center gap-1"><Icono n="hourglass_top" className="text-[16px] animate-spin" />Leyendo el documento…</p>}
+      {res && !ev && <p className="mt-2 text-[14px] text-on-surface-variant">{res.mensaje}</p>}
+      {res?.transcripcion && <details className="mt-2 text-[14px]"><summary className="cursor-pointer text-on-surface-variant">Texto leído del documento</summary><p className="whitespace-pre-wrap mt-1">{res.transcripcion}</p></details>}
       {ev && (
         <div className="mt-3 border border-outline-variant rounded p-3 space-y-2 text-[14px]">
           <div><span className="text-on-surface-variant">Evento:</span> <b>{TIPO_EVENTO[ev.tipo_evento]}</b> · {ev.subtipo} · {fmt(ev.fecha_evento)}</div>
           <blockquote className="border-l-4 border-ambar bg-ambar-container/40 px-2 py-1 italic">“{ev.evidencia}”</blockquote>
           <div className="flex items-center gap-2"><span className="text-on-surface-variant">Prioridad:</span><Prioridad cat={res.categoria_actual} /><span>→</span><Prioridad cat={res.categoria_propuesta} /></div>
-          {res.razones_propuestas?.map((r, i) => <div key={i} className="text-[13px] text-on-surface-variant">{r.valor} · {r.fuente}</div>)}
+          {res.razones_propuestas?.map((r, i) => <div key={i} className="text-[14px] text-on-surface-variant">{r.valor} · {r.fuente}</div>)}
           <div className="flex gap-2 pt-1">
             <button disabled={cargando} onClick={async () => { await onConfirmar({ ...ev, detalle: `Informe: ${ev.evidencia}` }); setRes(null); setTexto(""); }}
               className="flex-1 py-2 rounded bg-primary text-on-primary font-semibold disabled:opacity-50">Confirmar y actualizar lista</button>
             <button onClick={() => setRes(null)} className="flex-1 py-2 rounded border border-outline-variant font-semibold">Descartar</button>
           </div>
-          <p className="text-[12px] text-on-surface-variant">Lectura {res.fuente === "bedrock" ? "automática (Amazon Bedrock)" : "por palabras clave"}; verifique antes de confirmar.</p>
+          <p className="text-[13px] text-on-surface-variant">Lectura {res.fuente === "bedrock" ? "automática (Amazon Bedrock)" : "por palabras clave"}; verifique antes de confirmar.</p>
         </div>
       )}
     </Caja>
@@ -449,15 +449,15 @@ function Novedad({ p, fecha, onListo, onAviso }) {
     } catch (e) { onAviso({ titulo: "No se pudo registrar: " + e.message }); } finally { setEnviando(false); }
   };
   const peso = cat?.charlson.find((c) => c.condicion === v.condicion)?.peso;
-  const campo = "h-9 px-2 border border-outline-variant rounded bg-white w-full";
+  const campo = "h-11 px-2 border border-outline-variant rounded bg-surface-container-lowest w-full";
   const btn = (t, icono, texto, rojo) => (
-    <button onClick={() => abrir(t)} className={`flex-1 min-w-[120px] py-2 rounded border font-semibold text-[13px] flex items-center justify-center gap-1 ${tipo === t ? (rojo ? "bg-error text-on-error border-error" : "bg-primary text-on-primary border-primary") : "border-outline-variant hover:bg-surface-container-low"}`}>
+    <button onClick={() => abrir(t)} className={`flex-1 min-w-[120px] py-2 rounded border font-semibold text-[14px] flex items-center justify-center gap-1 ${tipo === t ? (rojo ? "bg-error text-on-error border-error" : "bg-primary text-on-primary border-primary") : "border-outline-variant hover:bg-surface-container-low"}`}>
       <Icono n={icono} className="text-[18px]" />{texto}
     </button>
   );
   return (
     <Caja titulo="Registrar novedad del paciente">
-      {p.comorbilidades?.length > 0 && <p className="text-[13px] mb-2">Comorbilidades registradas: {p.comorbilidades.map((c) => c.nombre).join(", ")}</p>}
+      {p.comorbilidades?.length > 0 && <p className="text-[14px] mb-2">Comorbilidades registradas: {p.comorbilidades.map((c) => c.nombre).join(", ")}</p>}
       <div className="flex flex-wrap gap-2">
         {btn("comorbilidad", "add_circle", "Condición / comorbilidad")}
         {btn("diagnostico", "edit_note", "Cambiar diagnóstico")}
@@ -478,7 +478,7 @@ function Novedad({ p, fecha, onListo, onAviso }) {
                 <option key={d.diagnostico_cie10} value={`cie:${d.diagnostico_cie10}`}>{d.diagnostico_cie10} · {d.diagnostico_texto}</option>)}
             </optgroup>
           </select>
-          {v.condicion && <p className={`text-[13px] ${peso ? "text-primary-container font-semibold" : "text-on-surface-variant"}`}>
+          {v.condicion && <p className={`text-[14px] ${peso ? "text-primary-container font-semibold" : "text-on-surface-variant"}`}>
             {peso ? `Suma ${peso} al índice de Charlson (van Walraven 2010). El puntaje LACE se recalcula.` : "Queda registrada en la ficha; no tiene peso en el índice de Charlson, no cambia el puntaje."}</p>}
           <button disabled={!v.condicion || enviando} onClick={enviar} className="w-full py-2 rounded bg-primary text-on-primary font-semibold disabled:opacity-40">Registrar y recalcular</button>
         </div>
@@ -490,7 +490,7 @@ function Novedad({ p, fecha, onListo, onAviso }) {
             <option value="">Nuevo diagnóstico de la interconsulta…</option>
             {cat?.diagnosticos.map((d) => <option key={d.diagnostico_cie10} value={d.diagnostico_cie10}>{d.especialidad} · {d.diagnostico_cie10} {d.diagnostico_texto}</option>)}
           </select>
-          <p className="text-[13px] text-on-surface-variant">Se vuelve a aplicar la tabla del HLF, el puntaje LACE y la garantía GES del nuevo diagnóstico. Si cambia la especialidad, el paciente pasa a esa lista.</p>
+          <p className="text-[14px] text-on-surface-variant">Se vuelve a aplicar la tabla del HLF, el puntaje LACE y la garantía GES del nuevo diagnóstico. Si cambia la especialidad, el paciente pasa a esa lista.</p>
           <button disabled={!v.cie10 || enviando} onClick={enviar} className="w-full py-2 rounded bg-primary text-on-primary font-semibold disabled:opacity-40">Cambiar y recalcular</button>
         </div>
       )}
@@ -507,7 +507,7 @@ function Novedad({ p, fecha, onListo, onAviso }) {
               <option value="">Sin dato</option>{cat?.acg.map((a) => <option key={a.nivel} value={a.nivel}>{a.nivel} · {a.texto}</option>)}
             </select>
           </Filtro>
-          <p className="text-[13px] text-on-surface-variant">El grupo de protección ordena dentro de la misma prioridad (MINSAL Ord. 536/2025). El ACG se muestra como dato de riesgo del SSMSO.</p>
+          <p className="text-[14px] text-on-surface-variant">El grupo de protección ordena dentro de la misma prioridad (MINSAL Ord. 536/2025). El ACG se muestra como dato de riesgo del SSMSO.</p>
           <button disabled={enviando} onClick={enviar} className="w-full py-2 rounded bg-primary text-on-primary font-semibold disabled:opacity-40">Guardar y recalcular</button>
         </div>
       )}
@@ -517,10 +517,10 @@ function Novedad({ p, fecha, onListo, onAviso }) {
           <Filtro label={tipo === "fallecimiento" ? "Fecha de defunción" : "Fecha de la consulta nueva de especialidad"}>
             <input type="date" value={v.fecha} max={fecha} onChange={(e) => setV({ ...v, fecha: e.target.value })} className={campo} />
           </Filtro>
-          <p className="text-[13px] text-on-surface-variant">{tipo === "fallecimiento"
+          <p className="text-[14px] text-on-surface-variant">{tipo === "fallecimiento"
             ? "Egreso por causal 9 (fallecimiento, Manual SSMSO). El paciente sale de la lista y no recibe nuevas citaciones."
             : "La lista se resuelve cuando el especialista atiende la consulta nueva (CNE). El paciente sale de la lista."}</p>
-          <label className="flex items-center gap-2 text-[13px]"><input type="checkbox" checked={confirma} onChange={(e) => setConfirma(e.target.checked)} />
+          <label className="flex items-center gap-2 text-[14px]"><input type="checkbox" checked={confirma} onChange={(e) => setConfirma(e.target.checked)} />
             Confirmo que {p.nombre_fantasia} {tipo === "fallecimiento" ? "falleció" : "fue atendido(a)"} (verificado en {tipo === "fallecimiento" ? "Registro Civil / ficha" : "la ficha clínica"}).</label>
           <button disabled={!confirma || !v.fecha || enviando} onClick={enviar} className={`w-full py-2 rounded font-semibold disabled:opacity-40 ${tipo === "fallecimiento" ? "bg-error text-on-error" : "bg-primary text-on-primary"}`}>
             {tipo === "fallecimiento" ? "Registrar fallecimiento y egresar" : "Registrar atención y egresar"}</button>

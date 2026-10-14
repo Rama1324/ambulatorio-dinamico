@@ -3,11 +3,11 @@ import { COLOR_CAT, ETIQUETA } from "../lib/constantes";
 
 export const Icono = ({ n, className = "" }) => <span className={`material-symbols-outlined align-middle ${className}`}>{n}</span>;
 export const Prioridad = ({ cat }) => (
-  <span className={`inline-block min-w-[58px] text-center px-2 py-0.5 rounded border text-[13px] font-semibold ${COLOR_CAT[cat]}`}>{ETIQUETA[cat]}</span>
+  <span className={`inline-block min-w-[58px] text-center px-2 py-0.5 rounded border text-[14px] font-semibold ${COLOR_CAT[cat]}`}>{ETIQUETA[cat]}</span>
 );
 export const Marca = ({ children, tono = "gris", title }) => {
   const t = { rojo: "text-error border-error/40 bg-error-container/50", ambar: "text-ambar border-ambar/40 bg-ambar-container/50", gris: "text-on-surface-variant border-outline-variant bg-surface-container-low", azul: "text-primary border-primary/30 bg-primary/5" }[tono];
-  return <span title={title} className={`inline-block px-1.5 py-px rounded border text-[12px] whitespace-nowrap ${t}`}>{children}</span>;
+  return <span title={title} className={`inline-block px-1.5 py-px rounded border text-[13px] whitespace-nowrap ${t}`}>{children}</span>;
 };
 export const Caja = ({ titulo, accion, children, className = "" }) => (
   <section className={`bg-surface-container-lowest border border-outline-variant rounded ${className}`}>
@@ -21,14 +21,14 @@ export function Logo() {
   const [ok, setOk] = useState(true);
   return ok
     ? <img src="/logo-hlf.png" alt="Hospital Clínico Dra. Eloísa Díaz Inzunza" className="h-14 w-auto object-contain" onError={() => setOk(false)} />
-    : <div className="w-9 h-9 rounded bg-primary text-on-primary flex items-center justify-center"><Icono n="local_hospital" className="text-[22px]" /></div>;
+    : <div className="w-9 h-11 rounded bg-primary text-on-primary flex items-center justify-center"><Icono n="local_hospital" className="text-[22px]" /></div>;
 }
 
 export const Indicador = ({ n, t, tono, onClick }) => {
   const c = tono === "rojo" ? "border-l-error text-error" : tono === "ambar" ? "border-l-ambar text-ambar" : "border-l-primary text-on-surface";
   return (
     <button onClick={onClick} disabled={!onClick} className={`text-left bg-surface-container-lowest border border-outline-variant border-l-4 rounded px-3 py-2 ${c} ${onClick ? "hover:bg-surface-container-low" : "cursor-default"}`}>
-      <div className="text-[24px] font-semibold leading-tight">{n}</div><div className="text-[13px] text-on-surface-variant">{t}</div>
+      <div className="text-[24px] font-semibold leading-tight">{n}</div><div className="text-[14px] text-on-surface-variant">{t}</div>
     </button>
   );
 };

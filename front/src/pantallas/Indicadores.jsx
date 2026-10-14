@@ -16,13 +16,13 @@ export function Indicadores({ fecha, esApi, data }) {
     <section className={`bg-surface-container-lowest border rounded p-4 border-l-4 ${ok === null ? "border-l-outline" : ok ? "border-l-hlf" : "border-l-ambar"} border-outline-variant`}>
       <div className="flex items-start justify-between gap-2">
         <h3 className="font-semibold text-[15px]">{titulo}</h3>
-        <span className={`text-[12px] font-semibold rounded px-2 py-0.5 ${ok === null ? "bg-surface-container text-on-surface-variant" : ok ? "bg-hlf-claro text-hlf" : "bg-ambar-container text-ambar"}`}>
+        <span className={`text-[13px] font-semibold rounded px-2 py-0.5 ${ok === null ? "bg-surface-container text-on-surface-variant" : ok ? "bg-hlf-claro text-hlf" : "bg-ambar-container text-ambar"}`}>
           {ok === null ? "Sin datos suficientes" : ok ? "Cumple" : "Bajo la meta"}</span>
       </div>
       <div className="text-[32px] font-bold text-primary-container mt-1">{valor}</div>
-      <div className="text-[13px] text-on-surface-variant">Meta del hospital: {meta}</div>
+      <div className="text-[14px] text-on-surface-variant">Meta del hospital: {meta}</div>
       {pct != null && <div className="h-2 rounded bg-surface-container-high overflow-hidden mt-2"><div className="h-full bg-hlf" style={{ width: `${Math.max(0, Math.min(100, pct))}%` }} /></div>}
-      <p className="text-[13px] mt-2">{detalle}</p>
+      <p className="text-[14px] mt-2">{detalle}</p>
     </section>
   );
   return (
@@ -47,7 +47,7 @@ export function Indicadores({ fecha, esApi, data }) {
         <Caja titulo="Revisión del especialista">
           <div className="text-[14px] space-y-1">
             <div className="flex justify-between"><span>Pacientes que requieren revisión</span><b className="text-ambar">{k.alertas.revision_sugerida}</b></div>
-            <p className="text-[12px] text-on-surface-variant">Descompensaciones, exámenes alterados o aumentos de dosis posteriores a la interconsulta o a la última revisión.</p>
+            <p className="text-[13px] text-on-surface-variant">Descompensaciones, exámenes alterados o aumentos de dosis posteriores a la interconsulta o a la última revisión.</p>
           </div>
         </Caja>
         <Caja titulo="Egresos de la lista">
@@ -57,7 +57,7 @@ export function Indicadores({ fecha, esApi, data }) {
           </div>
         </Caja>
       </div>
-      <p className="text-[12px] text-on-surface-variant">Kappa de Cohen entre la prioridad que propone el sistema y la decisión del especialista al revisar (Alta / Media / Baja). Indicadores al {fmt(k.fecha_corte)}.</p>
+      <p className="text-[13px] text-on-surface-variant">Kappa de Cohen entre la prioridad que propone el sistema y la decisión del especialista al revisar (Alta / Media / Baja). Indicadores al {fmt(k.fecha_corte)}.</p>
     </div>
   );
 }

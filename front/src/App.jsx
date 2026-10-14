@@ -78,14 +78,14 @@ export default function App() {
             <Logo />
             <div className="leading-tight border-l border-outline-variant pl-3">
               <div className="text-[16px] font-bold text-primary-container">Hospital Clínico Dra. Eloísa Díaz Inzunza</div>
-              <div className="text-[13px] text-on-surface-variant">La Florida · Servicio de Salud Metropolitano Sur Oriente</div>
-              <div className="text-[13px] font-semibold text-hlf">Lista de espera dinámica · Consultas de especialidad</div>
+              <div className="text-[14px] text-on-surface-variant">La Florida · Servicio de Salud Metropolitano Sur Oriente</div>
+              <div className="text-[14px] font-semibold text-hlf">Lista de espera dinámica · Consultas de especialidad</div>
             </div>
           </div>
-          <div className="flex items-center gap-3 text-[13px]">
+          <div className="flex items-center gap-3 text-[14px]">
             <span className="text-on-surface-variant">Lista al <b className="text-on-surface">{fmt(fecha)}</b></span>
             <label className="flex items-center gap-1.5 text-on-surface-variant cursor-pointer select-none border-l border-outline-variant pl-3">
-              <input type="checkbox" checked={demo} onChange={(e) => setDemo(e.target.checked)} className="accent-[#0f69b4]" />Modo demostración
+              <input type="checkbox" checked={demo} onChange={(e) => setDemo(e.target.checked)} className="accent-primary" />Modo demostración
             </label>
           </div>
         </div>
@@ -93,7 +93,7 @@ export default function App() {
           {[["hoy", "Hoy", porContactar.length], ["lista", "Lista de espera", null], ["indicadores", "Indicadores", null], ["cargar", "Cargar datos", null], ["criterios", "Criterios", null]].map(([k, t, n]) => (
             <button key={k} onClick={() => setVista(k)}
               className={`py-2.5 border-b-2 -mb-px ${vista === k ? "border-primary text-primary font-semibold" : "border-transparent text-on-surface-variant hover:text-on-surface"}`}>
-              {t}{n ? <span className="ml-1.5 px-1.5 rounded-full bg-error text-on-error text-[12px] font-semibold">{n}</span> : null}
+              {t}{n ? <span className="ml-1.5 px-1.5 rounded-full bg-error text-on-error text-[13px] font-semibold">{n}</span> : null}
             </button>
           ))}
         </nav>
@@ -101,11 +101,11 @@ export default function App() {
 
       {demo && (
         <div className="bg-ambar-container/60 border-b border-ambar/30">
-          <div className="max-w-[1400px] mx-auto px-6 py-2 flex flex-wrap items-center gap-4 text-[13px]">
+          <div className="max-w-[1400px] mx-auto px-6 py-2 flex flex-wrap items-center gap-4 text-[14px]">
             <span className="font-semibold text-ambar flex items-center gap-1"><Icono n="science" className="text-[18px]" />Modo demostración{!esApi && " (datos precalculados, sin API)"}</span>
             <label className="flex items-center gap-2 flex-1 min-w-[280px]">
               Ver la lista como estaba el <b>{fmt(fechas[iFecha])}</b>
-              <input type="range" min={0} max={fechas.length - 1} value={iFecha} onChange={(e) => setIFecha(+e.target.value)} className="flex-1 accent-[#8a5100]" />
+              <input type="range" min={0} max={fechas.length - 1} value={iFecha} onChange={(e) => setIFecha(+e.target.value)} className="flex-1 accent-ambar" />
             </label>
             <span className="text-on-surface-variant">Solo se usan registros con fecha anterior o igual.</span>
           </div>
@@ -115,7 +115,7 @@ export default function App() {
       <AnimatePresence>
         {aviso && (
           <motion.div initial={{ y: -8, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-on-surface text-white px-4 py-2.5 rounded shadow-lg text-[14px] flex items-center gap-2">
+            className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-on-surface text-background px-4 py-2.5 rounded shadow-lg text-[14px] flex items-center gap-2">
             <Icono n="check_circle" className="text-[20px]" />{aviso.titulo}
             {aviso.antes != null && <span className="opacity-90">· posición {aviso.antes} → <b>{aviso.despues}</b>{aviso.cat && ` · prioridad ${ETIQUETA[aviso.cat]}`}</span>}
           </motion.div>
@@ -143,21 +143,21 @@ export default function App() {
         {vista === "lista" && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
             <div className="lg:col-span-7 xl:col-span-8 flex flex-col gap-4">
-              <div className="bg-surface-container-lowest border border-outline-variant rounded p-3 flex flex-wrap items-end gap-3 text-[13px]">
+              <div className="bg-surface-container-lowest border border-outline-variant rounded p-3 flex flex-wrap items-end gap-3 text-[14px]">
                 <Filtro label="Especialidad">
-                  <select value={esp} onChange={(e) => setEsp(e.target.value)} className="h-9 px-2 border border-outline-variant rounded bg-white">{ESPECIALIDADES.map((e) => <option key={e}>{e}</option>)}</select>
+                  <select value={esp} onChange={(e) => setEsp(e.target.value)} className="h-11 px-2 border border-outline-variant rounded bg-surface-container-lowest">{ESPECIALIDADES.map((e) => <option key={e}>{e}</option>)}</select>
                 </Filtro>
                 <Filtro label="Buscar paciente">
-                  <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Nombre, ID o diagnóstico" className="h-9 px-2 w-56 border border-outline-variant rounded" />
+                  <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Nombre, ID o diagnóstico" className="h-11 px-2 w-56 border border-outline-variant rounded" />
                 </Filtro>
                 <Filtro label="Prioridad">
-                  <select value={filtroCat} onChange={(e) => setFiltroCat(e.target.value)} className="h-9 px-2 border border-outline-variant rounded bg-white">
+                  <select value={filtroCat} onChange={(e) => setFiltroCat(e.target.value)} className="h-11 px-2 border border-outline-variant rounded bg-surface-container-lowest">
                     <option value="todas">Todas</option><option value="vital">Contactar hoy</option><option value="revisar">Requieren revisión</option><option value="alta">Alta</option><option value="media">Media</option><option value="baja">Baja</option>
                   </select>
                 </Filtro>
-                <label className="flex items-center gap-2 h-9 cursor-pointer select-none"><input type="checkbox" checked={soloPend} onChange={(e) => setSoloPend(e.target.checked)} className="w-4 h-4 accent-[#0f69b4]" />Solo pendientes de revisión</label>
-                <button onClick={() => exportarCsv(filtrados, fecha)} className="ml-auto h-9 px-3 rounded border border-outline-variant bg-white font-semibold flex items-center gap-1"><Icono n="download" className="text-[18px]" />Descargar Excel</button>
-                {esApi && <button onClick={() => setNuevo(true)} className="h-9 px-3 rounded bg-primary text-on-primary font-semibold flex items-center gap-1"><Icono n="person_add" className="text-[18px]" />Ingresar paciente</button>}
+                <label className="flex items-center gap-2 h-11 cursor-pointer select-none"><input type="checkbox" checked={soloPend} onChange={(e) => setSoloPend(e.target.checked)} className="w-4 h-4 accent-primary" />Solo pendientes de revisión</label>
+                <button onClick={() => exportarCsv(filtrados, fecha)} className="ml-auto h-11 px-3 rounded border border-outline-variant bg-surface-container-lowest font-semibold flex items-center gap-1"><Icono n="download" className="text-[18px]" />Descargar Excel</button>
+                {esApi && <button onClick={() => setNuevo(true)} className="h-11 px-3 rounded bg-primary text-on-primary font-semibold flex items-center gap-1"><Icono n="person_add" className="text-[18px]" />Ingresar paciente</button>}
               </div>
               {nuevo && <NuevoPaciente fecha={fecha} onCerrar={() => setNuevo(false)} onListo={async (r) => {
                 setNuevo(false); setBusca(""); setFiltroCat("todas"); setSoloPend(false); await cargar(); setSel(r.id_paciente);
@@ -167,7 +167,7 @@ export default function App() {
               <section className="bg-surface-container-lowest border border-outline-variant rounded overflow-hidden">
                 <table className="w-full text-left border-collapse text-[14px]">
                   <thead>
-                    <tr className="bg-surface-container-low text-[13px] text-on-surface-variant border-b border-outline-variant">
+                    <tr className="bg-surface-container-low text-[14px] text-on-surface-variant border-b border-outline-variant">
                       <th className="py-2 px-3 font-semibold w-16">N°</th><th className="py-2 px-2 font-semibold">Prioridad</th>
                       <th className="py-2 px-3 font-semibold">Paciente / diagnóstico</th><th className="py-2 px-2 font-semibold">Observaciones</th>
                       <th className="py-2 px-2 font-semibold text-center" title="Índice LACE (van Walraven 2010)">LACE</th>
@@ -185,12 +185,12 @@ export default function App() {
                             className={`cursor-pointer border-b border-outline-variant/60 ${activo ? "bg-primary/10" : destacado === p.id_paciente ? "bg-ambar-container/60" : "hover:bg-surface-container-low"}`}>
                             <td className={`py-2.5 px-3 align-top ${p.riesgo_vital ? "border-l-4 border-l-error" : "border-l-4 border-l-transparent"}`}>
                               <div className="font-semibold">{p.posicion}</div>
-                              {demo && delta !== 0 && <div className={`text-[12px] ${delta > 0 ? "text-error" : "text-on-surface-variant"}`}>{delta > 0 ? `▲ ${delta}` : `▼ ${-delta}`}</div>}
+                              {demo && delta !== 0 && <div className={`text-[13px] ${delta > 0 ? "text-error" : "text-on-surface-variant"}`}>{delta > 0 ? `▲ ${delta}` : `▼ ${-delta}`}</div>}
                             </td>
                             <td className="py-2.5 px-2 align-top"><Prioridad cat={p.categoria} /></td>
                             <td className="py-2.5 px-3 align-top">
-                              <div className="font-semibold">{p.nombre_fantasia} <span className="font-normal text-on-surface-variant text-[13px]">· {p.edad} años</span></div>
-                              <div className="text-[13px] text-on-surface-variant">{p.especialidad} · {p.diagnostico_cie10} {p.diagnostico_texto}</div>
+                              <div className="font-semibold">{p.nombre_fantasia} <span className="font-normal text-on-surface-variant text-[14px]">· {p.edad} años</span></div>
+                              <div className="text-[14px] text-on-surface-variant">{p.especialidad} · {p.diagnostico_cie10} {p.diagnostico_texto}</div>
                             </td>
                             <td className="py-2.5 px-2 align-top">
                               <div className="flex flex-wrap gap-1">
@@ -207,8 +207,8 @@ export default function App() {
                             <td className="py-2.5 px-2 align-top text-center">
                               <span className={`inline-block min-w-[28px] px-1.5 py-px rounded font-semibold ${p.lace?.total ? "bg-primary/10 text-primary-container" : "text-on-surface-variant"}`}>{p.lace?.total ?? "—"}</span>
                             </td>
-                            <td className="py-2.5 px-3 align-top text-right whitespace-nowrap">{p.dias_espera} días{p.antiguedad_mayor_1_anio && <div className="text-[12px] text-on-surface-variant">más de 1 año</div>}</td>
-                            <td className="py-2.5 px-3 align-top text-[13px] whitespace-nowrap">
+                            <td className="py-2.5 px-3 align-top text-right whitespace-nowrap">{p.dias_espera} días{p.antiguedad_mayor_1_anio && <div className="text-[13px] text-on-surface-variant">más de 1 año</div>}</td>
+                            <td className="py-2.5 px-3 align-top text-[14px] whitespace-nowrap">
                               {p.estado_revision === "pendiente" ? <span className="text-on-surface-variant">Pendiente</span>
                                 : p.estado_revision === "requiere_revision" ? <span className="text-ambar font-semibold" title={p.revision_vencida_por}><Icono n="update" className="text-[16px]" /> Revisar de nuevo</span>
                                 : <span className="text-verde font-semibold"><Icono n="check" className="text-[16px]" /> {p.estado_revision === "ajustado" ? "Ajustada" : "Confirmada"}</span>}
@@ -220,12 +220,12 @@ export default function App() {
                   </tbody>
                 </table>
                 {filtrados.length === 0 && <p className="p-6 text-on-surface-variant">No hay pacientes con esos filtros.</p>}
-                <div className="px-3 py-2 flex items-center justify-between text-[13px] text-on-surface-variant bg-surface-container-low">
+                <div className="px-3 py-2 flex items-center justify-between text-[14px] text-on-surface-variant bg-surface-container-low">
                   <span>{filtrados.length} pacientes · orden: prioridad, contactar hoy, puntaje LACE, más de 1 año en espera, fecha de ingreso</span>
                   <div className="flex items-center gap-2">
-                    <button disabled={pagina === 0} onClick={() => setPagina(pagina - 1)} className="px-2 py-1 border border-outline-variant rounded bg-white disabled:opacity-40">Anterior</button>
+                    <button disabled={pagina === 0} onClick={() => setPagina(pagina - 1)} className="px-2 py-1 border border-outline-variant rounded bg-surface-container-lowest disabled:opacity-40">Anterior</button>
                     <span>{pagina + 1} / {paginas}</span>
-                    <button disabled={pagina >= paginas - 1} onClick={() => setPagina(pagina + 1)} className="px-2 py-1 border border-outline-variant rounded bg-white disabled:opacity-40">Siguiente</button>
+                    <button disabled={pagina >= paginas - 1} onClick={() => setPagina(pagina + 1)} className="px-2 py-1 border border-outline-variant rounded bg-surface-container-lowest disabled:opacity-40">Siguiente</button>
                   </div>
                 </div>
               </section>
@@ -235,7 +235,7 @@ export default function App() {
                   <summary className="px-4 py-2.5 cursor-pointer text-[14px] font-semibold">
                     Egresados de la lista ({data.excluidos.length}): {data.excluidos.filter((e) => e.motivo === "fallecido").length} por fallecimiento · {data.excluidos.filter((e) => e.motivo === "atendido").length} atendidos
                   </summary>
-                  <ul className="px-4 pb-3 text-[13px] text-on-surface-variant">
+                  <ul className="px-4 pb-3 text-[14px] text-on-surface-variant">
                     {[...data.excluidos].sort((a, b) => (b.fecha || "").localeCompare(a.fecha || "")).map((e) => (
                       <li key={e.id_paciente} className="py-1 border-t border-outline-variant/60 flex justify-between gap-2">
                         <span>{e.nombre_fantasia || e.id_paciente} · {e.especialidad}</span>
@@ -258,7 +258,7 @@ export default function App() {
       </main>
 
       <footer className="border-t border-outline-variant bg-surface-container-lowest">
-        <div className="max-w-[1400px] mx-auto px-6 py-3 text-[12px] text-on-surface-variant flex flex-wrap justify-between gap-2">
+        <div className="max-w-[1400px] mx-auto px-6 py-3 text-[13px] text-on-surface-variant flex flex-wrap justify-between gap-2">
           <span>Prioridad según Tabla de priorización SSMSO 2025 (HLF) y criterios MINSAL. La herramienta propone; el equipo clínico decide.</span>
           <span>Datos sintéticos de demostración</span>
         </div>
