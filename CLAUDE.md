@@ -27,26 +27,28 @@ Dataset sintético del hospital: 500 pacientes, fecha de referencia 2026-10-13, 
 Pacientes de demo: 00002 (salta del puesto 312 al 18 tras urgencia + hospitalización), 00001 (deterioro progresivo, PHQ-9 de 4 a 19), 00028 (mejora y baja), 00020 (2 inasistencias), 00009 (fallece y sale de la lista).
 
 ## Stack
-- `front/`: React + Vite + framer-motion. Hosting en AWS Amplify (deploy automático desde `main`).
-- `lambda/`: Python. `puntaje.py` contiene la lógica del puntaje (ya probada).
-- AWS: API Gateway → Lambda → S3 (perfiles.json) + DynamoDB (revisiones/eventos) + Bedrock (explicaciones).
-- Contrato de la API y del JSON en `contrato.md`. **No cambiar campos sin avisar al equipo.**
+- `front/`: React + Vite + framer-motion + Tailwind (CDN). Hosting en AWS Amplify (deploy automático desde `main`).
+- `lambda/`: Python sin dependencias externas. `puntaje.py` = motor de priorización con reglas oficiales (ver docs/criterios_oficiales.md).
+- AWS: Amplify → API Gateway → Lambda → S3 (perfiles.json, box.json) + DynamoDB (eventos, revisiones, contactos, novedades, importaciones) + Bedrock (leer informes/fotos y redactar).
+- Contrato de la API en `contrato.md`. **No cambiar campos sin avisar al equipo.**
 
-## Estado actual (miércoles 16:30) — TODO funciona en local, falta deploy
-- `lambda/app.py`: API completa (GET /pacientes, GET /pacientes/{id}, POST /eventos, POST /pacientes/{id}/revision, POST /pacientes/{id}/explicar, GET /boxes). 9 tests pytest pasando.
-- `lambda/explicar.py`: Bedrock Converse con fallback a plantilla si falla.
-- `lambda/local_server.py`: corre la API en localhost:3001 sin AWS.
-- `template.yaml` (SAM): S3 + DynamoDB + Lambda + HTTP API. Validado con cfn-lint. `amplify.yml` para el front.
-- `front/`: lista con slider, Explicar con IA, Confirmar/Ajustar, Simular evento con "Reevaluado en X ms", pestaña Uso de box, excluidos. Probado end-to-end contra la API local.
-- Pasos de deploy en DEPLOY.md.
+## Cómo se prioriza (sin pesos inventados)
+1. Categoría: prioridad inicial de la SIC; sube a la fila "descompensada" de la Tabla SSMSO 2025 del HLF si hay descompensación posterior. Nunca baja sola.
+2. Orden MINSAL Ord. 536/2025: categoría → riesgo vital → puntaje LACE (van Walraven 2010) → grupo de especial protección → antigüedad > 1 año → llegada.
+3. Banderas: GES vencida, causal 8 (2 inasistencias seguidas), revisión sugerida (examen alterado, aumento de dosis), ACG.
+4. Una revisión clínica vale hasta el próximo evento. "Contactar hoy" se apaga registrando el contacto.
+
+## Estado actual — todo funciona en local, falta deploy
+- 30 tests (`python -m pytest -q tests`). API: pacientes, eventos, informe (texto/foto), revisión, contacto, novedad, historia, box, KPIs, importar Excel/CSV, plantillas.
+- Front: Hoy (contactar hoy + mapa de box + asignación de cupos), Lista, ficha en pestañas, Indicadores (kappa), Cargar datos, Criterios.
 
 ## Pendiente
-1. Deploy en AWS (DEPLOY.md pasos 2–5) y elegir modelo Bedrock.
-2. Validar pesos de puntaje con Víctor Arancibia (HLF) y medir concordancia (kappa).
-3. Pulido visual y pitch.
+1. Push a GitHub y deploy en AWS (DEPLOY.md) con Model ID de Bedrock.
+2. Validar con el HLF las filas de "descompensado" y recalibrar LACE con datos reales.
+3. Pitch y video de respaldo.
 
 ## Reglas para el asistente
-- No cambies la lógica de `lambda/puntaje.py` sin avisar: los tests dependen de ella.
+- No cambies la lógica de `lambda/puntaje.py` sin avisar: los tests dependen de ella. Toda regla nueva debe citar su fuente.
 - Corre `python -m pytest -q tests` y `npm run build` después de cada cambio.
 - Cambios chicos y que no rompan lo que funciona. Si propones algo grande, avisa antes.
 - No agregues librerías nuevas sin preguntar.
