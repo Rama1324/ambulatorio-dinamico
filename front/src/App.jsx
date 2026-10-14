@@ -94,7 +94,7 @@ export default function App() {
       <header className="bg-surface-container-lowest border-b border-outline-variant">
         <div className="max-w-[1400px] mx-auto px-6 h-16 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded bg-primary text-on-primary flex items-center justify-center"><Icono n="local_hospital" className="text-[22px]" /></div>
+            <Logo />
             <div className="leading-tight">
               <div className="text-[17px] font-semibold text-primary">Lista de espera dinámica · Consultas de especialidad</div>
               <div className="text-[13px] text-on-surface-variant">Hospital Clínico Dra. Eloísa Díaz Inzunza · La Florida · SSMSO</div>
@@ -257,6 +257,14 @@ export default function App() {
       </footer>
     </div>
   );
+}
+
+// Logo oficial del hospital: poner el archivo en front/public/logo-hlf.png. Si no está, se muestra el ícono.
+function Logo() {
+  const [ok, setOk] = useState(true);
+  return ok
+    ? <img src="/logo-hlf.png" alt="Hospital Clínico Dra. Eloísa Díaz Inzunza" className="h-11 w-auto object-contain" onError={() => setOk(false)} />
+    : <div className="w-9 h-9 rounded bg-primary text-on-primary flex items-center justify-center"><Icono n="local_hospital" className="text-[22px]" /></div>;
 }
 
 const Indicador = ({ n, t, tono, onClick }) => {

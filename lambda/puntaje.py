@@ -69,13 +69,12 @@ def estabiliza(ev):
 
 
 def inasistencias_consecutivas(citas):
-    """Máximo de inasistencias seguidas (las reprogramaciones/cancelaciones no cortan la racha)."""
+    """Máximo de inasistencias en citas consecutivas (causal 8: 'dos inasistencias consecutivas').
+    Cualquier otra cita entre medio (asistió, reprogramó, canceló) corta la racha."""
     racha = mejor = 0
     for c in sorted(citas, key=lambda c: c["fecha_cita"]):
-        if c["estado_cita"] == "no_asistio":
-            racha += 1; mejor = max(mejor, racha)
-        elif c["estado_cita"] == "asistio":
-            racha = 0
+        racha = racha + 1 if c["estado_cita"] == "no_asistio" else 0
+        mejor = max(mejor, racha)
     return mejor
 
 
