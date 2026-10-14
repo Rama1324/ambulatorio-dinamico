@@ -729,17 +729,32 @@ function Hoy({ vitales, fecha, esp, setEsp, onVer, esApi }) {
     api.getBoxes(fecha, esp === "Todas" ? null : esp).then(setB).catch((e) => setErr(e.message));
   }, [fecha, esp, esApi]);
 
+  const lista = vitales.filter((p) => esp === "Todas" || p.especialidad === esp);
+  const cupo = b?.cupo_por_paciente || {};
+  const conCupo = lista.filter((p) => cupo[p.id_paciente]).length;
   return (
     <div className="grid gap-5 lg:grid-cols-12 items-start">
-      <Caja titulo={`Contactar hoy (${vitales.length})`} className="lg:col-span-4 border-l-4 border-l-error">
-        <p className="text-[13px] text-on-surface-variant mb-3">Descompensación grave después de la interconsulta, sin estabilización posterior, en un diagnóstico de prioridad alta según la tabla del HLF. No esperar cupo: contactar y evaluar derivación a urgencia según criterio médico.</p>
-        {vitales.length === 0 && <p className="text-on-surface-variant">Sin pacientes en esta condición.</p>}
+      <Caja titulo={`Contactar hoy (${lista.length})`} className="lg:col-span-4 border-l-4 border-l-error">
+        <p className="text-[13px] text-on-surface-variant mb-2">Descompensación grave después de la interconsulta, sin estabilización posterior, en un diagnóstico de prioridad alta según la tabla del HLF. Llamar hoy a todos, tengan o no cupo de box.</p>
+        {b && lista.length > 0 && (
+          <div className="flex gap-2 mb-3 text-[13px]">
+            <span className="flex-1 rounded bg-hlf-claro text-hlf px-2 py-1"><b>{conCupo}</b> con cupo de box hoy</span>
+            <span className={`flex-1 rounded px-2 py-1 ${lista.length - conCupo ? "bg-error-container text-on-error-container" : "bg-surface-container-low"}`}><b>{lista.length - conCupo}</b> sin cupo hoy</span>
+          </div>
+        )}
+        {lista.length === 0 && <p className="text-on-surface-variant">Sin pacientes en esta condición{esp !== "Todas" && ` en ${esp}`}.</p>}
         <ul className="divide-y divide-outline-variant/60">
-          {vitales.map((p) => (
+          {lista.map((p) => (
             <li key={p.id_paciente}>
               <button onClick={() => onVer(p.id_paciente)} className="w-full text-left py-2 hover:bg-surface-container-low">
-                <div className="font-semibold">{p.nombre_fantasia} <span className="font-normal text-on-surface-variant text-[13px]">· {p.edad} años · N° {p.posicion}</span></div>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="font-semibold">{p.nombre_fantasia} <span className="font-normal text-on-surface-variant text-[13px]">· {p.edad} años · N° {p.posicion}</span></div>
+                  {b && (cupo[p.id_paciente]
+                    ? <span className="shrink-0 text-[12px] rounded bg-hlf-claro text-hlf px-1.5 py-px font-semibold">Cupo hoy: {cupo[p.id_paciente]}</span>
+                    : <span className="shrink-0 text-[12px] rounded bg-error-container text-on-error-container px-1.5 py-px font-semibold">Sin cupo hoy</span>)}
+                </div>
                 <div className="text-[13px] text-on-surface-variant">{p.especialidad} · {p.diagnostico_texto}</div>
+                {b && !cupo[p.id_paciente] && <div className="text-[12px] text-error">Evaluar sobrecupo o derivación a urgencia según criterio médico</div>}
               </button>
             </li>
           ))}
@@ -755,6 +770,10 @@ function Hoy({ vitales, fecha, esp, setEsp, onVer, esApi }) {
         {!err && !b && <p className="text-on-surface-variant">Cargando agenda…</p>}
         {b?.especialidades.map((e) => (
           <Caja key={e.especialidad} titulo={e.especialidad} accion={<span className="text-[13px] text-on-surface-variant">Inasistencia histórica {e.inasistencia_pct ?? "—"}%</span>}>
+            <div className="flex flex-wrap gap-2 mb-3 text-[13px]">
+              <span className="rounded bg-surface-container-low px-2 py-1"><b>{e.cupos_libres_hoy}</b> cupo{e.cupos_libres_hoy !== 1 ? "s" : ""} libre{e.cupos_libres_hoy !== 1 ? "s" : ""} hoy</span>
+              {e.vitales_sin_cupo.length > 0 && <span className="rounded bg-error-container text-on-error-container px-2 py-1"><b>{e.vitales_sin_cupo.length}</b> con riesgo vital sin cupo</span>}
+            </div>
             {e.asignaciones.length === 0 && <p className="text-on-surface-variant text-[14px]">Sin box asignado a esta especialidad.</p>}
             {e.asignaciones.map((a) => (
               <div key={a.id_box} className="mb-3">
@@ -776,6 +795,18 @@ function Hoy({ vitales, fecha, esp, setEsp, onVer, esApi }) {
                 </table>
               </div>
             ))}
+            {e.vitales_sin_cupo.length > 0 && (
+              <div className="mb-3 rounded border border-error/40 bg-error-container/40 p-2 text-[14px]">
+                <div className="font-semibold text-on-error-container">No alcanzan cupo hoy, pero tienen riesgo vital: contactar y evaluar sobrecupo o derivación a urgencia</div>
+                <ul className="mt-1">
+                  {e.vitales_sin_cupo.map((p) => (
+                    <li key={p.id_paciente} onClick={() => onVer(p.id_paciente)} className="cursor-pointer hover:underline">
+                      N° {p.posicion} · {p.nombre_fantasia} · {p.diagnostico_texto}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {e.alternativa && (
               <div onClick={() => onVer(e.alternativa.id_paciente)} className="cursor-pointer border border-dashed border-outline rounded p-2 text-[14px] hover:bg-surface-container-low">
                 <div className="text-[13px] text-on-surface-variant">Siguiente en la lista, si un paciente no confirma:</div>

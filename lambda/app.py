@@ -397,9 +397,14 @@ def boxes(corte, especialidad=None):
         if alt:
             ref = next(p for p in cola[esp] if p["id_paciente"] == ultimo["id_paciente"]) if ultimo else None
             alternativa = {**_fila_box(alt), "por_que_despues": _diferencia(ref, alt) if ref else None}
+        # pacientes con riesgo vital que no alcanzan cupo hoy: hay que gestionarlos igual (no esperar)
+        sin_cupo = [_fila_box(p) for p in pendientes if p["riesgo_vital"]]
         out.append({**info, "especialidad": esp, "dia_agenda": dia, "asignaciones": asignaciones, "alternativa": alternativa,
+                    "cupos_libres_hoy": sum(a["libres"] for a in asignaciones), "vitales_sin_cupo": sin_cupo,
                     "sugeridos": [p for a in asignaciones for p in a["pacientes"]][:5]})
-    return {"fecha_corte": corte.isoformat(), "dia_agenda": dia, "resumen": b.get("resumen", {}), "especialidades": out}
+    cupo = {p["id_paciente"]: a["id_box"] for e in out for a in e["asignaciones"] for p in a["pacientes"]}
+    return {"fecha_corte": corte.isoformat(), "dia_agenda": dia, "resumen": b.get("resumen", {}), "especialidades": out,
+            "cupo_por_paciente": cupo}
 
 
 # ---------- HTTP ----------
