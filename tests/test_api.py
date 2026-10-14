@@ -142,5 +142,67 @@ def test_ingresar_paciente_nuevo():
     assert s == 200 and r["paciente"]["categoria"] == "alta" and r["paciente"]["riesgo_vital"]
     assert call("POST", "/pacientes", body={"nombre": "", "edad": 70})[0] == 400
 
+def _xlsx(hojas):
+    """Excel mínimo (cadenas en línea) para probar la lectura sin librerías."""
+    import base64, io, zipfile
+    from xml.sax.saxutils import escape
+    b = io.BytesIO()
+    z = zipfile.ZipFile(b, "w")
+    z.writestr("[Content_Types].xml", '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>')
+    z.writestr("xl/workbook.xml", '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+               'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>' +
+               "".join(f'<sheet name="{n}" sheetId="{i}" r:id="rId{i}"/>' for i, n in enumerate(hojas, 1)) + "</sheets></workbook>")
+    z.writestr("xl/_rels/workbook.xml.rels", '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+               "".join(f'<Relationship Id="rId{i}" Target="worksheets/sheet{i}.xml"/>' for i in range(1, len(hojas) + 1)) + "</Relationships>")
+    for i, filas in enumerate(hojas.values(), 1):
+        xml = "".join("<row>" + "".join(
+            (f'<c r="{chr(65 + j)}{k + 1}"><v>{v}</v></c>' if isinstance(v, (int, float)) else
+             f'<c r="{chr(65 + j)}{k + 1}" t="inlineStr"><is><t>{escape(str(v))}</t></is></c>') for j, v in enumerate(f)) + "</row>"
+                      for k, f in enumerate(filas))
+        z.writestr(f"xl/worksheets/sheet{i}.xml", f'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>{xml}</sheetData></worksheet>')
+    z.close()
+    return base64.b64encode(b.getvalue()).decode()
+
+def test_importar_excel_y_csv():
+    import base64
+    excel = _xlsx({
+        "Pacientes": [["RUT", "Nombre", "Edad", "Género"], ["11.111.111-1", "Ana Soto", 71, "Femenino"]],
+        "Lista espera": [["RUT", "CIE10", "Prioridad", "Fecha ingreso"], ["11.111.111-1", "I50.9", "MEDIA", 46000]],
+    })
+    csv_ev = base64.b64encode("Rut;Fecha;Tipo;Subtipo;Gravedad\n11.111.111-1;01-10-2026;Hospitalización;ingreso hospitalario;Grave\n"
+                              "99;xx;urgencia;;leve\n".encode("utf-8")).decode()
+    archivos = [{"nombre": "export_hlf.xlsx", "contenido_base64": excel}, {"nombre": "eventos.csv", "contenido_base64": csv_ev}]
+    s, rev = call("POST", "/importar", body={"archivos": archivos})
+    assert s == 200 and not rev["cargado"]
+    tablas = {i["tabla"]: i for i in rev["informe"]}
+    assert tablas["pacientes"]["validas"] == 1 and tablas["lista_espera"]["validas"] == 1
+    assert tablas["eventos_clinicos"]["validas"] == 1 and tablas["eventos_clinicos"]["errores"][0]["fila"] == 3
+    assert rev["resumen"]["pacientes_nuevos"] == 1 and rev["resumen"]["eventos"] == 1
+    s, carga = call("POST", "/importar", body={"archivos": archivos, "confirmar": True})
+    assert carga["cargado"]
+    _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
+    p = fila(d, "11.111.111-1")
+    assert p["especialidad"] == "Cardiología" and p["fecha_ingreso_lista"] == "2025-12-09"   # 46000 = fecha interna de Excel
+    assert p["categoria"] == "alta" and p["riesgo_vital"]   # IC descompensada (pág. 85) tras la hospitalización importada
+
+def test_novedades_comorbilidad_diagnostico_fallecimiento():
+    _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
+    p = next(x for x in d["pacientes"] if x["diagnostico_cie10"] == "M75" and x["lace"]["total"] == 0)
+    pid = p["id_paciente"]
+    s, r = call("POST", f"/pacientes/{pid}/novedad", body={"tipo": "comorbilidad", "cie10": "M54"})   # lumbago: sin peso Charlson
+    assert s == 200 and r["paciente"]["lace"]["total"] == 0 and "sin peso Charlson" in r["paciente"]["lace"]["partes"][2]["valor"]
+    s, r = call("POST", f"/pacientes/{pid}/novedad", body={"tipo": "comorbilidad", "condicion": "insuficiencia cardíaca congestiva"})
+    assert r["paciente"]["lace"]["partes"][2]["puntos"] == 2 and r["paciente"]["lace"]["total"] == 2
+    s, r = call("POST", f"/pacientes/{pid}/novedad", body={"tipo": "diagnostico", "cie10": "I20"})
+    assert r["paciente"]["especialidad"] == "Cardiología"
+    s, r = call("POST", f"/pacientes/{pid}/novedad", body={"tipo": "fallecimiento", "fecha": "2026-10-12"})
+    assert s == 200 and not r["en_lista"]
+    _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
+    assert pid in [e["id_paciente"] for e in d["excluidos"]] and pid not in [x["id_paciente"] for x in d["pacientes"]]
+
+def test_plantilla():
+    r = app.handler({"requestContext": {"http": {"method": "GET"}}, "rawPath": "/plantillas/lista_espera"})
+    assert r["statusCode"] == 200 and "diagnostico_cie10" in r["body"]
+
 def test_404():
     assert call("GET", "/nada")[0] == 404

@@ -66,6 +66,29 @@ CHARLSON_LACE = {
     "K70": (2, "enfermedad hepática leve"),
     "E11": (1, "diabetes sin complicaciones"),
 }
+# Condiciones de Charlson con su peso en el índice LACE (nota de la Tabla 3, van Walraven 2010), para registrar comorbilidades.
+CONDICIONES_CHARLSON = [
+    ("infarto agudo al miocardio", 1), ("enfermedad vascular periférica", 1), ("enfermedad cerebrovascular", 1),
+    ("diabetes sin complicaciones", 1), ("insuficiencia cardíaca congestiva", 2), ("enfermedad pulmonar crónica", 2),
+    ("enfermedad hepática leve", 2), ("cáncer", 2), ("demencia", 3), ("enfermedad del tejido conectivo", 3),
+    ("enfermedad hepática moderada a severa", 4), ("infección por VIH", 4), ("cáncer metastásico", 6),
+]
+PESO_CHARLSON = dict(CONDICIONES_CHARLSON)
+
+
+def charlson(perfil):
+    """Suma de pesos Charlson (LACE) del diagnóstico de la SIC + comorbilidades registradas, cada condición una vez."""
+    conds = {}
+    peso, nombre = CHARLSON_LACE.get(perfil["lista_espera"]["diagnostico_cie10"], (0, None))
+    if nombre:
+        conds[nombre] = peso
+    for c in perfil["paciente"].get("comorbilidades", []):
+        if c.get("condicion") in PESO_CHARLSON:
+            conds[c["condicion"]] = PESO_CHARLSON[c["condicion"]]
+        elif c.get("cie10") in CHARLSON_LACE:
+            p, n = CHARLSON_LACE[c["cie10"]]
+            conds[n] = p
+    return sum(conds.values()), conds
 
 
 def indice_lace(perfil, corte):
@@ -74,11 +97,17 @@ def indice_lace(perfil, corte):
     evs = [e for e in perfil.get("eventos_clinicos", []) if desde <= d(e["fecha_evento"]).toordinal() <= corte.toordinal()]
     hosp = [e for e in evs if e["tipo_evento"] == "hospitalizacion"]
     urg = sum(1 for e in evs if e["tipo_evento"] == "visita_urgencia")
-    charlson, cond = CHARLSON_LACE.get(perfil["lista_espera"]["diagnostico_cie10"], (0, None))
+    total_c, conds = charlson(perfil)
+    cond = ", ".join(f"{n} ({p})" for n, p in conds.items())
+    otras = [c.get("nombre") for c in perfil["paciente"].get("comorbilidades", []) if c.get("condicion") not in PESO_CHARLSON
+             and c.get("cie10") not in CHARLSON_LACE]
+    if otras:
+        cond = (cond + "; " if cond else "") + "sin peso Charlson: " + ", ".join(otras)
     partes = [
         {"letra": "L", "nombre": "Días de estada", "valor": "sin dato en el registro", "puntos": 0},
         {"letra": "A", "nombre": "Ingreso de urgencia (6 meses)", "valor": f'{len(hosp)} hospitalización(es)' if hosp else "no", "puntos": 3 if hosp else 0},
-        {"letra": "C", "nombre": "Comorbilidad (Charlson)", "valor": cond or "sin condición de Charlson", "puntos": charlson if charlson < 4 else 5},
+        {"letra": "C", "nombre": "Comorbilidad (Charlson)", "valor": f"Charlson {total_c}: {cond}" if cond else "sin condición de Charlson",
+         "puntos": total_c if total_c < 4 else 5},
         {"letra": "E", "nombre": "Consultas en urgencia (6 meses)", "valor": str(urg), "puntos": min(urg, 4)},
     ]
     return {"total": sum(p["puntos"] for p in partes), "partes": partes, "fuente": LACE_FUENTE}

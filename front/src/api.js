@@ -70,6 +70,9 @@ export async function getHistoria(id, fechaCorte) {
     (e.severidad === "grave" || e.subtipo.includes("descompensaci") || ["estabilización", "buena respuesta"].includes(e.subtipo)));
   return { id_paciente: id, puntos, eventos };
 }
+export const postNovedad = (id, body) => req("POST", `/pacientes/${id}/novedad`, body);
+export const postImportar = (archivos, confirmar) => req("POST", "/importar", { archivos, confirmar });
+export const urlPlantilla = (tabla) => `${API_URL}/plantillas/${tabla}`;
 export const getCatalogo = () => req("GET", "/catalogo");
 export const postPaciente = (body) => req("POST", "/pacientes", body);
 export const postInforme = (id, body) => req("POST", `/pacientes/${id}/informe`, body);

@@ -21,6 +21,7 @@ from datetime import date, datetime, timedelta, timezone
 
 import puntaje
 import explicar
+import importar
 import informe
 
 LOCAL = os.environ.get("LOCAL") == "1"
@@ -97,7 +98,9 @@ def perfiles_combinados():
             continue
         if pid in base and out[pid] is base[pid]:
             out[pid] = copy.deepcopy(base[pid])
-        out[pid].setdefault("eventos_clinicos", []).append(json.loads(ev["evento"]))
+        e = json.loads(ev["evento"])
+        if not any(x.get("id_evento") == e["id_evento"] for x in out[pid].setdefault("eventos_clinicos", [])):
+            out[pid]["eventos_clinicos"].append(e)
     ult_rev = {r["id_paciente"]: json.loads(r["revision"]) for r in revisiones}
     return out, ult_rev
 
@@ -116,6 +119,7 @@ def _enriquecer(r, perfil, revision, pos_ant):
         "edad": pac["edad"],
         "sexo": pac["sexo"],
         "comuna": pac["comuna"],
+        "comorbilidades": pac.get("comorbilidades", []),
         "especialidad": le["especialidad"],
         "diagnostico_cie10": le["diagnostico_cie10"],
         "diagnostico_texto": le["diagnostico_texto"],
@@ -242,7 +246,52 @@ def catalogo():
     return {"diagnosticos": sorted(vistos.values(), key=lambda d: (d["especialidad"], d["diagnostico_cie10"])),
             "comunas": sorted({p["paciente"]["comuna"] for p in perfiles().values()}),
             "previsiones": sorted({p["paciente"]["prevision"] for p in perfiles().values()}),
-            "origenes": sorted({p["lista_espera"]["origen_derivacion"] for p in perfiles().values()})}
+            "origenes": sorted({p["lista_espera"]["origen_derivacion"] for p in perfiles().values()}),
+            "charlson": [{"condicion": n, "peso": p} for n, p in puntaje.CONDICIONES_CHARLSON]}
+
+
+def post_novedad(pid, body):
+    """Novedad registrada por el equipo: comorbilidad, cambio de diagnóstico o egreso (fallecimiento / atención)."""
+    perfs, _ = perfiles_combinados()
+    if pid not in perfs:
+        return 404, {"error": "paciente no existe"}
+    tipo = body.get("tipo")
+    corte = date.fromisoformat(body.get("fecha_corte") or FECHA_REFERENCIA.isoformat())
+    fecha = body.get("fecha") or corte.isoformat()
+    p = copy.deepcopy(perfs[pid])
+    cat = {d["diagnostico_cie10"]: d for d in catalogo()["diagnosticos"]}
+    if tipo == "comorbilidad":
+        cond, cie = body.get("condicion"), body.get("cie10")
+        if cond in puntaje.PESO_CHARLSON:
+            nueva = {"condicion": cond, "nombre": cond, "fecha": fecha}
+        elif cie in cat:
+            nueva = {"cie10": cie, "nombre": f'{cie} {cat[cie]["diagnostico_texto"]}', "fecha": fecha}
+        else:
+            return 400, {"error": "indique 'condicion' (lista de Charlson) o 'cie10' del catálogo"}
+        p["paciente"].setdefault("comorbilidades", []).append(nueva)
+        texto = f'comorbilidad registrada: {nueva["nombre"]}'
+    elif tipo == "diagnostico":
+        dx = cat.get(body.get("cie10"))
+        if not dx:
+            return 400, {"error": "cie10 debe estar en el catálogo"}
+        p["lista_espera"].update({k: dx[k] for k in ("especialidad", "sub_especialidad", "diagnostico_cie10", "diagnostico_texto")})
+        texto = f'diagnóstico cambiado a {dx["diagnostico_cie10"]} {dx["diagnostico_texto"]}'
+    elif tipo == "fallecimiento":
+        p["paciente"].update({"fallecido": True, "fecha_defuncion": fecha})
+        p["lista_espera"]["estado"] = "fallecido"
+        texto = f"fallecimiento el {fecha} (causal de egreso 9)"
+    elif tipo == "atendido":
+        p["lista_espera"].update({"estado": "atendido", "fecha_atencion": fecha})
+        texto = f"atendido en consulta nueva de especialidad el {fecha}: sale de la lista"
+    else:
+        return 400, {"error": "tipo debe ser comorbilidad, diagnostico, fallecimiento o atendido"}
+    p["eventos_clinicos"] = [e for e in p.get("eventos_clinicos", []) if not e.get("id_evento", "").startswith("EV-DEMO")]
+    ahora = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    guardar({"id_paciente": pid, "sk": "paciente#", "perfil": json.dumps(p, ensure_ascii=False, default=str)})
+    guardar({"id_paciente": pid, "sk": f"novedad#{ahora}", "novedad": json.dumps(
+        {"tipo": tipo, "detalle": texto, "usuario": body.get("usuario", "equipo clínico"), "fecha": ahora}, ensure_ascii=False)})
+    fila = next((x for x in lista(corte)["pacientes"] if x["id_paciente"] == pid), None)
+    return 200, {"id_paciente": pid, "mensaje": texto, "paciente": fila, "en_lista": fila is not None}
 
 
 def post_paciente(body):
@@ -275,6 +324,36 @@ def post_paciente(body):
     data = lista(corte)
     fila = next((p for p in data["pacientes"] if p["id_paciente"] == pid), None)
     return 200, {"id_paciente": pid, "paciente": fila}
+
+
+def post_importar(body):
+    """Revisa (confirmar=false) o carga (confirmar=true) archivos Excel/CSV con datos del hospital."""
+    archivos = body.get("archivos") or []
+    if not archivos:
+        return 400, {"error": "envíe 'archivos': [{nombre, contenido_base64}]"}
+    informe, datos = importar.procesar(archivos)
+    existentes, _ = perfiles_combinados()
+    cat = {d["diagnostico_cie10"]: d for d in catalogo()["diagnosticos"]}
+    perfs, agenda, resumen, avisos = importar.combinar(datos, existentes, cat)
+    out = {"informe": informe, "resumen": resumen, "avisos": avisos, "cargado": False}
+    if body.get("confirmar"):
+        for pid, p in perfs.items():
+            guardar({"id_paciente": pid, "sk": "paciente#", "perfil": json.dumps(p, ensure_ascii=False, default=str)})
+        for a in agenda:
+            guardar({"id_paciente": "_agenda", "sk": f'agenda#{a["fecha"]}#{a["id_box"]}', "fila": json.dumps(a, ensure_ascii=False)})
+        out["cargado"] = True
+    return 200, out
+
+
+def agenda_combinada():
+    """Agenda de box.json + bloques importados (un bloque importado reemplaza al mismo box ese día)."""
+    agenda = {f: list(filas) for f, filas in box_data().get("agenda", {}).items()}
+    for r in registros():
+        if r["sk"].startswith("agenda#"):
+            a = json.loads(r["fila"])
+            dia = [x for x in agenda.get(a["fecha"], []) if x["id_box"] != a["id_box"]]
+            agenda[a["fecha"]] = dia + [{k: v for k, v in a.items() if k != "fecha"}]
+    return agenda
 
 
 def post_revision(pid, body):
@@ -378,7 +457,7 @@ def boxes(corte, especialidad=None):
     cola = {}
     for p in data["pacientes"]:
         cola.setdefault(p["especialidad"], []).append(p)
-    agenda = b.get("agenda", {})
+    agenda = agenda_combinada()
     dia = max((f for f in agenda if f <= corte.isoformat()), default=None)  # último día hábil con agenda ≤ corte
     out = []
     for esp, info in sorted(b.get("especialidades", {}).items()):
@@ -445,10 +524,18 @@ def handler(event, context=None):
             return _resp(*post_paciente(body))
         if method == "GET" and partes == ["catalogo"]:
             return _resp(200, catalogo())
+        if method == "POST" and partes == ["importar"]:
+            return _resp(*post_importar(body))
+        if method == "GET" and len(partes) == 2 and partes[0] == "plantillas" and partes[1] in importar.TABLAS:
+            return {"statusCode": 200, "headers": {**CORS, "Content-Type": "text/csv; charset=utf-8",
+                                                   "Content-Disposition": f'attachment; filename="plantilla_{partes[1]}.csv"'},
+                    "body": importar.plantilla_csv(partes[1])}
         if method == "POST" and partes == ["eventos"]:
             return _resp(*post_evento(body))
         if method == "POST" and len(partes) == 3 and partes[0] == "pacientes" and partes[2] == "revision":
             return _resp(*post_revision(partes[1], body))
+        if method == "POST" and len(partes) == 3 and partes[0] == "pacientes" and partes[2] == "novedad":
+            return _resp(*post_novedad(partes[1], body))
         if method == "POST" and len(partes) == 3 and partes[0] == "pacientes" and partes[2] == "informe":
             return _resp(*post_informe(partes[1], body))
         if method == "POST" and len(partes) == 3 and partes[0] == "pacientes" and partes[2] == "explicar":

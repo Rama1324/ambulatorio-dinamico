@@ -117,7 +117,7 @@ export default function App() {
           </div>
         </div>
         <nav className="max-w-[1400px] mx-auto px-6 flex gap-6 text-[14px]">
-          {[["hoy", "Hoy", vitales.length], ["lista", "Lista de espera", null], ["criterios", "Criterios de priorización", null]].map(([k, t, n]) => (
+          {[["hoy", "Hoy", vitales.length], ["lista", "Lista de espera", null], ["cargar", "Cargar datos", null], ["criterios", "Criterios de priorización", null]].map(([k, t, n]) => (
             <button key={k} onClick={() => setVista(k)}
               className={`py-2.5 border-b-2 -mb-px ${vista === k ? "border-primary text-primary font-semibold" : "border-transparent text-on-surface-variant hover:text-on-surface"}`}>
               {t}{n ? <span className="ml-1.5 px-1.5 rounded-full bg-error text-on-error text-[12px] font-semibold">{n}</span> : null}
@@ -162,6 +162,10 @@ export default function App() {
 
         {vista === "hoy" && <Hoy vitales={vitales} fecha={fecha} esp={esp} setEsp={setEsp} onVer={abrir} esApi={esApi} />}
         {vista === "criterios" && <Criterios />}
+        {vista === "cargar" && <CargarDatos esApi={esApi} onListo={async (r) => {
+          await cargar();
+          mostrarAviso({ titulo: `Datos cargados: ${r.resumen.pacientes_nuevos} pacientes nuevos, ${r.resumen.pacientes_actualizados} actualizados, ${r.resumen.eventos} eventos` });
+        }} />}
         {vista === "lista" && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
             <div className="lg:col-span-7 xl:col-span-8 flex flex-col gap-4">
@@ -178,7 +182,8 @@ export default function App() {
                   </select>
                 </Filtro>
                 <label className="flex items-center gap-2 h-9 cursor-pointer select-none"><input type="checkbox" checked={soloPend} onChange={(e) => setSoloPend(e.target.checked)} className="w-4 h-4 accent-[#0f69b4]" />Solo pendientes de revisión</label>
-                {esApi && <button onClick={() => setNuevo(true)} className="ml-auto h-9 px-3 rounded bg-primary text-on-primary font-semibold flex items-center gap-1"><Icono n="person_add" className="text-[18px]" />Ingresar paciente</button>}
+                <button onClick={() => exportarCsv(filtrados, fecha)} className="ml-auto h-9 px-3 rounded border border-outline-variant bg-white font-semibold flex items-center gap-1"><Icono n="download" className="text-[18px]" />Descargar Excel</button>
+                {esApi && <button onClick={() => setNuevo(true)} className="h-9 px-3 rounded bg-primary text-on-primary font-semibold flex items-center gap-1"><Icono n="person_add" className="text-[18px]" />Ingresar paciente</button>}
               </div>
               {nuevo && <NuevoPaciente fecha={fecha} onCerrar={() => setNuevo(false)} onListo={async (r) => {
                 setNuevo(false); setBusca(""); setFiltroCat("todas"); setSoloPend(false); await cargar(); setSel(r.id_paciente);
@@ -283,6 +288,249 @@ function Logo() {
   return ok
     ? <img src="/logo-hlf.png" alt="Hospital Clínico Dra. Eloísa Díaz Inzunza" className="h-14 w-auto object-contain" onError={() => setOk(false)} />
     : <div className="w-9 h-9 rounded bg-primary text-on-primary flex items-center justify-center"><Icono n="local_hospital" className="text-[22px]" /></div>;
+}
+
+// Novedades que registra el equipo: comorbilidad (pondera en Charlson/LACE), cambio de diagnóstico y egresos.
+function Novedad({ p, fecha, onListo, onAviso }) {
+  const [tipo, setTipo] = useState(null);
+  const [cat, setCat] = useState(null);
+  const [v, setV] = useState({ condicion: "", cie10: "", fecha });
+  const [confirma, setConfirma] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+  useEffect(() => { if (tipo && !cat) api.getCatalogo().then(setCat).catch((e) => onAviso({ titulo: e.message })); }, [tipo]); // eslint-disable-line react-hooks/exhaustive-deps
+  const abrir = (t) => { setTipo(tipo === t ? null : t); setV({ condicion: "", cie10: "", fecha }); setConfirma(false); };
+  const enviar = async () => {
+    setEnviando(true);
+    try {
+      const body = { tipo, fecha_corte: fecha, fecha: v.fecha };
+      if (tipo === "comorbilidad") Object.assign(body, v.condicion.startsWith("cie:") ? { cie10: v.condicion.slice(4) } : { condicion: v.condicion });
+      if (tipo === "diagnostico") body.cie10 = v.cie10;
+      const r = await api.postNovedad(p.id_paciente, body);
+      setTipo(null); onListo(r);
+    } catch (e) { onAviso({ titulo: "No se pudo registrar: " + e.message }); } finally { setEnviando(false); }
+  };
+  const peso = cat?.charlson.find((c) => c.condicion === v.condicion)?.peso;
+  const campo = "h-9 px-2 border border-outline-variant rounded bg-white w-full";
+  const btn = (t, icono, texto, rojo) => (
+    <button onClick={() => abrir(t)} className={`flex-1 min-w-[120px] py-2 rounded border font-semibold text-[13px] flex items-center justify-center gap-1 ${tipo === t ? (rojo ? "bg-error text-on-error border-error" : "bg-primary text-on-primary border-primary") : "border-outline-variant hover:bg-surface-container-low"}`}>
+      <Icono n={icono} className="text-[18px]" />{texto}
+    </button>
+  );
+  return (
+    <Caja titulo="Registrar novedad del paciente">
+      {p.comorbilidades?.length > 0 && <p className="text-[13px] mb-2">Comorbilidades registradas: {p.comorbilidades.map((c) => c.nombre).join(", ")}</p>}
+      <div className="flex flex-wrap gap-2">
+        {btn("comorbilidad", "add_circle", "Condición / comorbilidad")}
+        {btn("diagnostico", "edit_note", "Cambiar diagnóstico")}
+        {btn("atendido", "how_to_reg", "Atendido")}
+        {btn("fallecimiento", "heart_minus", "Fallecimiento", true)}
+      </div>
+
+      {tipo === "comorbilidad" && (
+        <div className="mt-3 space-y-2 text-[14px]">
+          <select value={v.condicion} onChange={(e) => setV({ ...v, condicion: e.target.value })} className={campo}>
+            <option value="">Seleccione la condición…</option>
+            <optgroup label="Condiciones de Charlson (suman al LACE)">
+              {cat?.charlson.map((c) => <option key={c.condicion} value={c.condicion}>{c.condicion} · peso {c.peso}</option>)}
+            </optgroup>
+            <optgroup label="Otros diagnósticos (se registran, no suman en Charlson)">
+              {cat?.diagnosticos.filter((d) => !["I50", "J44", "J45", "K70", "E11"].includes(d.diagnostico_cie10)).map((d) =>
+                <option key={d.diagnostico_cie10} value={`cie:${d.diagnostico_cie10}`}>{d.diagnostico_cie10} · {d.diagnostico_texto}</option>)}
+            </optgroup>
+          </select>
+          {v.condicion && <p className={`text-[13px] ${peso ? "text-primary-container font-semibold" : "text-on-surface-variant"}`}>
+            {peso ? `Suma ${peso} al índice de Charlson (van Walraven 2010). El puntaje LACE se recalcula.` : "Queda registrada en la ficha; no tiene peso en el índice de Charlson, no cambia el puntaje."}</p>}
+          <button disabled={!v.condicion || enviando} onClick={enviar} className="w-full py-2 rounded bg-primary text-on-primary font-semibold disabled:opacity-40">Registrar y recalcular</button>
+        </div>
+      )}
+
+      {tipo === "diagnostico" && (
+        <div className="mt-3 space-y-2 text-[14px]">
+          <select value={v.cie10} onChange={(e) => setV({ ...v, cie10: e.target.value })} className={campo}>
+            <option value="">Nuevo diagnóstico de la interconsulta…</option>
+            {cat?.diagnosticos.map((d) => <option key={d.diagnostico_cie10} value={d.diagnostico_cie10}>{d.especialidad} · {d.diagnostico_cie10} {d.diagnostico_texto}</option>)}
+          </select>
+          <p className="text-[13px] text-on-surface-variant">Se vuelve a aplicar la tabla del HLF, el puntaje LACE y la garantía GES del nuevo diagnóstico. Si cambia la especialidad, el paciente pasa a esa lista.</p>
+          <button disabled={!v.cie10 || enviando} onClick={enviar} className="w-full py-2 rounded bg-primary text-on-primary font-semibold disabled:opacity-40">Cambiar y recalcular</button>
+        </div>
+      )}
+
+      {(tipo === "fallecimiento" || tipo === "atendido") && (
+        <div className="mt-3 space-y-2 text-[14px]">
+          <Filtro label={tipo === "fallecimiento" ? "Fecha de defunción" : "Fecha de la consulta nueva de especialidad"}>
+            <input type="date" value={v.fecha} max={fecha} onChange={(e) => setV({ ...v, fecha: e.target.value })} className={campo} />
+          </Filtro>
+          <p className="text-[13px] text-on-surface-variant">{tipo === "fallecimiento"
+            ? "Egreso por causal 9 (fallecimiento, Manual SSMSO). El paciente sale de la lista y no recibe nuevas citaciones."
+            : "La lista se resuelve cuando el especialista atiende la consulta nueva (CNE). El paciente sale de la lista."}</p>
+          <label className="flex items-center gap-2 text-[13px]"><input type="checkbox" checked={confirma} onChange={(e) => setConfirma(e.target.checked)} />
+            Confirmo que {p.nombre_fantasia} {tipo === "fallecimiento" ? "falleció" : "fue atendido(a)"} (verificado en {tipo === "fallecimiento" ? "Registro Civil / ficha" : "la ficha clínica"}).</label>
+          <button disabled={!confirma || !v.fecha || enviando} onClick={enviar} className={`w-full py-2 rounded font-semibold disabled:opacity-40 ${tipo === "fallecimiento" ? "bg-error text-on-error" : "bg-primary text-on-primary"}`}>
+            {tipo === "fallecimiento" ? "Registrar fallecimiento y egresar" : "Registrar atención y egresar"}</button>
+        </div>
+      )}
+    </Caja>
+  );
+}
+
+// Exporta la lista priorizada (con los filtros actuales) a CSV separado por ";" con BOM: Excel en español lo abre en columnas.
+function exportarCsv(pacientes, fecha) {
+  const col = ["N°", "Prioridad", "Contactar hoy", "Paciente", "ID", "Edad", "Especialidad", "CIE-10", "Diagnóstico",
+    "Fecha ingreso", "Días de espera", "Más de 1 año", "Puntaje LACE", "GES vencida", "2 inasistencias", "Estado clínico", "Revisión"];
+  const filas = pacientes.map((p) => [p.posicion, ETIQUETA[p.categoria], p.riesgo_vital ? "Sí" : "", p.nombre_fantasia, p.id_paciente, p.edad,
+    p.especialidad, p.diagnostico_cie10, p.diagnostico_texto, fmt(p.fecha_ingreso_lista), p.dias_espera, p.antiguedad_mayor_1_anio ? "Sí" : "",
+    p.lace?.total ?? "", p.ges?.vencida ? `Sí (GES N°${p.ges.problema})` : "", p.riesgo_inasistencia ? "Sí" : "", p.estado_clinico.replace("_", " "), p.estado_revision]);
+  const esc = (v) => { const s = String(v ?? ""); return /[;"\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s; };
+  const csv = "﻿" + [col, ...filas].map((f) => f.map(esc).join(";")).join("\r\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  a.download = `lista_priorizada_HLF_${fecha}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+const leerBase64 = (f) => new Promise((ok, mal) => {
+  const r = new FileReader();
+  r.onload = () => ok(String(r.result).split(",")[1]);
+  r.onerror = () => mal(new Error(`No se pudo leer ${f.name}`));
+  r.readAsDataURL(f);
+});
+
+const TABLAS_IMPORT = [
+  ["pacientes", "Pacientes", "id_paciente, edad, sexo"],
+  ["lista_espera", "Lista de espera", "id_paciente, diagnostico_cie10, prioridad_inicial, fecha_ingreso_lista"],
+  ["eventos_clinicos", "Eventos clínicos", "id_paciente, fecha_evento, tipo_evento"],
+  ["mediciones", "Mediciones", "id_paciente, fecha_medicion, tipo_medicion, valor"],
+  ["citaciones", "Citaciones", "id_paciente, fecha_cita, estado_cita"],
+  ["agenda_box", "Agenda de box", "id_box, fecha, especialidad, capacidad_cupos"],
+];
+
+function CargarDatos({ esApi, onListo }) {
+  const [archivos, setArchivos] = useState([]);
+  const [rev, setRev] = useState(null);
+  const [estado, setEstado] = useState(null);
+  const [error, setError] = useState(null);
+  const [arrastrando, setArrastrando] = useState(false);
+  const input = useRef(null);
+
+  const agregar = (lista) => {
+    const nuevos = [...lista].filter((f) => /\.(xlsx|xlsm|csv|txt)$/i.test(f.name));
+    if (nuevos.length < lista.length) setError("Solo se aceptan archivos .xlsx o .csv (en Excel: Guardar como → Libro de Excel o CSV).");
+    else setError(null);
+    setArchivos((a) => [...a.filter((x) => !nuevos.some((n) => n.name === x.name)), ...nuevos]);
+    setRev(null);
+  };
+  const enviar = async (confirmar) => {
+    setEstado(confirmar ? "cargando" : "revisando"); setError(null);
+    try {
+      const datos = await Promise.all(archivos.map(async (f) => ({ nombre: f.name, contenido_base64: await leerBase64(f) })));
+      const r = await api.postImportar(datos, confirmar);
+      setRev(r);
+      if (confirmar) { setArchivos([]); onListo(r); }
+    } catch (e) { setError(e.message); } finally { setEstado(null); }
+  };
+  if (!esApi) return <Caja><p className="text-on-surface-variant">Cargar datos requiere conexión al servidor.</p></Caja>;
+  const validas = rev?.informe.reduce((s, i) => s + (i.validas || 0), 0) || 0;
+
+  return (
+    <div className="grid gap-5 lg:grid-cols-12 items-start">
+      <div className="lg:col-span-8 flex flex-col gap-4">
+        <Caja titulo="Cargar planillas del hospital">
+          <div onDragOver={(e) => { e.preventDefault(); setArrastrando(true); }} onDragLeave={() => setArrastrando(false)}
+            onDrop={(e) => { e.preventDefault(); setArrastrando(false); agregar(e.dataTransfer.files); }}
+            onClick={() => input.current.click()}
+            className={`cursor-pointer rounded border-2 border-dashed p-8 text-center ${arrastrando ? "border-primary bg-primary/5" : "border-outline-variant hover:bg-surface-container-low"}`}>
+            <Icono n="upload_file" className="text-[40px] text-primary" />
+            <p className="font-semibold mt-1">Arrastre aquí archivos Excel (.xlsx) o CSV, o haga clic para elegirlos</p>
+            <p className="text-[13px] text-on-surface-variant">Puede subir varios a la vez. Cada hoja de un Excel se lee como una tabla distinta.</p>
+            <input ref={input} type="file" multiple accept=".xlsx,.xlsm,.csv,.txt" hidden onChange={(e) => { agregar(e.target.files); e.target.value = ""; }} />
+          </div>
+          {archivos.length > 0 && (
+            <ul className="mt-3 divide-y divide-outline-variant/60 text-[14px]">
+              {archivos.map((f) => (
+                <li key={f.name} className="py-1.5 flex items-center justify-between">
+                  <span className="flex items-center gap-2"><Icono n={f.name.toLowerCase().endsWith("csv") ? "description" : "table_view"} className="text-[18px] text-hlf" />{f.name}<span className="text-[12px] text-on-surface-variant">{Math.round(f.size / 1024)} KB</span></span>
+                  <button onClick={() => { setArchivos(archivos.filter((x) => x !== f)); setRev(null); }} className="text-on-surface-variant"><Icono n="close" className="text-[18px]" /></button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {error && <p className="mt-2 text-error text-[14px]">{error}</p>}
+          <div className="flex gap-2 mt-3">
+            <button disabled={!archivos.length || estado} onClick={() => enviar(false)} className="flex-1 py-2 rounded border border-primary text-primary font-semibold disabled:opacity-40">{estado === "revisando" ? "Revisando…" : "1. Revisar archivos"}</button>
+            <button disabled={!rev || rev.cargado || !validas || estado} onClick={() => enviar(true)} className="flex-1 py-2 rounded bg-primary text-on-primary font-semibold disabled:opacity-40">{estado === "cargando" ? "Cargando…" : "2. Cargar al sistema"}</button>
+          </div>
+          <p className="text-[12px] text-on-surface-variant mt-2">Nada se guarda hasta el paso 2. Los pacientes que ya existen se actualizan y los eventos repetidos no se duplican.</p>
+        </Caja>
+
+        {rev && (
+          <Caja titulo={rev.cargado ? "Carga completada" : "Revisión de los archivos"}>
+            <div className="grid grid-cols-3 md:grid-cols-6 gap-2 mb-4 text-center">
+              {[["pacientes_nuevos", "Pacientes nuevos"], ["pacientes_actualizados", "Actualizados"], ["eventos", "Eventos"],
+                ["mediciones", "Mediciones"], ["citaciones", "Citaciones"], ["bloques_agenda", "Bloques de box"]].map(([k, t]) => (
+                <div key={k} className="rounded bg-surface-container-low p-2"><div className="text-[20px] font-semibold text-primary-container">{rev.resumen[k]}</div><div className="text-[12px] text-on-surface-variant">{t}</div></div>
+              ))}
+            </div>
+            {rev.avisos.length > 0 && <div className="mb-3 rounded bg-ambar-container/50 p-2 text-[13px]">{rev.avisos.map((a, i) => <div key={i}>⚠ {a}</div>)}</div>}
+            <div className="space-y-3">
+              {rev.informe.map((i, k) => (
+                <div key={k} className="rounded border border-outline-variant p-3 text-[14px]">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-semibold">{i.archivo}{i.hoja && i.hoja !== "hoja" ? ` · hoja "${i.hoja}"` : ""}</span>
+                    {i.tabla ? <span className="rounded bg-hlf-claro text-hlf px-2 py-0.5 text-[13px] font-semibold">Detectado: {i.nombre_tabla}</span>
+                      : <span className="rounded bg-error-container text-on-error-container px-2 py-0.5 text-[13px] font-semibold">No reconocido</span>}
+                  </div>
+                  {i.error && <p className="text-error text-[13px] mt-1">{i.error}</p>}
+                  {i.tabla && <>
+                    <div className="mt-1 flex items-center gap-2">
+                      <div className="flex-1 h-2 rounded bg-error-container overflow-hidden"><div className="h-full bg-hlf" style={{ width: `${i.filas ? (i.validas / i.filas) * 100 : 0}%` }} /></div>
+                      <span className="text-[13px] whitespace-nowrap"><b>{i.validas}</b> de {i.filas} filas correctas</span>
+                    </div>
+                    <details className="mt-2"><summary className="cursor-pointer text-[13px] text-primary">Cómo se leyeron las columnas</summary>
+                      <div className="flex flex-wrap gap-1 mt-1">{i.columnas.map((c) => <span key={c.campo} className="rounded bg-surface-container-low px-1.5 py-0.5 text-[12px]">{c.original} → <b>{c.campo}</b></span>)}</div>
+                      {i.ignoradas.length > 0 && <p className="text-[12px] text-on-surface-variant mt-1">No usadas: {i.ignoradas.join(", ")}</p>}
+                    </details>
+                    {i.errores.length > 0 && (
+                      <table className="w-full mt-2 text-[13px]">
+                        <thead><tr className="text-left text-on-surface-variant"><th className="w-16">Fila</th><th>Problema</th></tr></thead>
+                        <tbody>{i.errores.map((e) => <tr key={e.fila} className="border-t border-outline-variant/50"><td className="py-0.5">{e.fila}</td><td className="text-error">{e.motivo}</td></tr>)}</tbody>
+                      </table>
+                    )}
+                    {i.n_errores > i.errores.length && <p className="text-[12px] text-on-surface-variant">… y {i.n_errores - i.errores.length} filas más con problemas.</p>}
+                  </>}
+                </div>
+              ))}
+            </div>
+          </Caja>
+        )}
+      </div>
+
+      <div className="lg:col-span-4 flex flex-col gap-4">
+        <Caja titulo="Plantillas">
+          <p className="text-[13px] text-on-surface-variant mb-2">Columnas mínimas de cada tabla. Los nombres pueden variar (p. ej. "RUT", "Fecha ingreso", "CIE10", "Prioridad"): el sistema los reconoce.</p>
+          <ul className="divide-y divide-outline-variant/60 text-[14px]">
+            {TABLAS_IMPORT.map(([t, n, req]) => (
+              <li key={t} className="py-2">
+                <div className="flex items-center justify-between"><span className="font-semibold">{n}</span>
+                  <a href={api.urlPlantilla(t)} className="text-primary text-[13px] font-semibold flex items-center gap-0.5"><Icono n="download" className="text-[16px]" />Plantilla</a></div>
+                <div className="text-[12px] text-on-surface-variant">{req}</div>
+              </li>
+            ))}
+          </ul>
+        </Caja>
+        <Caja titulo="Qué se convierte solo">
+          <ul className="list-disc pl-5 text-[13px] space-y-1">
+            <li>Fechas en dd-mm-aaaa, dd/mm/aaaa, aaaa-mm-dd o fecha interna de Excel.</li>
+            <li>Prioridad "ALTA", "Alta", "1", "Inmediata" → alta (igual media y baja).</li>
+            <li>Sexo "Femenino", "Mujer", "F" → F. Sí/No, 1/0, X → verdadero/falso.</li>
+            <li>CIE-10 "I50.9" → I50; la especialidad y el diagnóstico se completan desde el catálogo.</li>
+            <li>Si una medición no trae "fuera de rango", se calcula con los rangos del diccionario de datos.</li>
+            <li>CSV separado por coma, punto y coma o tabulación; UTF-8 o Latin-1.</li>
+          </ul>
+        </Caja>
+      </div>
+    </div>
+  );
 }
 
 const Indicador = ({ n, t, tono, onClick }) => {
@@ -391,6 +639,12 @@ function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso, onDes
               </div>
             )}
           </Caja>
+
+          <Novedad p={p} fecha={fecha} onListo={async (r) => {
+            await onCambio();
+            onAviso(r.en_lista ? { titulo: `Registrado: ${r.mensaje}`, despues: r.paciente?.posicion, antes: p.posicion, cat: r.paciente?.categoria }
+              : { titulo: `${p.nombre_fantasia}: ${r.mensaje}` });
+          }} onAviso={onAviso} />
 
           <Informe p={p} fecha={fecha} cargando={cargando} onConfirmar={(ev) => registrarEvento(ev, "Evento del informe registrado")} onAviso={onAviso} />
 
