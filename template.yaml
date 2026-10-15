@@ -71,6 +71,7 @@ Resources:
           BOX_KEY: box.json
           TABLE: !Ref RegistrosTable
           MODEL_ID: !Ref ModelId
+          FECHA_REFERENCIA: hoy  # fecha real de Chile; AAAA-MM-DD para simular
           BEDROCK_REGION: !If [HasBedrockRegion, !Ref BedrockRegion, !Ref AWS::Region]
       Policies:
         - S3ReadPolicy:

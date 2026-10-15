@@ -2,16 +2,24 @@
 
 Fuente de datos: `perfiles.json` (500 pacientes, ya consolidado) en S3. **Nunca en el repo.**
 Fecha de referencia del dataset: 2026-10-13. Todo cálculo usa una `fecha_corte`: solo registros con fecha ≤ corte.
+Sin `fecha_corte`, la API usa `FECHA_REFERENCIA` (variable de entorno): `hoy` = fecha real de Chile (versión publicada) o
+`AAAA-MM-DD` para simular (por defecto 2026-10-13). `/health` informa `fecha_hoy` y `modo` (`tiempo_real | simulacion`).
 
 ## Reglas de negocio (todas con fuente; detalle en `docs/criterios_oficiales.md`)
 - **Categoría** `alta | media | baja`: parte de `prioridad_inicial` (la que asignó el especialista a la SIC). Si después de la SIC
   hay un evento de descompensación o severidad grave, sube a la fila "descompensada / no controlada" de la
   **Tabla SSMSO 2025 del HLF** (págs. 84–111). El sistema **nunca baja** una categoría: eso lo hace el equipo clínico con motivo.
-- **Orden** (MINSAL Ord. 536/2025): categoría → (grupos de especial protección: sin datos) → antigüedad > 1 año → orden de llegada.
-- **Banderas** (no cambian el orden): `ges.vencida` (garantía GES, auge.minsal.cl) · `riesgo_inasistencia` = 2 inasistencias
+- **Orden** (MINSAL Ord. 536/2025): categoría → descompensación grave (`riesgo_vital`) → grupo de especial protección →
+  antigüedad > 1 año → LACE (experimental, solo desempate) → orden de llegada.
+- **Descompensación grave** (`riesgo_vital` = true, nombre interno): requiere evaluación médica dentro de 72 h. El sistema no
+  declara "riesgo vital"; lo decide el médico. `evaluacion.estado`: `pendiente | atrasada (> 72 h) | evaluada`. Se cierra solo con
+  una decisión clínica (`/decision`), una revisión del especialista, una cita reservada o una derivación a urgencia.
+- **Banderas** (no cambian el orden): `ges.vencida` / `ges.verificar` = posible incumplimiento GES a verificar (el plazo se cuenta
+  desde el ingreso a la lista porque el registro no trae el hito real) · `riesgo_inasistencia` = 2 inasistencias
   consecutivas, posible causal 8 · `medicion_alerta` = última medición fuera de rango.
 - `estado = atendido` → no aparece. Fallecido con `fecha_defuncion <= corte` → `excluidos` (causal 9).
-- No hay puntaje numérico ni pesos: el LLM (Bedrock) **solo** explica, transcribe fotos y extrae eventos de informes.
+- No hay pesos inventados: el orden lo dan reglas con fuente. Las fotos se leen con Amazon Textract + reglas + Pydantic;
+  el LLM (Bedrock) solo redacta explicaciones y es respaldo opcional para proponer eventos, siempre con confirmación humana.
 
 ## Objeto Paciente (respuesta de la API)
 ```json
@@ -41,7 +49,10 @@ Fecha de referencia del dataset: 2026-10-13. Todo cálculo usa una `fecha_corte`
 - `estado_clinico`: `sin_cambios | descompensado | estabilizado` (eventos posteriores al ingreso a la lista).
 - `ges`: `null` o `{"problema": 34, "nombre": "Depresión", "plazo_dias": 30, "vencida": true}`.
 - `razones[].factor`: `prioridad_inicial | evento | tabla_oficial | dias_espera | ges | medicion`. Cada razón trae su `fuente`.
-- `estado_revision`: `pendiente | confirmado | ajustado`.
+- `estado_revision`: `pendiente | confirmado | ajustado | requiere_revision`.
+- `evaluacion` (solo si `riesgo_vital`): `{"estado", "dias_desde_evento", "fecha_evento", "plazo_dias": 3, "cierre": null | {"por", "texto", "responsable", "fecha"}}`.
+- `decision`: última decisión clínica o `null`. `contacto`: última llamada o `null` (con `intentos_sin_respuesta`).
+- `lace`: `{"total", "partes", "experimental": true, "datos_faltantes": [...], "uso"}`.
 
 ## Endpoints
 | Método | Ruta | Qué hace |
@@ -53,16 +64,18 @@ Fecha de referencia del dataset: 2026-10-13. Todo cálculo usa una `fecha_corte`
 | POST | `/pacientes` | Ingresa una interconsulta nueva (`nombre, edad, sexo, diagnostico_cie10, prioridad_inicial`, opcionales comuna, previsión, origen) |
 | POST | `/pacientes/{id}/novedad` | `tipo`: `comorbilidad` (`condicion` de Charlson o `cie10`), `diagnostico` (`cie10`), `fallecimiento` o `atendido` (`fecha`). Queda registro `novedad#` |
 | GET | `/pacientes/{id}/historia?fecha_corte=` | Posición y categoría cada 14 días (gráfico de evolución) |
-| POST | `/pacientes/{id}/contacto` | `resultado`: citado · derivado_urgencia · se_mantiene · no_contesta (+ `nota`). Apaga "contactar hoy" salvo no_contesta |
-| GET | `/disponible?especialidad=X&desde=HH:MM&hasta=HH:MM` (o `&cupos=N`) | Médico con horas libres: a quiénes atender, en el orden de la lista, con hora sugerida (duración promedio real de la especialidad), sin repetir a quienes ya tienen hora hoy; + 3 reservas |
-| GET | `/kpis?fecha_corte=` | Cobertura, reevaluación, kappa (desde revisiones), alertas y egresos |
+| POST | `/pacientes/{id}/contacto` | Llamada: `resultado` citado · derivado_urgencia · contactado · no_contesta (+ `nota`). `citado` con `hora`, `hora_fin`, `id_box` reserva la hora (409 si ya está reservada). Solo citado y derivado_urgencia cierran la alerta. **Cambio:** `se_mantiene` pasó a `/decision` (`mantener`) |
+| POST | `/pacientes/{id}/decision` | Decisión clínica: `decision` citar_prioritario · derivar_urgencia · adelantar_control · mantener; `responsable` (obligatorio), `nota`, `seguimiento` (AAAA-MM-DD). Cierra la alerta |
+| POST | `/pacientes/{id}/cita` | Estado de la cita reservada hoy: `estado` confirmada · atendida · no_asistio · cancelada (libera la hora). 404 si no hay reserva |
+| GET | `/disponible?especialidad=X&desde=HH:MM&hasta=HH:MM` (o `&cupos=N`) | Médico con horas libres: a quiénes atender, en el orden de la lista, con hora sugerida (duración promedio de la especialidad), sin repetir a quienes ya tienen cita reservada; los que solo están propuestos en un box vienen con `propuesto_en_box`; + 3 reservas |
+| GET | `/kpis?fecha_corte=` | `reevaluacion` (mediana de horas evento → evaluación, < 72 h, pendientes/atrasadas), `citas` (propuestas vs. reservada/confirmada/atendida/no_asistio/cancelada, horas recuperadas), `contactabilidad`, `concordancia` (n, acuerdo %, kappa, `n_recomendado` 50), cobertura, egresos |
 | GET | `/catalogo` | Diagnósticos, comunas, previsiones, orígenes y condiciones de Charlson con su peso |
 | POST | `/importar` | `{archivos:[{nombre, contenido_base64}], confirmar}`: lee Excel/CSV, detecta la tabla, normaliza y valida. Sin `confirmar` solo revisa |
 | GET | `/plantillas/{tabla}` | CSV de ejemplo: pacientes, lista_espera, eventos_clinicos, mediciones, citaciones, agenda_box |
 | POST | `/pacientes/{id}/revision` | `{"accion":"confirmar"}` o `{"accion":"ajustar","categoria_ajustada":"alta|media|baja","motivo":"..."}` |
 | POST | `/pacientes/{id}/explicar` | Bedrock redacta `explicacion_ia` desde `razones` |
-| GET | `/boxes?fecha_corte=AAAA-MM-DD` | Ocupación de box por especialidad + pacientes sugeridos para cupos libres |
-| GET | `/health` | `{ok, pacientes}` para verificar el deploy |
+| GET | `/boxes?fecha_corte=AAAA-MM-DD` | Ocupación de box por especialidad + pacientes sugeridos para horas libres. Cada fila trae `estado_cita` (propuesta · reservada · confirmada · atendida · no_asistio); por especialidad `conteo_citas` y `descompensados` |
+| GET | `/health` | `{ok, pacientes, fecha_hoy, modo, datos: "sinteticos"}` para verificar el deploy |
 
 ## Respuesta POST /pacientes/{id}/informe
 ```json

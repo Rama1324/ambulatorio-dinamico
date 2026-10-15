@@ -9,9 +9,10 @@ Capa 1 · Categoría (Alta / Media / Baja)
   - El sistema nunca baja una categoría solo: eso lo decide el equipo clínico (revisión con motivo).
 Capa 2 · Orden dentro de la categoría — MINSAL Ord. C N°536 (21-03-2025), recogido en el Manual de Gestión
   de la Demanda SSMSO 2025 (RE 2679), pág. 13: 1) criterio médico (la categoría), 2) grupos de especial
-  protección (el dataset no los trae), 3) antigüedad en lista > 1 año. Luego orden de llegada (fecha de ingreso).
+  protección (el dataset no los trae), 3) antigüedad en lista > 1 año. Luego LACE (experimental, solo desempata)
+  y orden de llegada (fecha de ingreso).
 Capa 3 · Banderas (no cambian el orden)
-  - Garantía GES vencida (plazo de atención por especialista, auge.minsal.cl).
+  - Posible incumplimiento GES: verificar (el plazo corre desde un hito que el registro no trae).
   - Posible causal 8 "inasistencias reiteradas": 2 inasistencias consecutivas (Manual SSMSO, Anexo 4).
   - Última medición fuera de rango (rangos de referencia del diccionario de datos).
 Exclusión: causal 9 "fallecimiento" (Manual SSMSO, Anexo 4) desde fecha_defuncion; atendidos salen de la lista.
@@ -38,6 +39,13 @@ FILA_DESCOMPENSADO = {
     "E03": ("Hipotiroidismo sintomático", "media", 94),
     "G40": ("Epilepsia con crisis mensuales (deja de ser 'epilepsia controlada', baja)", "media", 103),
 }
+# Equivalencias CIE-10 → fila de la tabla que son interpretación del equipo y deben validarse con el especialista.
+EQUIVALENCIA_A_VALIDAR = {
+    "K70": "K70 es enfermedad hepática alcohólica; se asimila a la fila de cirrosis",
+    "I20": "I20 incluye toda angina de pecho; la fila oficial es solo angina inestable",
+    "G40": "la tabla no tiene fila 'epilepsia descompensada'; se usa 'crisis mensuales'",
+}
+DIAS_EVALUACION = 3  # KPI del hospital: reevaluación clínica < 72 h tras un evento
 
 # Garantía GES de oportunidad: atención por especialista (días). auge.minsal.cl/problemasdesalud/index/<N°>
 # cie10: (N° problema GES, nombre, días, edad mínima)
@@ -110,7 +118,11 @@ def indice_lace(perfil, corte):
          "puntos": total_c if total_c < 4 else 5},
         {"letra": "E", "nombre": "Consultas en urgencia (6 meses)", "valor": str(urg), "puntos": min(urg, 4)},
     ]
-    return {"total": sum(p["puntos"] for p in partes), "partes": partes, "fuente": LACE_FUENTE}
+    return {"total": sum(p["puntos"] for p in partes), "partes": partes, "fuente": LACE_FUENTE, "experimental": True,
+            "datos_faltantes": ["días de estada (L): no vienen en el registro",
+                                "comorbilidades: solo el diagnóstico de la SIC y las registradas por el equipo"],
+            "uso": "solo desempata dentro de la misma categoría, después de la antigüedad; validado para reingreso o "
+                   "muerte tras alta hospitalaria, no para listas de espera"}
 
 
 def d(s): return date.fromisoformat(s)
@@ -199,13 +211,14 @@ def puntuar(perfil, corte):
         razones.append({"factor": "evento", "valor": f'{ult_desc["tipo_evento"].replace("_", " ")}: {ult_desc["subtipo"]} '
                                                     f'({ult_desc["severidad"]}, {ult_desc["fecha_evento"]})',
                         "fuente": "Registro clínico posterior a la SIC"})
+    validar = f' · equivalencia a validar: {EQUIVALENCIA_A_VALIDAR[cie]}' if cie in EQUIVALENCIA_A_VALIDAR else ""
     if estado == "descompensado":
         if fila and ORDEN_CAT[fila[1]] > ORDEN_CAT[inicial]:
             categoria = fila[1]
-            razones.append({"factor": "tabla_oficial", "valor": f'"{fila[0]}" → prioridad {fila[1]}',
+            razones.append({"factor": "tabla_oficial", "valor": f'"{fila[0]}" → prioridad {fila[1]}{validar}',
                             "fuente": f"{FUENTE_TABLA}, pág. {fila[2]}"})
         elif fila:
-            razones.append({"factor": "tabla_oficial", "valor": f'"{fila[0]}" → prioridad {fila[1]} (no supera la actual)',
+            razones.append({"factor": "tabla_oficial", "valor": f'"{fila[0]}" → prioridad {fila[1]} (no supera la actual){validar}',
                             "fuente": f"{FUENTE_TABLA}, pág. {fila[2]}"})
         else:
             razones.append({"factor": "tabla_oficial", "valor": "la tabla del HLF no tiene fila para este diagnóstico descompensado: "
@@ -213,19 +226,21 @@ def puntuar(perfil, corte):
                             "fuente": FUENTE_TABLA})
     if riesgo_vital:
         razones.insert(0, {"factor": "riesgo_vital",
-                           "valor": f'{fila[0]} sin estabilización posterior: no esperar cupo, contactar hoy y '
-                                    'evaluar derivación a urgencia según criterio médico',
+                           "valor": f'Descompensación grave ({fila[0]}) sin estabilización posterior: requiere evaluación '
+                                    f'clínica dentro de 72 h; el médico decide si es riesgo vital y si deriva a urgencia',
                            "fuente": "MINSAL: criticidad / riesgo vital (SSMSO 2025, pág. 4) · " f"{FUENTE_TABLA}, pág. {fila[2]}"})
     elif estado == "estabilizado":
         razones.append({"factor": "evento", "valor": f'{ult_estab["subtipo"]} ({ult_estab["fecha_evento"]}): '
                                                     "el sistema no baja la prioridad solo; puede ajustarla el equipo clínico",
                         "fuente": "Principio de diseño: la herramienta propone, el equipo clínico decide"})
 
-    # --- Puntaje de riesgo clínico publicado (ordena dentro de la categoría: criterio médico MINSAL) ---
+    # --- LACE: componente EXPERIMENTAL (validado para muerte/reingreso tras alta hospitalaria, no para ordenar
+    # consultas de especialidad). Solo desempata al final; datos faltantes (días de estada) se informan. ---
     lace = indice_lace(perfil, corte)
     if lace["total"]:
         razones.append({"factor": "lace", "valor": f'{lace["total"]} puntos (' + ", ".join(
-            f'{p["letra"]} {p["puntos"]}' for p in lace["partes"] if p["puntos"]) + ")", "fuente": LACE_FUENTE})
+            f'{p["letra"]} {p["puntos"]}' for p in lace["partes"] if p["puntos"]) + ") · experimental, solo desempata",
+            "fuente": LACE_FUENTE + " — adaptado; requiere validación local"})
 
     # --- Capa 2: criterios de orden MINSAL ----------------------------------------
     antiguo = dias_espera > DIAS_ANTIGUEDAD
@@ -233,13 +248,16 @@ def puntuar(perfil, corte):
                     "fuente": "MINSAL Ord. 536/2025: antigüedad > 1 año"})
 
     # --- Capa 3: banderas ---------------------------------------------------------
+    # GES: la garantía corre desde un hito clínico (p. ej. la derivación con confirmación diagnóstica) que el registro
+    # no trae; se usa el ingreso a la lista como aproximación → se informa "posible incumplimiento: verificar".
     ges = GES_ESPECIALISTA.get(cie)
     ges_info = None
     if ges and pac["edad"] >= ges[3]:
         vencida = dias_espera > ges[2]
-        ges_info = {"problema": ges[0], "nombre": ges[1], "plazo_dias": ges[2], "vencida": vencida}
-        razones.append({"factor": "ges", "valor": f"GES N°{ges[0]} {ges[1]}: especialista en {ges[2]} días" +
-                        (f" — VENCIDA hace {dias_espera - ges[2]} días" if vencida else ""),
+        ges_info = {"problema": ges[0], "nombre": ges[1], "plazo_dias": ges[2], "vencida": vencida, "verificar": vencida}
+        razones.append({"factor": "ges", "valor": f"GES N°{ges[0]} {ges[1]}: especialista en {ges[2]} días desde la derivación" +
+                        (f" — posible incumplimiento: {dias_espera} días desde el ingreso a la lista (verificar el hito real)"
+                         if vencida else ""),
                         "fuente": f"auge.minsal.cl, problema de salud N°{ges[0]}"})
 
     # Señales que piden revisión del especialista (no cambian el orden): fecha y momento de registro para compararlas
@@ -276,15 +294,16 @@ def puntuar(perfil, corte):
             "estado_clinico": estado, "riesgo_vital": riesgo_vital, "lace": lace, "antiguedad_mayor_1_anio": antiguo, "dias_espera": dias_espera,
             "ges": ges_info, "medicion_alerta": medicion_alerta, "senales": senales, "grupo_proteccion": grupo, "acg": acg,
             "fecha_descompensacion": ult_desc["fecha_evento"] if estado == "descompensado" else None,
+            "dias_desde_descompensacion": (corte - d(ult_desc["fecha_evento"])).days if estado == "descompensado" else None,
             "registro_descompensacion": ult_desc.get("registrado") if estado == "descompensado" else None,
             "riesgo_inasistencia": consecutivas >= 2, "no_shows": no_show, "razones": razones}
 
 
 def clave_orden(r, categoria=None):
-    """MINSAL Ord. 536/2025: criterio médico (categoría, riesgo vital, puntaje LACE) → grupos de especial protección
-    → antigüedad > 1 año → orden de llegada."""
-    return (-ORDEN_CAT[categoria or r["categoria"]], not r["riesgo_vital"], -r["lace"]["total"],
-            not r.get("grupo_proteccion"), not r["antiguedad_mayor_1_anio"], -r["dias_espera"], r["id_paciente"])
+    """MINSAL Ord. 536/2025: criterio médico (categoría y descompensación grave) → grupos de especial protección
+    → antigüedad > 1 año → LACE (componente experimental, solo desempata) → orden de llegada."""
+    return (-ORDEN_CAT[categoria or r["categoria"]], not r["riesgo_vital"], not r.get("grupo_proteccion"),
+            not r["antiguedad_mayor_1_anio"], -r["lace"]["total"], -r["dias_espera"], r["id_paciente"])
 
 
 def priorizar(perfiles, corte, especialidad=None):

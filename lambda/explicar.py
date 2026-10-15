@@ -31,6 +31,7 @@ def _datos(p):
         "posicion_actual": p.get("posicion"),
         "posicion_hace_14_dias": p.get("posicion_anterior"),
         "riesgo_inasistencia": p.get("riesgo_inasistencia"),
+        "evaluacion_descompensacion": p.get("evaluacion"),
         "razones": p.get("razones"),
     }
 
@@ -43,6 +44,8 @@ def plantilla(p):
         partes.append(f'Evento posterior a la interconsulta: {rz["evento"]["valor"]}.')
     if "tabla_oficial" in rz:
         partes.append(f'Según {rz["tabla_oficial"]["fuente"]}: {rz["tabla_oficial"]["valor"]}.')
+    if "riesgo_vital" in rz:
+        partes.append(f'{rz["riesgo_vital"]["valor"]}.')
     if p.get("antiguedad_mayor_1_anio"):
         partes.append("Lleva más de 1 año en lista (criterio MINSAL).")
     if "ges" in rz and (p.get("ges") or {}).get("vencida"):

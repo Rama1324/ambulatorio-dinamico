@@ -9,7 +9,13 @@ const FECHAS_SLIDER = (() => {
   out.push("2026-10-13");
   return out;
 })();
-export const fechas = () => FECHAS_SLIDER;
+// Fecha de trabajo y modo que informa la API (/health): "tiempo_real" usa la fecha de hoy en Chile.
+let info = { fecha_hoy: "2026-10-13", modo: "simulacion", datos: "sinteticos" };
+export async function cargarInfo() {
+  if (MODO === "api") { try { info = { ...info, ...(await req("GET", "/health")) }; } catch { /* sin API: simulación */ } }
+  return info;
+}
+export const fechas = () => (info.fecha_hoy > FECHAS_SLIDER[FECHAS_SLIDER.length - 1] ? [...FECHAS_SLIDER, info.fecha_hoy] : FECHAS_SLIDER);
 
 let mockCache = null;
 async function mock() {
@@ -73,6 +79,8 @@ export async function getHistoria(id, fechaCorte) {
 export const getDisponible = (fechaCorte, params) =>
   req("GET", `/disponible?${new URLSearchParams({ fecha_corte: fechaCorte, ...params })}`);
 export const postContacto = (id, body) => req("POST", `/pacientes/${id}/contacto`, body);
+export const postDecision = (id, body) => req("POST", `/pacientes/${id}/decision`, body);
+export const postCita = (id, body) => req("POST", `/pacientes/${id}/cita`, body);
 export const getKpis = (fechaCorte) => req("GET", `/kpis?fecha_corte=${fechaCorte}`);
 export const postNovedad = (id, body) => req("POST", `/pacientes/${id}/novedad`, body);
 export const postImportar = (archivos, confirmar) => req("POST", "/importar", { archivos, confirmar });

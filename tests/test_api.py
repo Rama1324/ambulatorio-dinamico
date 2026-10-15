@@ -21,12 +21,13 @@ def test_lista_y_exclusion():
     assert {p["categoria"] for p in d["pacientes"]} <= {"alta", "media", "baja"}
 
 def test_orden_minsal():
-    """Categoría primero; dentro de la categoría, > 1 año en lista primero y luego orden de llegada."""
+    """Categoría → descompensación grave → grupo de protección → > 1 año → LACE (solo desempate) → llegada."""
     _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
     orden = {"alta": 3, "media": 2, "baja": 1}
-    claves = [(-orden[p["categoria"]], not p["riesgo_vital"], -p["lace"]["total"], not p["grupo_proteccion"],
-               not p["antiguedad_mayor_1_anio"], -p["dias_espera"]) for p in d["pacientes"]]
+    claves = [(-orden[p["categoria"]], not p["riesgo_vital"], not p["grupo_proteccion"],
+               not p["antiguedad_mayor_1_anio"], -p["lace"]["total"], -p["dias_espera"]) for p in d["pacientes"]]
     assert claves == sorted(claves)
+    assert all(p["lace"]["experimental"] and p["lace"]["datos_faltantes"] for p in d["pacientes"])
 
 def test_lace_00002():
     """Angina sin Charlson; hospitalización (A=3) y 1 urgencia (E=1) en los 6 meses previos al 10-08."""
@@ -269,6 +270,8 @@ def test_bug_contacto_apaga_alerta():
     p = next(x for x in d["pacientes"] if x["contactar_hoy"] and x["id_paciente"] != "PAC-HLF-00002")
     s, r = call("POST", f"/pacientes/{p['id_paciente']}/contacto", body={"resultado": "no_contesta", "fecha_corte": "2026-10-13"})
     assert s == 200 and r["paciente"]["contactar_hoy"]          # no contesta: la alerta sigue
+    s, r = call("POST", f"/pacientes/{p['id_paciente']}/contacto", body={"resultado": "contactado", "fecha_corte": "2026-10-13"})
+    assert s == 200 and r["paciente"]["contactar_hoy"]          # llamar no es decidir: sigue pendiente la evaluación médica
     s, r = call("POST", f"/pacientes/{p['id_paciente']}/contacto", body={"resultado": "citado", "fecha_corte": "2026-10-13"})
     assert not r["paciente"]["contactar_hoy"] and r["paciente"]["riesgo_vital"]   # reconocida, sigue priorizado
 
@@ -354,9 +357,12 @@ def test_medico_con_horas_libres():
     assert s == 200 and d["duracion_min"] > 0 and d["cupos"] == 180 // d["duracion_min"]
     assert d["pacientes"][0]["hora"] == "14:00" and len(d["pacientes"]) == d["cupos"]
     _, b = call("GET", "/boxes", {"fecha_corte": "2026-10-13", "especialidad": "Cardiología"})
-    assert not set(p["id_paciente"] for p in d["pacientes"]) & set(b["cupo_por_paciente"])   # no repite a quien ya tiene hora
+    citados = {pid for pid, c in b["cupo_por_paciente"].items() if c["citado"]}
+    assert not set(p["id_paciente"] for p in d["pacientes"]) & citados       # no repite a quien ya tiene cita reservada
+    propuestos = {pid for pid, c in b["cupo_por_paciente"].items() if not c["citado"]}
+    assert all(p.get("propuesto_en_box") for p in d["pacientes"] if p["id_paciente"] in propuestos)   # propuesta rotulada
     _, l = call("GET", "/pacientes", {"fecha_corte": "2026-10-13", "especialidad": "Cardiología"})
-    orden = [p["id_paciente"] for p in l["pacientes"] if p["id_paciente"] not in b["cupo_por_paciente"]]
+    orden = [p["id_paciente"] for p in l["pacientes"] if p["id_paciente"] not in citados]
     assert [p["id_paciente"] for p in d["pacientes"]] == orden[:d["cupos"]]                   # respeta el orden de la lista
     s, d = call("GET", "/disponible", {"especialidad": "Cardiología", "cupos": "5"})
     assert len(d["pacientes"]) == 5 and d["reservas"] and d["reservas"][0]["por_que_despues"]
@@ -392,3 +398,63 @@ def test_plantilla():
 
 def test_404():
     assert call("GET", "/nada")[0] == 404
+
+def test_decision_clinica_cierra_la_alerta():
+    _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
+    p = next(x for x in d["pacientes"] if x["contactar_hoy"] and not x["contacto"] and not x["decision"])
+    assert p["evaluacion"]["estado"] in ("pendiente", "atrasada") and p["evaluacion"]["dias_desde_evento"] >= 0
+    pid = p["id_paciente"]
+    assert call("POST", f"/pacientes/{pid}/decision", body={"decision": "mantener"})[0] == 400        # falta responsable
+    assert call("POST", f"/pacientes/{pid}/decision", body={"decision": "otra", "responsable": "Dra. X"})[0] == 400
+    s, r = call("POST", f"/pacientes/{pid}/decision", body={"decision": "adelantar_control", "responsable": "Dra. Soto",
+                                                           "seguimiento": "2026-10-20", "fecha_corte": "2026-10-13"})
+    assert s == 200 and not r["paciente"]["contactar_hoy"] and r["paciente"]["evaluacion"]["estado"] == "evaluada"
+    assert r["paciente"]["evaluacion"]["cierre"]["responsable"] == "Dra. Soto"
+    # un evento grave nuevo reabre la evaluación
+    call("POST", "/eventos", body={"id_paciente": pid, "tipo_evento": "visita_urgencia", "subtipo": "triage ESI 2", "fecha_corte": "2026-10-13"})
+    _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
+    assert fila(d, pid)["contactar_hoy"] and fila(d, pid)["evaluacion"]["estado"] == "pendiente"
+
+def test_estados_de_cita():
+    q = {"fecha_corte": "2026-10-13", "especialidad": "Neurología"}
+    _, b = call("GET", "/boxes", q)
+    a = next(x for e in b["especialidades"] for x in e["asignaciones"] if len(x["pacientes"]) >= 2)
+    p1, p2 = a["pacientes"][0], a["pacientes"][1]
+    assert p1["estado_cita"] == "propuesta"
+    assert call("POST", f"/pacientes/{p1['id_paciente']}/cita", body={"estado": "confirmada", "fecha_corte": "2026-10-13"})[0] == 404
+    call("POST", f"/pacientes/{p1['id_paciente']}/contacto", body={"resultado": "citado", "fecha_corte": "2026-10-13",
+         "hora": p1["hora"], "hora_fin": p1["hora_fin"], "id_box": a["id_box"]})
+    s, r = call("POST", f"/pacientes/{p1['id_paciente']}/cita", body={"estado": "confirmada", "fecha_corte": "2026-10-13"})
+    assert s == 200 and r["cita"]["estado_cita"] == "confirmada"
+    _, b = call("GET", "/boxes", q)
+    e = b["especialidades"][0]
+    assert e["conteo_citas"]["confirmada"] >= 1 and b["cupo_por_paciente"][p1["id_paciente"]]["estado_cita"] == "confirmada"
+    # cancelar libera la hora: ahora otro paciente puede reservarla
+    call("POST", f"/pacientes/{p1['id_paciente']}/cita", body={"estado": "cancelada", "fecha_corte": "2026-10-13"})
+    s, _ = call("POST", f"/pacientes/{p2['id_paciente']}/contacto", body={"resultado": "citado", "fecha_corte": "2026-10-13",
+                "hora": p1["hora"], "hora_fin": p1["hora_fin"], "id_box": a["id_box"]})
+    assert s == 200
+
+def test_kpis_de_resultado():
+    pid = "PAC-HLF-00004"
+    call("POST", "/eventos", body={"id_paciente": pid, "tipo_evento": "visita_urgencia", "subtipo": "triage ESI 2", "fecha_corte": "2026-10-13"})
+    call("POST", f"/pacientes/{pid}/decision", body={"decision": "mantener", "responsable": "Dr. Rojas", "fecha_corte": "2026-10-13"})
+    _, k = call("GET", "/kpis", {"fecha_corte": "2026-10-13"})
+    r = k["reevaluacion"]
+    assert r["evaluados"] >= 1 and r["mediana_horas"] is not None and r["meta_horas"] == 72
+    assert r["descompensados_en_lista"] == r["evaluacion_pendiente"] + r["evaluacion_atrasada"] + r["evaluacion_hecha"]
+    assert {"propuestas_sin_reservar", "reservada", "confirmada", "horas_recuperadas"} <= set(k["citas"])
+    assert k["contactabilidad"]["intentos"] >= k["contactabilidad"]["efectivos"]
+    c = k["concordancia"]
+    assert c["n_recomendado"] == 50 and c["suficiente"] == (c["revisiones"] >= 50)
+
+def test_ges_y_equivalencias_se_informan_para_verificar():
+    _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
+    g = next(p for p in d["pacientes"] if p["ges"] and p["ges"]["vencida"])
+    assert g["ges"]["verificar"] and any("posible incumplimiento" in r["valor"] for r in g["razones"])
+    k = next((p for p in d["pacientes"] if p["diagnostico_cie10"] == "K70" and p["estado_clinico"] == "descompensado"), None)
+    assert k is None or any("a validar" in r["valor"] for r in k["razones"] if r["factor"] == "tabla_oficial")
+
+def test_health_informa_fecha_y_modo():
+    s, h = call("GET", "/health")
+    assert s == 200 and h["datos"] == "sinteticos" and h["modo"] in ("simulacion", "tiempo_real") and h["fecha_hoy"]
