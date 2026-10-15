@@ -30,6 +30,16 @@ En macOS / Linux: `LOCAL=1 DATA_DIR=data python3 lambda/local_server.py` y `echo
 Abrir http://localhost:5173 → debe decir **"API conectada"**. Probar: elegir paciente → Explicar con IA → Simular evento → Confirmar → pestaña Uso de box.
 (Sin `.env.local` el front corre en modo mock: solo lectura.)
 
+## 1b. Despliegue simple en AWS Academy (Learner Lab) — recomendado para probar con el equipo
+El Learner Lab no deja crear roles IAM ni trae SAM CLI: `template-lab.yaml` usa el rol `LabRole` y el front queda en un
+bucket S3 (sitio web estático). Con las credenciales del lab activas (`aws sts get-caller-identity`) y el dataset en `data/`:
+```bash
+bash scripts/desplegar_lab.sh        # crea/actualiza el stack, sube datos y front, y prueba /health
+```
+Al final imprime la URL de la API y la del front (`http://...s3-website-us-east-1.amazonaws.com`).
+Se puede volver a correr para publicar cambios. Los registros del equipo quedan en DynamoDB; para partir de cero, vaciar la
+tabla `TableName` del stack. Arquitectura y flujo de datos: `docs/arquitectura.md`.
+
 ## 2. Credenciales AWS (una persona, la que deploya)
 Instalar **AWS CLI v2** y **AWS SAM CLI** (instaladores MSI oficiales de AWS). Luego:
 ```powershell

@@ -50,7 +50,7 @@ export function Hoy({ vitales, fecha, esp, setEsp, onVer, esApi, onCambio, onAvi
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-[24px] font-bold leading-tight">Box del día · {fmt(b.dia_agenda)}</h1>
-          <p className="text-[15px] text-on-surface-variant">Bloque 08:30–13:30 · <b className="text-hlf">{b.totales.libres}</b> cupos libres de {b.totales.capacidad} · {b.totales.citas_sistema} citas asignadas desde la lista</p>
+          <p className="text-[15px] text-on-surface-variant">Bloque 08:30–13:30 · <b className="text-hlf">{b.totales.libres}</b> cupos libres de {b.totales.capacidad} · {b.totales.citas_sistema} cita{b.totales.citas_sistema === 1 ? "" : "s"} asignada{b.totales.citas_sistema === 1 ? "" : "s"} desde la lista</p>
         </div>
         <label className="flex flex-col gap-1 text-[14px] text-on-surface-variant">Especialidad
           <select value={esp} onChange={(e) => { setEsp(e.target.value); setSel(null); }} className="h-11 px-2 border border-outline-variant text-on-surface">{ESPECIALIDADES.map((e) => <option key={e}>{e}</option>)}</select>
