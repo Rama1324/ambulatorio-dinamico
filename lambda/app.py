@@ -642,6 +642,47 @@ def boxes(corte, especialidad=None):
             "cupo_por_paciente": cupo, "mapa": mapa}
 
 
+def duracion_consulta(especialidad):
+    """Minutos promedio de atención real por especialidad (citaciones del registro con estado 'asistió')."""
+    mins = [c["minutos_atencion_real"] for p in perfiles().values() for c in p.get("citaciones", [])
+            if c.get("estado_cita") == "asistio" and c.get("minutos_atencion_real") and c.get("especialidad") == especialidad]
+    if not mins:
+        mins = [c["minutos_atencion_real"] for p in perfiles().values() for c in p.get("citaciones", [])
+                if c.get("estado_cita") == "asistio" and c.get("minutos_atencion_real")]
+    return (round(sum(mins) / len(mins)) if mins else 30), len(mins)
+
+
+def disponible(corte, especialidad, cupos=None, desde=None, hasta=None):
+    """Médico con tiempo libre: a quiénes atender, en el orden de la lista, sin repetir a quienes ya tienen hora hoy."""
+    if not especialidad:
+        return 400, {"error": "indique la especialidad"}
+    dur, n_citas = duracion_consulta(especialidad)
+    inicio = None
+    if desde and hasta:
+        h1, h2 = datetime.strptime(desde, "%H:%M"), datetime.strptime(hasta, "%H:%M")
+        minutos = int((h2 - h1).total_seconds() // 60)
+        if minutos <= 0:
+            return 400, {"error": "la hora de término debe ser posterior a la de inicio"}
+        cupos, inicio = max(1, minutos // dur), h1
+    cupos = max(1, min(int(cupos or 5), 40))
+    ya_con_hora = boxes(corte, especialidad)["cupo_por_paciente"]
+    data = lista(corte, especialidad)
+    candidatos = [p for p in data["pacientes"] if p["id_paciente"] not in ya_con_hora]
+    elegidos, reservas = candidatos[:cupos], candidatos[cupos:cupos + 3]
+    filas = []
+    for i, p in enumerate(elegidos):
+        f = _fila_box(p)
+        if inicio:
+            f["hora"] = (inicio + timedelta(minutes=dur * i)).strftime("%H:%M")
+        filas.append(f)
+    ref = elegidos[-1] if elegidos else None
+    return 200, {"fecha_corte": corte.isoformat(), "especialidad": especialidad, "cupos": cupos,
+                 "duracion_min": dur, "duracion_fuente": f"promedio de {n_citas} consultas reales del registro",
+                 "excluidos_con_hora_hoy": len(ya_con_hora), "en_espera": data["total"],
+                 "pacientes": filas,
+                 "reservas": [{**_fila_box(p), "por_que_despues": _diferencia(ref, p) if ref else None} for p in reservas]}
+
+
 # ---------- HTTP ----------
 CORS = {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "content-type",
         "Access-Control-Allow-Methods": "GET,POST,OPTIONS", "Content-Type": "application/json"}
@@ -686,6 +727,8 @@ def handler(event, context=None):
             return _resp(*post_revision(partes[1], body))
         if method == "POST" and len(partes) == 3 and partes[0] == "pacientes" and partes[2] == "contacto":
             return _resp(*post_contacto(partes[1], body))
+        if method == "GET" and partes == ["disponible"]:
+            return _resp(*disponible(_fecha(qs), qs.get("especialidad"), qs.get("cupos"), qs.get("desde"), qs.get("hasta")))
         if method == "GET" and partes == ["kpis"]:
             return _resp(200, kpis(_fecha(qs)))
         if method == "POST" and len(partes) == 3 and partes[0] == "pacientes" and partes[2] == "novedad":

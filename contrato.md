@@ -54,6 +54,7 @@ Fecha de referencia del dataset: 2026-10-13. Todo cálculo usa una `fecha_corte`
 | POST | `/pacientes/{id}/novedad` | `tipo`: `comorbilidad` (`condicion` de Charlson o `cie10`), `diagnostico` (`cie10`), `fallecimiento` o `atendido` (`fecha`). Queda registro `novedad#` |
 | GET | `/pacientes/{id}/historia?fecha_corte=` | Posición y categoría cada 14 días (gráfico de evolución) |
 | POST | `/pacientes/{id}/contacto` | `resultado`: citado · derivado_urgencia · se_mantiene · no_contesta (+ `nota`). Apaga "contactar hoy" salvo no_contesta |
+| GET | `/disponible?especialidad=X&desde=HH:MM&hasta=HH:MM` (o `&cupos=N`) | Médico con horas libres: a quiénes atender, en el orden de la lista, con hora sugerida (duración promedio real de la especialidad), sin repetir a quienes ya tienen hora hoy; + 3 reservas |
 | GET | `/kpis?fecha_corte=` | Cobertura, reevaluación, kappa (desde revisiones), alertas y egresos |
 | GET | `/catalogo` | Diagnósticos, comunas, previsiones, orígenes y condiciones de Charlson con su peso |
 | POST | `/importar` | `{archivos:[{nombre, contenido_base64}], confirmar}`: lee Excel/CSV, detecta la tabla, normaliza y valida. Sin `confirmar` solo revisa |

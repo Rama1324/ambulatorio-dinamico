@@ -70,6 +70,8 @@ export async function getHistoria(id, fechaCorte) {
     (e.severidad === "grave" || e.subtipo.includes("descompensaci") || ["estabilización", "buena respuesta"].includes(e.subtipo)));
   return { id_paciente: id, puntos, eventos };
 }
+export const getDisponible = (fechaCorte, params) =>
+  req("GET", `/disponible?${new URLSearchParams({ fecha_corte: fechaCorte, ...params })}`);
 export const postContacto = (id, body) => req("POST", `/pacientes/${id}/contacto`, body);
 export const getKpis = (fechaCorte) => req("GET", `/kpis?fecha_corte=${fechaCorte}`);
 export const postNovedad = (id, body) => req("POST", `/pacientes/${id}/novedad`, body);

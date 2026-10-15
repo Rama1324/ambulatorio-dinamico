@@ -118,7 +118,7 @@ export default function App() {
           </div>
         </div>
         <nav className="max-w-[1400px] mx-auto px-6 flex gap-6 text-[14px]">
-          {[["hoy", "Hoy", porContactar.length], ["lista", "Lista de espera", null], ["indicadores", "Indicadores", null], ["cargar", "Cargar datos", null], ["criterios", "Criterios", null]].map(([k, t, n]) => (
+          {[["hoy", "Hoy", porContactar.length], ["medico", "Tengo horas libres", null], ["lista", "Lista de espera", null], ["indicadores", "Indicadores", null], ["cargar", "Cargar datos", null], ["criterios", "Criterios", null]].map(([k, t, n]) => (
             <button key={k} onClick={() => setVista(k)}
               className={`py-2.5 border-b-2 -mb-px ${vista === k ? "border-primary text-primary font-semibold" : "border-transparent text-on-surface-variant hover:text-on-surface"}`}>
               {t}{n ? <span className="ml-1.5 px-1.5 rounded-full bg-error text-on-error text-[12px] font-semibold">{n}</span> : null}
@@ -163,6 +163,7 @@ export default function App() {
 
         {vista === "hoy" && <Hoy vitales={vitales} fecha={fecha} esp={esp} setEsp={setEsp} onVer={abrir} esApi={esApi} onCambio={cargar} onAviso={mostrarAviso} />}
         {vista === "criterios" && <Criterios />}
+        {vista === "medico" && <MedicoDisponible fecha={fecha} esApi={esApi} espInicial={esp} onVer={abrir} onCambio={cargar} onAviso={mostrarAviso} />}
         {vista === "indicadores" && <Indicadores fecha={fecha} esApi={esApi} data={data} />}
         {vista === "cargar" && <CargarDatos esApi={esApi} onListo={async (r) => {
           await cargar();
@@ -1286,6 +1287,104 @@ function Hoy({ vitales, fecha, esp, setEsp, onVer, esApi, onCambio, onAviso }) {
           <div className="p-2"><MapaBox mapa={b.mapa} dia={b.dia_agenda} esp={esp} setEsp={setEsp} /></div>
         </details>
       )}
+    </div>
+  );
+}
+
+// Médico con tiempo libre: le dice a quiénes atender, en orden, con hora sugerida y motivo.
+function MedicoDisponible({ fecha, esApi, espInicial, onVer, onCambio, onAviso }) {
+  const [esp, setEsp] = useState(espInicial && espInicial !== "Todas" ? espInicial : "Cardiología");
+  const [modo, setModo] = useState("horario");
+  const [desde, setDesde] = useState("14:00");
+  const [hasta, setHasta] = useState("17:00");
+  const [cupos, setCupos] = useState(5);
+  const [r, setR] = useState(null);
+  const [buscando, setBuscando] = useState(false);
+  const [citados, setCitados] = useState({});
+  const buscar = async () => {
+    setBuscando(true); setCitados({});
+    try { setR(await api.getDisponible(fecha, modo === "horario" ? { especialidad: esp, desde, hasta } : { especialidad: esp, cupos })); }
+    catch (e) { onAviso({ titulo: "No se pudo buscar: " + e.message }); } finally { setBuscando(false); }
+  };
+  const marcar = async (p, resultado) => {
+    try {
+      await api.postContacto(p.id_paciente, { resultado, fecha_corte: fecha, nota: p.hora ? `Citado a las ${p.hora} (médico con horas libres)` : "Médico con horas libres" });
+      setCitados({ ...citados, [p.id_paciente]: resultado }); await onCambio();
+    } catch (e) { onAviso({ titulo: "No se pudo registrar: " + e.message }); }
+  };
+  if (!esApi) return <Caja><p className="text-on-surface-variant">Esta función requiere conexión al servidor.</p></Caja>;
+  const campo = "h-9 px-2 border border-outline-variant rounded bg-white";
+  return (
+    <div className="grid gap-5 lg:grid-cols-12 items-start">
+      <Caja titulo="¿Tiene horas libres hoy?" className="lg:col-span-4">
+        <p className="text-[13px] text-on-surface-variant mb-3">Indique su especialidad y su tiempo disponible. Se proponen los pacientes de la lista que más lo necesitan, sin repetir a quienes ya tienen hora hoy en un box.</p>
+        <div className="space-y-3 text-[14px]">
+          <Filtro label="Especialidad">
+            <select value={esp} onChange={(e) => setEsp(e.target.value)} className={campo}>{ESPECIALIDADES.filter((e) => e !== "Todas").map((e) => <option key={e}>{e}</option>)}</select>
+          </Filtro>
+          <div className="flex gap-1">
+            {[["horario", "Por horario"], ["cantidad", "Por cantidad"]].map(([k, t]) => (
+              <button key={k} onClick={() => setModo(k)} className={`flex-1 h-9 rounded border font-semibold ${modo === k ? "bg-primary text-on-primary border-primary" : "border-outline-variant"}`}>{t}</button>
+            ))}
+          </div>
+          {modo === "horario" ? (
+            <div className="grid grid-cols-2 gap-2">
+              <Filtro label="Desde"><input type="time" value={desde} onChange={(e) => setDesde(e.target.value)} className={campo} /></Filtro>
+              <Filtro label="Hasta"><input type="time" value={hasta} onChange={(e) => setHasta(e.target.value)} className={campo} /></Filtro>
+            </div>
+          ) : (
+            <Filtro label="¿Cuántos pacientes puede ver?"><input type="number" min={1} max={40} value={cupos} onChange={(e) => setCupos(e.target.value)} className={campo} /></Filtro>
+          )}
+          <button disabled={buscando} onClick={buscar} className="w-full py-2.5 rounded bg-primary text-on-primary font-semibold disabled:opacity-50 flex items-center justify-center gap-1">
+            <Icono n="person_search" className="text-[18px]" />{buscando ? "Buscando…" : "¿A quiénes atiendo?"}</button>
+        </div>
+      </Caja>
+
+      <div className="lg:col-span-8">
+        {!r ? <Caja><p className="text-on-surface-variant">Complete el formulario para ver a quiénes atender.</p></Caja> : (
+          <Caja titulo={`${r.pacientes.length} paciente${r.pacientes.length !== 1 ? "s" : ""} para atender · ${r.especialidad}`}
+            accion={<button onClick={() => window.print()} className="text-[13px] text-primary font-semibold flex items-center gap-1"><Icono n="print" className="text-[16px]" />Imprimir</button>}>
+            <p className="text-[14px] mb-3">
+              {modo === "horario" ? <>Con su horario de <b>{desde} a {hasta}</b> y consultas de <b>~{r.duracion_min} min</b> ({r.duracion_fuente} de {r.especialidad}) alcanza a ver <b>{r.cupos} pacientes</b>.</>
+                : <>Los <b>{r.cupos} pacientes</b> que más lo necesitan hoy.</>}
+              {r.excluidos_con_hora_hoy > 0 && <span className="text-on-surface-variant"> Se omiten {r.excluidos_con_hora_hoy} que ya tienen hora hoy en un box.</span>}
+            </p>
+            <ol className="divide-y divide-outline-variant/60">
+              {r.pacientes.map((p, i) => (
+                <li key={p.id_paciente} className={`py-2.5 flex gap-3 ${p.riesgo_vital ? "bg-error-container/30 -mx-4 px-4" : ""}`}>
+                  <span className="shrink-0 w-14 text-[15px] font-semibold text-primary-container">{p.hora || `${i + 1}.`}</span>
+                  <span className="shrink-0"><Prioridad cat={p.categoria} /></span>
+                  <div className="flex-1 text-[14px]">
+                    <button onClick={() => onVer(p.id_paciente)} className="font-semibold hover:underline text-left">{p.nombre_fantasia}</button>
+                    <span className="text-[13px] text-on-surface-variant"> · {p.diagnostico_texto} · {p.dias_espera} días esperando</span>
+                    <div className="text-[13px]">Por qué: {p.motivo}</div>
+                    {p.riesgo_inasistencia && <div className="text-[13px] text-ambar font-semibold">Faltó 2 veces seguidas: confirmar por teléfono</div>}
+                    <div className="flex gap-1 mt-1.5 text-[12px]">
+                      {citados[p.id_paciente]
+                        ? <span className="text-hlf font-semibold flex items-center gap-1"><Icono n="task_alt" className="text-[14px]" />{citados[p.id_paciente] === "citado" ? "Citado" : "No contesta: llamar a una reserva"}</span>
+                        : <>
+                          <button onClick={() => marcar(p, "citado")} className="px-2 py-1 rounded border border-primary text-primary font-semibold">Citar</button>
+                          <button onClick={() => marcar(p, "no_contesta")} className="px-2 py-1 rounded border border-outline-variant text-on-surface-variant font-semibold">No contesta</button>
+                        </>}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ol>
+            {r.reservas.length > 0 && (
+              <div className="mt-3 rounded border border-dashed border-outline p-3 text-[14px]">
+                <div className="font-semibold mb-1">Reservas, si alguien no contesta:</div>
+                <ol className="space-y-1">
+                  {r.reservas.map((p) => (
+                    <li key={p.id_paciente}><button onClick={() => onVer(p.id_paciente)} className="hover:underline font-semibold">{p.nombre_fantasia}</button>
+                      <span className="text-[13px] text-on-surface-variant"> · {p.diagnostico_texto} · va después porque {p.por_que_despues}</span></li>
+                  ))}
+                </ol>
+              </div>
+            )}
+          </Caja>
+        )}
+      </div>
     </div>
   );
 }

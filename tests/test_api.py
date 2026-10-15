@@ -312,6 +312,19 @@ def test_grupo_proteccion_ordena_despues_de_lace():
     q = fila(d, ultimo["id_paciente"])
     assert q["grupo_proteccion"] == "PRAIS" and q["acg"] == "G3" and q["posicion"] < ultimo["posicion"]
 
+def test_medico_con_horas_libres():
+    s, d = call("GET", "/disponible", {"fecha_corte": "2026-10-13", "especialidad": "Cardiología", "desde": "14:00", "hasta": "17:00"})
+    assert s == 200 and d["duracion_min"] > 0 and d["cupos"] == 180 // d["duracion_min"]
+    assert d["pacientes"][0]["hora"] == "14:00" and len(d["pacientes"]) == d["cupos"]
+    _, b = call("GET", "/boxes", {"fecha_corte": "2026-10-13", "especialidad": "Cardiología"})
+    assert not set(p["id_paciente"] for p in d["pacientes"]) & set(b["cupo_por_paciente"])   # no repite a quien ya tiene hora
+    _, l = call("GET", "/pacientes", {"fecha_corte": "2026-10-13", "especialidad": "Cardiología"})
+    orden = [p["id_paciente"] for p in l["pacientes"] if p["id_paciente"] not in b["cupo_por_paciente"]]
+    assert [p["id_paciente"] for p in d["pacientes"]] == orden[:d["cupos"]]                   # respeta el orden de la lista
+    s, d = call("GET", "/disponible", {"especialidad": "Cardiología", "cupos": "5"})
+    assert len(d["pacientes"]) == 5 and d["reservas"] and d["reservas"][0]["por_que_despues"]
+    assert call("GET", "/disponible", {})[0] == 400
+
 def test_plantilla():
     r = app.handler({"requestContext": {"http": {"method": "GET"}}, "rawPath": "/plantillas/lista_espera"})
     assert r["statusCode"] == 200 and "diagnostico_cie10" in r["body"]
