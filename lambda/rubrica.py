@@ -232,7 +232,7 @@ def respuesta_determinista(hist, dx_kb, tolerancia=0.05):
     en la evaluación: si el LLM no supera a este lector, no aporta con datos estructurados."""
     def cita(r):
         return {"fecha": r["fecha"], "tipo": r["tipo"], "valor": r["valor"]}
-    graves = [e for e in hist["eventos"] if e["tipo"] != "hallazgo_oncologico" and e.get("relacionado_con_su_diagnostico") is not False and
+    graves = [e for e in hist["eventos"] if e["tipo"] not in ("hallazgo_oncologico", "criterio_clinico") and e.get("relacionado_con_su_diagnostico") is not False and
               (e["severidad"] == "grave" or "descompensaci" in _norm(e["valor"]))]  # = puntaje.descompensa
     ultimo = graves[-1] if graves else None
     estab = [e for e in hist["eventos"] if e["tipo"] == "control_aps" and _norm(e["valor"]) in ("estabilizacion", "buena respuesta")

@@ -374,16 +374,19 @@
   },
   "F32": {
    "texto": "Episodio depresivo",
-   "fila_descompensado": null,
-   "estado": "a_validar_por_medico",
-   "equivalencia": null,
-   "detalle": "En el texto del PDF la prioridad de 'EPISODIO DEPRESIVO' (pág. 110) no se puede leer con certeza. Pendiente de verificar en el PDF original. Solo genera revisión.",
-   "candidata": {
+   "fila_descompensado": {
     "texto_pdf": "EPISODIO DEPRESIVO",
-    "prioridad": null,
+    "prioridad": "alta",
     "pagina": 110,
     "especialidad_pdf": "PSIQUIATRÍA ADULTO"
    },
+   "estado": "con_fuente",
+   "equivalencia": {
+    "estado": "a_validar_por_medico",
+    "detalle": "la fila 'Episodio depresivo' es ALTA (verificado en imagen, pág. 110); se usa como fila de un episodio depresivo descompensado"
+   },
+   "detalle": null,
+   "candidata": null,
    "ventanas": {
     "hospitalizacion": {
      "valor": 90,
@@ -512,6 +515,6 @@
   "E03: ¿cuántos días tras una hospitalizacion grave sigue vigente la fila descompensado? (sin fuente: no vence)",
   "G40: La tabla no tiene fila 'epilepsia descompensada'; se usa 'crisis mensuales' (media). Crisis diarias (alta) no se pueden distinguir en el registro.",
   "G43: 'Crónica refractaria' requiere criterios clínicos que el registro no trae. Solo genera revisión.",
-  "F32: En el texto del PDF la prioridad de 'EPISODIO DEPRESIVO' (pág. 110) no se puede leer con certeza. Pendiente de verificar en el PDF original. Solo genera revisión."
+  "F32: la fila 'Episodio depresivo' es ALTA (verificado en imagen, pág. 110); se usa como fila de un episodio depresivo descompensado"
  ]
 }

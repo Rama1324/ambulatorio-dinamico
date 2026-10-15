@@ -1,0 +1,1290 @@
+{
+  "version": "1.0",
+  "idioma": "es",
+  "objeto": "Categorización clínica por especialidad, enfermedad y nivel de prioridad según los documentos aportados.",
+  "interpretacion": {
+    "niveles": [
+      "alta",
+      "media",
+      "baja"
+    ],
+    "significado": "Las categorías originales son de prioridad de interconsulta, sustentadas en gravedad, riesgo, evolución o necesidad de evaluación. No son una escala validada de gravedad ni un puntaje.",
+    "criterios": "Se conservan las condiciones de cada celda. Los elementos de una lista reproducen párrafos de la fuente, no constituyen por sí solos un operador lógico OR o AND. Conservar las conjunciones y los calificadores internos.",
+    "justificacion": "Paráfrasis explicativa de los criterios aportados, sin agregar evidencia externa.",
+    "informacion_insuficiente": "No asignar baja por ausencia de datos. Si faltan condiciones necesarias o hay solapamiento no resuelto, la categoría no es determinable con estos criterios.",
+    "umbrales": "No inferir límites numéricos para términos como leve, moderado, severo, PSA muy elevado, IMC muy bajo o DAS28 alto cuando el documento no los define.",
+    "agrupaciones": "Las agrupaciones diagnósticas originales se mantienen; un criterio referido a un subtipo no se extiende automáticamente a todos los diagnósticos del grupo.",
+    "urgencias": "Las alertas de urgencia explícitas se conservan separadas y prevalecen sobre la clasificación electiva. Su ausencia en un registro no demuestra ausencia de urgencia.",
+    "alcance": "Extracción y organización de los documentos aportados; no incluye validación clínica externa, plazos generales de espera, puntajes, referencias, exámenes de derivación ni requisitos administrativos."
+  },
+  "especialidades": [
+    {
+      "especialidad": "Oftalmología",
+      "enfermedades": [
+        {
+          "id": "oftalmologia_01",
+          "enfermedad": "Catarata",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Compromiso visual severo bilateral que afecta la funcionalidad (riesgo de caídas, dependencia)",
+                "Catarata hipermadura con riesgo de complicaciones (glaucoma facolítico, uveítis facoanafiláctica)"
+              ],
+              "justificacion": "La pérdida visual bilateral severa compromete la autonomía y se asocia a caídas o dependencia; la catarata hipermadura presenta riesgo de glaucoma facolítico o uveítis facoanafiláctica."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Compromiso visual moderado, unilateral o bilateral, que afecta actividades diarias, sin riesgo inminente"
+              ],
+              "justificacion": "La afectación visual interfiere con actividades diarias, pero el documento especifica ausencia de riesgo inminente."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Catarata incipiente, leve, con buena agudeza visual funcional"
+              ],
+              "justificacion": "La catarata es incipiente o leve y conserva una agudeza visual funcional."
+            }
+          }
+        },
+        {
+          "id": "oftalmologia_02",
+          "enfermedad": "Desprendimiento de retina",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "DERIVACIÓN/URGENCIA INMEDIATA ante sospecha aguda: destellos, miodesopsias de inicio súbito, defecto de campo visual tipo cortina — no debe esperar cita electiva",
+                "Seguimiento post-cirugía en casos ya tratados"
+              ],
+              "justificacion": "La sospecha aguda exige atención inmediata según el documento. La misma categoría también incluye seguimiento posquirúrgico de casos tratados, sin explicar por qué todo ese seguimiento recibe prioridad alta."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Crónico/estable o degeneración retiniana periférica de riesgo, para evaluación y eventual tratamiento profiláctico (láser)"
+              ],
+              "justificacion": "El cuadro crónico o estable, o una degeneración periférica de riesgo, requiere valoración especializada y eventual prevención, sin describirse una presentación aguda."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Hallazgos periféricos de bajo riesgo (lattice sin síntomas), en seguimiento"
+              ],
+              "justificacion": "Los hallazgos periféricos son de bajo riesgo y no presentan síntomas."
+            }
+          },
+          "excepciones_de_urgencia": [
+            {
+              "condicion": "Sospecha de desprendimiento de retina agudo: destellos, miodesopsias de inicio súbito o defecto de campo visual tipo cortina.",
+              "clasificacion_excepcional": "Derivación inmediata, el mismo día; no esperar cita electiva."
+            }
+          ],
+          "precision_para_clasificar": "La fuente ubica tanto la sospecha aguda como el seguimiento posquirúrgico en alta; no permite deducir que todo seguimiento posquirúrgico sea una urgencia."
+        },
+        {
+          "id": "oftalmologia_03",
+          "enfermedad": "Estrabismo",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Inicio agudo en adulto (sospecha de causa neurológica: parálisis de nervio craneal) — evaluación neuro-oftalmológica urgente",
+                "En niño, con riesgo de ambliopía no tratada (ventana crítica de desarrollo visual)"
+              ],
+              "justificacion": "El inicio agudo en adultos plantea una causa neurológica; en niños, la ambliopía no tratada compromete la ventana crítica de desarrollo visual."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Crónico sintomático (diplopía, astenopia), para evaluación y definición de manejo (prismas, cirugía)"
+              ],
+              "justificacion": "El estrabismo crónico produce diplopía o astenopia y requiere definir su manejo."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Estable, cosmético, sin diplopía ni riesgo de ambliopía, en seguimiento"
+              ],
+              "justificacion": "El cuadro es estable y cosmético, sin diplopía ni riesgo de ambliopía."
+            }
+          },
+          "excepciones_de_urgencia": [
+            {
+              "condicion": "Estrabismo de inicio agudo en adulto con sospecha de causa neurológica.",
+              "clasificacion_excepcional": "Evaluación neuro-oftalmológica urgente."
+            }
+          ]
+        },
+        {
+          "id": "oftalmologia_04",
+          "enfermedad": "Vicio de refracción",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Severo, no corregido, con impacto funcional significativo (ambliopía en desarrollo en niños, o discapacidad visual funcional en adulto)"
+              ],
+              "justificacion": "El defecto severo no corregido produce discapacidad visual funcional o ambliopía en desarrollo."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Moderado, con necesidad de corrección óptica actualizada, sin urgencia"
+              ],
+              "justificacion": "El defecto moderado necesita actualización de la corrección óptica, sin urgencia descrita."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Leve, estable, en seguimiento con controles habituales"
+              ],
+              "justificacion": "El defecto es leve y estable."
+            }
+          }
+        },
+        {
+          "id": "oftalmologia_05",
+          "enfermedad": "Degeneración macular",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Forma húmeda de inicio reciente o con progresión rápida (riesgo de pérdida visual irreversible, requiere tratamiento antiangiogénico oportuno)",
+                "Metamorfopsia de inicio súbito"
+              ],
+              "justificacion": "La forma húmeda reciente o rápidamente progresiva amenaza con pérdida visual irreversible; la metamorfopsia súbita también se clasifica como alta."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Forma seca con drusas de riesgo intermedio-alto, para seguimiento y definir necesidad de suplementación/vigilancia"
+              ],
+              "justificacion": "La forma seca presenta drusas de riesgo intermedio-alto que justifican vigilancia y evaluación especializada."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Forma seca temprana, hallazgo incidental, bajo riesgo, en seguimiento"
+              ],
+              "justificacion": "La forma seca es temprana, incidental y de bajo riesgo."
+            }
+          }
+        },
+        {
+          "id": "oftalmologia_06",
+          "enfermedad": "Tumor orbitario",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Compromiso visual por compresión del nervio óptico",
+                "Proptosis progresiva rápida; sospecha de malignidad (crecimiento rápido, dolor, alteración de motilidad ocular)"
+              ],
+              "justificacion": "La compresión del nervio óptico compromete la visión; la proptosis rápidamente progresiva y los signos de sospecha de malignidad elevan la prioridad."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Estable, sintomático leve, pendiente de caracterización con imagen"
+              ],
+              "justificacion": "El tumor es estable, con síntomas leves, pero aún requiere caracterización."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Pequeño, asintomático, hallazgo incidental, en seguimiento"
+              ],
+              "justificacion": "La lesión es pequeña, asintomática e incidental."
+            }
+          }
+        },
+        {
+          "id": "oftalmologia_07",
+          "enfermedad": "Patologías palpebrales (ptosis, entropión, ectropión, chalazión)",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Ptosis que compromete el eje visual (riesgo de ambliopía en niños, o compromiso funcional severo del campo visual en adultos)",
+                "Entropión/ectropión con queratopatía por exposición o ulceración corneal asociada"
+              ],
+              "justificacion": "La ptosis obstruye el eje visual y amenaza el desarrollo visual infantil o el campo visual funcional adulto; el entropión o ectropión presenta daño corneal por exposición o ulceración."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Sintomático (irritación, epífora) sin compromiso corneal severo, candidato a manejo quirúrgico electivo"
+              ],
+              "justificacion": "Hay irritación o epífora, sin compromiso corneal severo."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Chalazión pequeño, ptosis leve estética, entropión/ectropión mínimo, sin compromiso corneal"
+              ],
+              "justificacion": "Las alteraciones son pequeñas, leves o estéticas, sin compromiso corneal."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "especialidad": "Otorrinolaringología",
+      "enfermedades": [
+        {
+          "id": "otorrinolaringologia_01",
+          "enfermedad": "Otomastoiditis",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Signos de complicación: absceso subperióstico, parálisis facial, sospecha de complicación intracraneal (derivar a urgencia)",
+                "Sin respuesta a tratamiento antibiótico inicial"
+              ],
+              "justificacion": "El absceso subperióstico, la parálisis facial o la sospecha de extensión intracraneal constituyen complicaciones; la falta de respuesta al antibiótico inicial también recibe prioridad alta."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Crónica en estudio, sin complicación aguda"
+              ],
+              "justificacion": "La enfermedad es crónica y está en estudio, sin complicación aguda."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Secuelas ya tratadas, estable, en seguimiento"
+              ],
+              "justificacion": "Solo persisten secuelas ya tratadas y estables."
+            }
+          },
+          "excepciones_de_urgencia": [
+            {
+              "condicion": "Otomastoiditis con absceso subperióstico, parálisis facial o sospecha de complicación intracraneal.",
+              "clasificacion_excepcional": "Derivación el mismo día a urgencia."
+            }
+          ]
+        },
+        {
+          "id": "otorrinolaringologia_02",
+          "enfermedad": "Retraso del lenguaje",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Asociado a hipoacusia no evaluada (ventana crítica de desarrollo)",
+                "Sospecha de hipoacusia severa/profunda"
+              ],
+              "justificacion": "La hipoacusia no evaluada puede afectar una ventana crítica de desarrollo; la sospecha de pérdida auditiva severa o profunda también determina prioridad alta."
+            },
+            "media": {
+              "criterios_detallados": [
+                "En estudio, sin causa auditiva clara, para evaluación ORL y audiológica completa"
+              ],
+              "justificacion": "El retraso sigue en estudio y no tiene una causa auditiva clara."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Leve, con audición normal documentada, en seguimiento con fonoaudiología"
+              ],
+              "justificacion": "El retraso es leve y existe audición normal documentada."
+            }
+          }
+        },
+        {
+          "id": "otorrinolaringologia_03",
+          "enfermedad": "Cáncer ORL",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Biopsia positiva o alta sospecha de malignidad",
+                "Disfonía persistente >3-4 semanas con lesión laríngea visible; adenopatía cervical sospechosa; disfagia progresiva con lesión visible"
+              ],
+              "justificacion": "Existe confirmación por biopsia o alta sospecha de malignidad, sustentada por lesiones visibles, adenopatía sospechosa o síntomas persistentes o progresivos."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Lesión sospechosa pendiente de biopsia confirmatoria, sin signos de alarma agudos"
+              ],
+              "justificacion": "La lesión requiere confirmación histológica y no presenta signos de alarma agudos; el documento la distingue de la alta sospecha de malignidad de la categoría alta."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Lesiones de bajo riesgo en seguimiento"
+              ],
+              "justificacion": "La lesión se considera de bajo riesgo y permanece en seguimiento."
+            }
+          },
+          "precision_para_clasificar": "La frontera entre alta sospecha de malignidad (alta) y lesión sospechosa pendiente de biopsia sin alarma aguda (media) no está operacionalizada en el documento."
+        },
+        {
+          "id": "otorrinolaringologia_04",
+          "enfermedad": "Disfonía",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Persistente >3-4 semanas en fumador/bebedor (factor de riesgo oncológico)",
+                "Parálisis de cuerda vocal de inicio agudo (sospecha de compresión por masa)"
+              ],
+              "justificacion": "La persistencia junto con tabaquismo o consumo de alcohol implica riesgo oncológico; la parálisis vocal aguda plantea compresión por una masa."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Funcional/nodular sin factores de riesgo oncológico, refractaria a manejo inicial, para laringoscopia"
+              ],
+              "justificacion": "La disfonía funcional o nodular no tiene factores de riesgo oncológico, pero no responde al manejo inicial."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Leve y transitoria, de causa evidente (laringitis viral), en resolución"
+              ],
+              "justificacion": "Es leve, transitoria, de causa evidente y está resolviéndose."
+            }
+          }
+        },
+        {
+          "id": "otorrinolaringologia_05",
+          "enfermedad": "Epistaxis",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Recurrente severa con anemia sintomática",
+                "Posterior de difícil control; sospecha de lesión estructural (tumor, telangiectasia hereditaria)"
+              ],
+              "justificacion": "El sangrado recurrente severo produce anemia sintomática, es posterior de difícil control o plantea una lesión estructural."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Recurrente leve-moderada en estudio de causa, sin repercusión hemodinámica"
+              ],
+              "justificacion": "Es recurrente y requiere estudiar la causa, pero no presenta repercusión hemodinámica."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Anterior ocasional, autolimitada, sin recurrencia significativa"
+              ],
+              "justificacion": "Es anterior, ocasional y autolimitado, sin recurrencia significativa."
+            }
+          }
+        },
+        {
+          "id": "otorrinolaringologia_06",
+          "enfermedad": "Otoesclerosis",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Hipoacusia de rápida progresión con impacto funcional severo"
+              ],
+              "justificacion": "La pérdida auditiva progresa rápidamente y tiene impacto funcional severo."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Hipoacusia conductiva progresiva con sospecha de otoesclerosis, para confirmación y definición de manejo"
+              ],
+              "justificacion": "La pérdida conductiva progresa y requiere confirmar la sospecha diagnóstica y definir manejo."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Ya diagnosticada, estable, en seguimiento o con manejo protésico"
+              ],
+              "justificacion": "El diagnóstico está establecido y el cuadro es estable o tiene manejo protésico."
+            }
+          }
+        },
+        {
+          "id": "otorrinolaringologia_07",
+          "enfermedad": "Colesteatoma",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Signos de complicación: parálisis facial, vértigo, sospecha de erosión ósea/complicación intracraneal",
+                "Otorrea crónica con sospecha de colesteatoma no tratado"
+              ],
+              "justificacion": "Hay signos de complicación, como parálisis facial, vértigo o sospecha de erosión ósea o extensión intracraneal; la otorrea crónica con sospecha de colesteatoma no tratado también recibe prioridad alta."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Confirmado, estable, sin signos de complicación, para definición quirúrgica electiva"
+              ],
+              "justificacion": "El colesteatoma está confirmado y requiere definición quirúrgica, pero se encuentra estable y sin complicaciones."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Seguimiento post-quirúrgico, estable"
+              ],
+              "justificacion": "Corresponde a seguimiento posquirúrgico estable."
+            }
+          },
+          "excepciones_de_urgencia": [
+            {
+              "condicion": "Colesteatoma con signos de complicación: parálisis facial, vértigo o sospecha de erosión ósea o complicación intracraneal.",
+              "clasificacion_excepcional": "Derivación el mismo día a urgencia."
+            }
+          ]
+        },
+        {
+          "id": "otorrinolaringologia_08",
+          "enfermedad": "Fractura nasal",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Deformidad significativa u obstrucción de vía aérea",
+                "Hematoma septal: URGENCIA — drenaje inmediato (riesgo de necrosis septal)"
+              ],
+              "justificacion": "Existe deformidad significativa u obstrucción de la vía aérea; el hematoma septal añade riesgo de necrosis septal y se identifica como urgencia inmediata."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Deformidad leve-moderada, para evaluación de reducción dentro de ventana terapéutica (7-14 días)"
+              ],
+              "justificacion": "La deformidad es leve o moderada, pero la evaluación para reducción está limitada por una ventana terapéutica de 7 a 14 días."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Ya consolidada, sin indicación de reducción, con secuela leve"
+              ],
+              "justificacion": "La fractura ya está consolidada, no tiene indicación de reducción y la secuela es leve."
+            }
+          },
+          "excepciones_de_urgencia": [
+            {
+              "condicion": "Hematoma septal.",
+              "clasificacion_excepcional": "Urgencia con drenaje inmediato por riesgo de necrosis septal."
+            }
+          ],
+          "precision_para_clasificar": "La ventana específica de reducción de 7–14 días debe conservarse: no puede interpretarse la categoría media como autorización para postergar esa ventana."
+        },
+        {
+          "id": "otorrinolaringologia_09",
+          "enfermedad": "Pólipos nasales",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Poliposis masiva con obstrucción severa de vía aérea",
+                "Sospecha de complicación (mucocele, compromiso orbitario)"
+              ],
+              "justificacion": "La poliposis produce obstrucción severa de la vía aérea o plantea complicaciones como mucocele o compromiso orbitario."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Sintomática (obstrucción, anosmia), refractaria a tratamiento médico, candidata a manejo quirúrgico electivo"
+              ],
+              "justificacion": "Los síntomas persisten pese al tratamiento médico y justifican evaluar manejo especializado."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Pequeños, asintomáticos o síntomas leves, en manejo médico"
+              ],
+              "justificacion": "Los pólipos son pequeños, asintomáticos o con síntomas leves."
+            }
+          }
+        },
+        {
+          "id": "otorrinolaringologia_10",
+          "enfermedad": "Hipoacusia",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Súbita (<72 horas de evolución): URGENCIA, requiere tratamiento esteroidal precoz",
+                "Unilateral asimétrica de rápida progresión (descartar schwannoma vestibular)"
+              ],
+              "justificacion": "La aparición súbita en menos de 72 horas se considera urgencia; la asimetría unilateral rápidamente progresiva requiere descartar schwannoma vestibular."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Progresiva gradual, para estudio audiológico completo y definición de manejo (audífonos)"
+              ],
+              "justificacion": "La progresión es gradual y requiere estudio auditivo y definición de manejo."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Leve y estable, en seguimiento"
+              ],
+              "justificacion": "La pérdida auditiva es leve y estable."
+            }
+          },
+          "excepciones_de_urgencia": [
+            {
+              "condicion": "Hipoacusia súbita con menos de 72 horas de evolución.",
+              "clasificacion_excepcional": "Derivación el mismo día a urgencia."
+            }
+          ]
+        },
+        {
+          "id": "otorrinolaringologia_11",
+          "enfermedad": "Tinitus",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Unilateral pulsátil (sospecha vascular) o asociado a hipoacusia asimétrica de rápida progresión"
+              ],
+              "justificacion": "El tinitus unilateral pulsátil plantea una causa vascular; su asociación con hipoacusia asimétrica rápidamente progresiva también eleva la prioridad."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Persistente bilateral, con impacto en calidad de vida, para evaluación audiológica y manejo"
+              ],
+              "justificacion": "El síntoma bilateral es persistente e impacta en la calidad de vida."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Leve, intermitente, sin impacto funcional significativo"
+              ],
+              "justificacion": "El síntoma es leve e intermitente, sin impacto funcional significativo."
+            }
+          }
+        },
+        {
+          "id": "otorrinolaringologia_12",
+          "enfermedad": "Vértigo periférico",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Con hipoacusia asociada de inicio agudo (sospecha de laberintitis/Ménière en crisis)",
+                "Recurrente incapacitante que afecta la seguridad del paciente (caídas)"
+              ],
+              "justificacion": "La hipoacusia de inicio agudo asociada plantea laberintitis o Ménière en crisis; los episodios recurrentes incapacitantes comprometen la seguridad por caídas."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Recurrente (VPPB recurrente, Ménière) en estudio, para definición de manejo"
+              ],
+              "justificacion": "Los episodios son recurrentes y requieren estudio y definición de manejo."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Posicional leve, esporádico, buena respuesta a maniobras/manejo inicial"
+              ],
+              "justificacion": "El vértigo es posicional, leve y esporádico, con buena respuesta al manejo inicial."
+            }
+          }
+        },
+        {
+          "id": "otorrinolaringologia_13",
+          "enfermedad": "Hipertrofia adenoidea",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Obstrucción severa de vía aérea superior con síntomas de apnea obstructiva significativos",
+                "Cor pulmonale asociado (poco frecuente pero grave)"
+              ],
+              "justificacion": "La obstrucción de vía aérea superior es severa y se acompaña de apnea obstructiva significativa, o existe cor pulmonale asociado."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Sintomática (obstrucción nasal, otitis media recurrente asociada), candidata a adenoidectomía electiva"
+              ],
+              "justificacion": "Hay obstrucción nasal u otitis media recurrente asociada que justifica evaluar tratamiento especializado."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Leve, síntomas mínimos, en seguimiento"
+              ],
+              "justificacion": "La hipertrofia es leve y los síntomas son mínimos."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "especialidad": "Psiquiatría",
+      "enfermedades": [
+        {
+          "id": "psiquiatria_01",
+          "enfermedad": "Intento suicida y autolesiones",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "DERIVACIÓN INMEDIATA A URGENCIA/SAPU — no corresponde interconsulta electiva: intento suicida reciente (independiente de la letalidad aparente), ideación suicida activa con plan e intencionalidad",
+                "Autolesiones recurrentes de gravedad creciente"
+              ],
+              "justificacion": "El intento reciente o la ideación activa con plan e intencionalidad exige atención inmediata según el documento; las autolesiones recurrentes de gravedad creciente también se clasifican como altas."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Antecedente de intento ya evaluado en urgencia, en seguimiento ambulatorio estrecho tras el alta",
+                "Ideación suicida pasiva sin plan, en paciente ya con seguimiento psiquiátrico iniciado"
+              ],
+              "justificacion": "El intento ya fue evaluado en urgencia y existe seguimiento estrecho tras el alta, o la ideación es pasiva, sin plan y con seguimiento psiquiátrico iniciado."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Antecedente remoto de intento suicida, sin ideación actual, estable, en seguimiento de mantención"
+              ],
+              "justificacion": "El intento es remoto, no existe ideación actual y el paciente está estable."
+            }
+          },
+          "excepciones_de_urgencia": [
+            {
+              "condicion": "Intento suicida reciente, independientemente de la letalidad aparente, o ideación suicida activa con plan e intencionalidad.",
+              "clasificacion_excepcional": "Derivación inmediata a urgencia/SAPU; no corresponde interconsulta electiva."
+            }
+          ]
+        },
+        {
+          "id": "psiquiatria_02",
+          "enfermedad": "Trastorno bipolar",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Episodio maníaco o depresivo severo actual con síntomas psicóticos o riesgo de auto/heteroagresión",
+                "Primer episodio maníaco (requiere diagnóstico y manejo precoz)"
+              ],
+              "justificacion": "El episodio severo actual presenta síntomas psicóticos o riesgo de agresión; el primer episodio maníaco requiere definición diagnóstica y manejo precoz."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Diagnosticado, con síntomas subsindromales o mal control con tratamiento actual, para ajuste terapéutico"
+              ],
+              "justificacion": "Persisten síntomas subsindromales o mal control con el tratamiento actual."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Estable, en eutimia, en control de mantención"
+              ],
+              "justificacion": "Existe estabilidad y eutimia."
+            }
+          }
+        },
+        {
+          "id": "psiquiatria_03",
+          "enfermedad": "Trastorno obsesivo-compulsivo",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Severo, con deterioro funcional significativo (incapacidad para actividades básicas)",
+                "Riesgo de daño físico asociado a rituales compulsivos"
+              ],
+              "justificacion": "Los síntomas impiden actividades básicas o los rituales compulsivos implican riesgo de daño físico."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Moderado, refractario a tratamiento de primera línea (ISRS a dosis adecuada), para evaluación especializada"
+              ],
+              "justificacion": "El trastorno moderado persiste pese a tratamiento de primera línea con ISRS a dosis adecuada."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Leve, respondedor a tratamiento inicial, en seguimiento"
+              ],
+              "justificacion": "Es leve y responde al tratamiento inicial."
+            }
+          }
+        },
+        {
+          "id": "psiquiatria_04",
+          "enfermedad": "Catatonía",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "DERIVACIÓN/HOSPITALIZACIÓN INMEDIATA ante sospecha — urgencia médico-psiquiátrica (riesgo de deshidratación, trombosis, complicaciones asociadas)"
+              ],
+              "justificacion": "La sospecha de catatonía es una urgencia médico-psiquiátrica por riesgo de deshidratación, trombosis y otras complicaciones asociadas."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Seguimiento post-episodio agudo ya resuelto, en fase de recuperación"
+              ],
+              "justificacion": "El episodio agudo ya se resolvió, pero continúa la fase de recuperación."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Antecedente de catatonía resuelta, en seguimiento de mantención"
+              ],
+              "justificacion": "La catatonía está resuelta y corresponde a seguimiento de mantención."
+            }
+          },
+          "excepciones_de_urgencia": [
+            {
+              "condicion": "Sospecha de catatonía.",
+              "clasificacion_excepcional": "Derivación u hospitalización inmediata."
+            }
+          ]
+        },
+        {
+          "id": "psiquiatria_05",
+          "enfermedad": "Esquizofrenia y otros trastornos psicóticos",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Primer episodio psicótico (requiere diagnóstico y manejo precoz — ventana crítica)",
+                "Psicosis con riesgo de auto/heteroagresión o descompensación aguda con deterioro funcional significativo"
+              ],
+              "justificacion": "El primer episodio psicótico requiere intervención en una ventana crítica; el riesgo de autoagresión o heteroagresión y la descompensación aguda con deterioro funcional significativo también determinan prioridad alta."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Diagnosticado, con síntomas residuales o mal control pese a tratamiento, para ajuste terapéutico"
+              ],
+              "justificacion": "Persisten síntomas residuales o mal control pese al tratamiento."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Estable, en tratamiento de mantención, sin síntomas activos"
+              ],
+              "justificacion": "El cuadro está estable, sin síntomas activos."
+            }
+          }
+        },
+        {
+          "id": "psiquiatria_06",
+          "enfermedad": "Trastornos de la conducta alimentaria (anorexia/bulimia)",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Compromiso médico agudo: bradicardia severa, alteraciones electrolíticas, IMC muy bajo con riesgo vital, purgas con complicaciones — evaluación urgente, posible hospitalización"
+              ],
+              "justificacion": "Existe compromiso médico agudo, con bradicardia severa, alteraciones electrolíticas, IMC muy bajo con riesgo vital o complicaciones por purgas."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Compromiso nutricional moderado, sin criterios de riesgo vital inmediato, para manejo especializado ambulatorio"
+              ],
+              "justificacion": "El compromiso nutricional es moderado y no hay criterios de riesgo vital inmediato."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Leve, estable médicamente, en seguimiento ambulatorio de mantención"
+              ],
+              "justificacion": "El trastorno es leve y existe estabilidad médica."
+            }
+          },
+          "excepciones_de_urgencia": [
+            {
+              "condicion": "Compromiso médico agudo: bradicardia severa, alteraciones electrolíticas, IMC muy bajo con riesgo vital o purgas con complicaciones.",
+              "clasificacion_excepcional": "Evaluación urgente y posible hospitalización."
+            }
+          ]
+        },
+        {
+          "id": "psiquiatria_07",
+          "enfermedad": "Trastorno depresivo mayor",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Severo con síntomas psicóticos, riesgo suicida asociado o deterioro funcional marcado (incapacidad de autocuidado)"
+              ],
+              "justificacion": "La depresión severa presenta psicosis, riesgo suicida o deterioro funcional que impide el autocuidado."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Moderado, refractario a tratamiento de primera línea en APS, para ajuste terapéutico especializado"
+              ],
+              "justificacion": "La depresión moderada no responde al tratamiento de primera línea en atención primaria."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Leve-moderado, respondedor a tratamiento inicial, en seguimiento"
+              ],
+              "justificacion": "La depresión leve o moderada responde al tratamiento inicial."
+            }
+          }
+        },
+        {
+          "id": "psiquiatria_08",
+          "enfermedad": "Trastorno de personalidad",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Con conductas autolesivas recurrentes o crisis conductuales severas que ponen en riesgo la seguridad del paciente o de terceros"
+              ],
+              "justificacion": "Las autolesiones recurrentes o las crisis conductuales severas ponen en riesgo al paciente o a terceros."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Con deterioro funcional significativo (relaciones, trabajo), para evaluación y definición de manejo (psicoterapia especializada)"
+              ],
+              "justificacion": "Existe deterioro significativo de relaciones o trabajo que requiere evaluación y manejo especializado."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Con síntomas leves, funcionalidad conservada, en seguimiento"
+              ],
+              "justificacion": "Los síntomas son leves y la funcionalidad se conserva."
+            }
+          }
+        },
+        {
+          "id": "psiquiatria_09",
+          "enfermedad": "Trastornos disociativos y conversivos",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Compromiso funcional agudo severo (ej. pseudocrisis frecuentes, parálisis funcional) que requiere diagnóstico diferencial urgente con patología neurológica"
+              ],
+              "justificacion": "El deterioro funcional agudo severo requiere diferenciar urgentemente el cuadro de una patología neurológica."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Síntomas persistentes, en estudio, para definición diagnóstica y manejo"
+              ],
+              "justificacion": "Los síntomas persisten y todavía requieren definición diagnóstica y de manejo."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Síntomas leves, intermitentes, con buen funcionamiento basal, en seguimiento"
+              ],
+              "justificacion": "Los síntomas son leves e intermitentes y el funcionamiento basal es bueno."
+            }
+          },
+          "excepciones_de_urgencia": [
+            {
+              "condicion": "Compromiso funcional agudo severo que requiere diferenciar patología neurológica.",
+              "clasificacion_excepcional": "Diagnóstico diferencial urgente."
+            }
+          ]
+        },
+        {
+          "id": "psiquiatria_10",
+          "enfermedad": "Trastorno por estrés post-traumático",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Con síntomas disociativos severos, riesgo suicida asociado o deterioro funcional marcado que impide actividades básicas"
+              ],
+              "justificacion": "Hay disociación severa, riesgo suicida o deterioro funcional que impide actividades básicas."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Moderado, refractario a manejo inicial, para evaluación y manejo especializado (psicoterapia trauma-focalizada, farmacoterapia)"
+              ],
+              "justificacion": "El trastorno moderado no responde al manejo inicial."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Leve, respondedor a manejo inicial, en seguimiento"
+              ],
+              "justificacion": "El trastorno es leve y responde al manejo inicial."
+            }
+          }
+        }
+      ],
+      "excepcion_transversal": {
+        "condicion": "Riesgo suicida activo con plan e intencionalidad, intento reciente o sospecha de catatonía, independientemente del diagnóstico y de la prioridad de la tabla.",
+        "clasificacion_excepcional": "Derivación inmediata a urgencia/SAPU; no gestionar como interconsulta electiva."
+      }
+    },
+    {
+      "especialidad": "Reumatología",
+      "enfermedades": [
+        {
+          "id": "reumatologia_01",
+          "enfermedad": "Lupus eritematoso sistémico",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Compromiso de órgano mayor: nefritis lúpica, compromiso neuropsiquiátrico, citopenias severas",
+                "Actividad de enfermedad alta con daño orgánico agudo"
+              ],
+              "justificacion": "Hay compromiso de órgano mayor, como nefritis, afectación neuropsiquiátrica o citopenias severas, o actividad alta con daño orgánico agudo."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Actividad leve-moderada, para ajuste de tratamiento",
+                "Sospecha en estudio, con serología positiva y clínica compatible"
+              ],
+              "justificacion": "Existe actividad leve o moderada que requiere ajuste, o sospecha sustentada por serología positiva y clínica compatible."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Estable, en remisión o baja actividad, en control de mantención"
+              ],
+              "justificacion": "La enfermedad está estable, en remisión o con baja actividad."
+            }
+          }
+        },
+        {
+          "id": "reumatologia_02",
+          "enfermedad": "Vasculitis",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Compromiso de órgano mayor (renal, pulmonar, neurológico)",
+                "Sospecha de vasculitis de grandes vasos con riesgo isquémico (arteritis de células gigantes con riesgo de pérdida visual)"
+              ],
+              "justificacion": "La vasculitis compromete riñón, pulmón o sistema neurológico, o plantea isquemia por afectación de grandes vasos y riesgo de pérdida visual."
+            },
+            "media": {
+              "criterios_detallados": [
+                "En estudio, actividad leve-moderada, sin compromiso de órgano mayor"
+              ],
+              "justificacion": "Existe actividad leve o moderada en estudio, sin compromiso de órgano mayor."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Ya diagnosticada, en remisión, en control de mantención"
+              ],
+              "justificacion": "El diagnóstico está establecido y la enfermedad está en remisión."
+            }
+          },
+          "excepciones_de_urgencia": [
+            {
+              "condicion": "Sospecha de arteritis de células gigantes con riesgo visual.",
+              "clasificacion_excepcional": "Derivación directa a urgencia; no interconsulta electiva."
+            }
+          ]
+        },
+        {
+          "id": "reumatologia_03",
+          "enfermedad": "Miopatías inflamatorias",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Debilidad muscular progresiva con compromiso respiratorio o de deglución",
+                "Sospecha de asociación paraneoplásica en adulto mayor"
+              ],
+              "justificacion": "La debilidad progresiva compromete la respiración o la deglución, o se sospecha asociación paraneoplásica en un adulto mayor."
+            },
+            "media": {
+              "criterios_detallados": [
+                "En estudio, debilidad muscular moderada, sin compromiso respiratorio"
+              ],
+              "justificacion": "La debilidad es moderada y no hay compromiso respiratorio."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Ya diagnosticada y estable, en control de mantención"
+              ],
+              "justificacion": "La miopatía ya está diagnosticada y permanece estable."
+            }
+          }
+        },
+        {
+          "id": "reumatologia_04",
+          "enfermedad": "Esclerodermia",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Compromiso pulmonar (enfermedad pulmonar intersticial progresiva)",
+                "Crisis renal esclerodérmica (urgencia); hipertensión pulmonar asociada"
+              ],
+              "justificacion": "Hay enfermedad pulmonar intersticial progresiva, crisis renal esclerodérmica o hipertensión pulmonar asociada."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Compromiso cutáneo progresivo o Raynaud severo, en estudio de compromiso sistémico"
+              ],
+              "justificacion": "El compromiso cutáneo progresa o el Raynaud es severo, y se estudia posible compromiso sistémico."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Limitada, estable, en control de mantención"
+              ],
+              "justificacion": "La enfermedad es limitada y estable."
+            }
+          },
+          "excepciones_de_urgencia": [
+            {
+              "condicion": "Crisis renal esclerodérmica.",
+              "clasificacion_excepcional": "Derivación directa a urgencia; no interconsulta electiva."
+            }
+          ]
+        },
+        {
+          "id": "reumatologia_05",
+          "enfermedad": "Artritis agudas (reactivas, psoriática, por cristales, etc.)",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Monoartritis aguda con sospecha de artritis séptica — requiere descarte urgente y punción articular",
+                "Artritis por cristales con compromiso poliarticular severo o tofos complicados"
+              ],
+              "justificacion": "La monoartritis aguda plantea artritis séptica que exige descarte urgente; la artritis por cristales presenta compromiso poliarticular severo o tofos complicados."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Reactiva o psoriática con actividad persistente pese a manejo inicial, para definición terapéutica"
+              ],
+              "justificacion": "La artritis reactiva o psoriática mantiene actividad pese al manejo inicial."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Por cristales, aislada, ya tratada, en control de mantención y prevención de recurrencias"
+              ],
+              "justificacion": "El episodio aislado por cristales ya fue tratado y se encuentra en mantención."
+            }
+          },
+          "excepciones_de_urgencia": [
+            {
+              "condicion": "Monoartritis aguda con sospecha de artritis séptica.",
+              "clasificacion_excepcional": "Derivación directa a urgencia y descarte urgente."
+            }
+          ]
+        },
+        {
+          "id": "reumatologia_06",
+          "enfermedad": "Artritis reumatoide",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Inicio reciente con actividad alta (DAS28 alto) y daño articular temprano documentado — ventana terapéutica crítica"
+              ],
+              "justificacion": "Coinciden inicio reciente, actividad alta y daño articular temprano documentado, dentro de una ventana terapéutica crítica."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Diagnosticada con actividad moderada pese a tratamiento, para ajuste terapéutico"
+              ],
+              "justificacion": "La actividad sigue siendo moderada pese al tratamiento."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "En remisión o baja actividad, en control de mantención"
+              ],
+              "justificacion": "La enfermedad está en remisión o tiene baja actividad."
+            }
+          }
+        },
+        {
+          "id": "reumatologia_07",
+          "enfermedad": "Espondilitis anquilosante",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Compromiso axial severo y limitación funcional marcada",
+                "Uveítis anterior aguda recurrente asociada"
+              ],
+              "justificacion": "Existe compromiso axial severo con limitación funcional marcada o uveítis anterior aguda recurrente asociada."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Actividad moderada, refractaria a AINEs, para definición de terapia biológica"
+              ],
+              "justificacion": "La actividad moderada persiste pese a antiinflamatorios no esteroidales."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Estable, baja actividad, en control de mantención"
+              ],
+              "justificacion": "El cuadro es estable y de baja actividad."
+            }
+          }
+        },
+        {
+          "id": "reumatologia_08",
+          "enfermedad": "Polimialgia reumática",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Sospecha de arteritis de células gigantes asociada (cefalea temporal, claudicación mandibular, alteración visual)"
+              ],
+              "justificacion": "Se sospecha arteritis de células gigantes asociada por cefalea temporal, claudicación mandibular o alteración visual, con la alerta de riesgo visual descrita en el documento."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Diagnóstico reciente, para confirmación y definición de tratamiento con corticoides"
+              ],
+              "justificacion": "El diagnóstico es reciente y requiere confirmación y definición terapéutica."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Ya diagnosticada y en tratamiento, en descenso progresivo de corticoides, estable"
+              ],
+              "justificacion": "El diagnóstico está establecido, el paciente está estable y el tratamiento se encuentra en descenso progresivo."
+            }
+          },
+          "excepciones_de_urgencia": [
+            {
+              "condicion": "Sospecha de arteritis de células gigantes asociada con riesgo visual: cefalea temporal, claudicación mandibular, alteración visual.",
+              "clasificacion_excepcional": "Derivación directa a urgencia; no interconsulta electiva."
+            }
+          ]
+        },
+        {
+          "id": "reumatologia_09",
+          "enfermedad": "Osteoporosis",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Fractura por fragilidad reciente, sin estudio ni tratamiento"
+              ],
+              "justificacion": "Existe una fractura por fragilidad reciente que aún no ha sido estudiada ni tratada."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Densitométrica sin fractura, para inicio de tratamiento especializado, o sospecha de causa secundaria (uso crónico de corticoides)"
+              ],
+              "justificacion": "Hay osteoporosis densitométrica sin fractura que requiere definir tratamiento, o sospecha de una causa secundaria."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Osteopenia o baja masa ósea de bajo riesgo, en seguimiento"
+              ],
+              "justificacion": "Existe osteopenia o baja masa ósea de bajo riesgo."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "especialidad": "Urología",
+      "enfermedades": [
+        {
+          "id": "urologia_01",
+          "enfermedad": "Cáncer de próstata",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "PSA muy elevado con sospecha clínica alta (tacto rectal sospechoso, nódulo palpable)",
+                "Biopsia positiva; síntomas de alarma (dolor óseo, síntomas obstructivos severos de rápida instalación)"
+              ],
+              "justificacion": "Hay sospecha oncológica alta por PSA muy elevado y hallazgos clínicos, confirmación por biopsia o síntomas de alarma como dolor óseo u obstrucción severa de rápida instalación."
+            },
+            "media": {
+              "criterios_detallados": [
+                "PSA elevado moderado o en ascenso, pendiente de biopsia/RNM multiparamétrica"
+              ],
+              "justificacion": "El PSA está moderadamente elevado o en ascenso y el estudio diagnóstico sigue pendiente."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "PSA levemente elevado o en rango de seguimiento, sin otros hallazgos, en control"
+              ],
+              "justificacion": "El PSA está levemente elevado o en rango de seguimiento, sin otros hallazgos; este criterio no equivale por sí solo a cáncer confirmado."
+            }
+          },
+          "precision_para_clasificar": "El encabezado cáncer de próstata incluye sospecha y seguimiento de PSA; no implica cáncer confirmado en todos los niveles."
+        },
+        {
+          "id": "urologia_02",
+          "enfermedad": "Hiperplasia prostática benigna",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Retención urinaria aguda/recurrente",
+                "Insuficiencia renal obstructiva asociada; hematuria recurrente secundaria a HPB"
+              ],
+              "justificacion": "La hiperplasia se acompaña de retención aguda o recurrente, insuficiencia renal obstructiva o hematuria recurrente atribuida a ella."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Sintomática (IPSS moderado-severo), refractaria a tratamiento médico, candidata a evaluación quirúrgica"
+              ],
+              "justificacion": "Los síntomas moderados o severos persisten pese al tratamiento médico."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Síntomas leves (IPSS bajo), en manejo médico inicial"
+              ],
+              "justificacion": "Los síntomas son leves y se encuentran en manejo médico inicial."
+            }
+          }
+        },
+        {
+          "id": "urologia_03",
+          "enfermedad": "Urolitiasis",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Obstructiva con compromiso de función renal",
+                "Litiasis con infección asociada (pielonefritis obstructiva: derivar a urgencia); dolor cólico refractario a manejo médico"
+              ],
+              "justificacion": "La litiasis compromete la función renal por obstrucción, se asocia a infección o produce cólico refractario; la pielonefritis obstructiva se identifica expresamente como urgencia."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Litiasis renal sintomática recurrente, sin obstrucción severa, para evaluación de manejo (litotricia, ureteroscopia)"
+              ],
+              "justificacion": "La litiasis es sintomática y recurrente, pero no presenta obstrucción severa."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Litiasis renal asintomática, pequeña, en seguimiento"
+              ],
+              "justificacion": "La litiasis es pequeña y asintomática."
+            }
+          },
+          "excepciones_de_urgencia": [
+            {
+              "condicion": "Pielonefritis obstructiva.",
+              "clasificacion_excepcional": "Derivación inmediata a urgencia; no interconsulta electiva."
+            }
+          ]
+        },
+        {
+          "id": "urologia_04",
+          "enfermedad": "Vejiga neurogénica",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Retención urinaria significativa con riesgo de daño renal (hidronefrosis, reflujo)",
+                "Infecciones urinarias recurrentes con deterioro de función renal"
+              ],
+              "justificacion": "La retención amenaza la función renal por hidronefrosis o reflujo, o las infecciones recurrentes se acompañan de deterioro renal."
+            },
+            "media": {
+              "criterios_detallados": [
+                "En estudio o con síntomas moderados, para definir manejo (cateterismo intermitente, manejo farmacológico)"
+              ],
+              "justificacion": "La condición está en estudio o presenta síntomas moderados y requiere definir manejo."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Estable, en manejo establecido, en control de mantención"
+              ],
+              "justificacion": "El cuadro es estable y el manejo ya está establecido."
+            }
+          }
+        },
+        {
+          "id": "urologia_05",
+          "enfermedad": "Incontinencia urinaria",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Impacto severo en calidad de vida asociado a retención con rebosamiento o compromiso renal"
+              ],
+              "justificacion": "El impacto severo en calidad de vida se asocia a retención con rebosamiento o compromiso renal."
+            },
+            "media": {
+              "criterios_detallados": [
+                "De esfuerzo o mixta, moderada, refractaria a manejo conservador (kinesiterapia de piso pélvico), candidata a evaluación urodinámica y manejo quirúrgico"
+              ],
+              "justificacion": "La incontinencia de esfuerzo o mixta es moderada y no responde al manejo conservador."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Leve, en manejo conservador inicial"
+              ],
+              "justificacion": "La incontinencia es leve y se encuentra en manejo conservador inicial."
+            }
+          }
+        },
+        {
+          "id": "urologia_06",
+          "enfermedad": "Patología testicular (hidrocele, varicocele, quiste de epidídimo)",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Masa testicular sólida sospechosa de malignidad (tiempo-sensible)",
+                "Dolor testicular agudo con sospecha de torsión: URGENCIA ABSOLUTA — derivar de inmediato a urgencia"
+              ],
+              "justificacion": "La masa testicular sólida plantea malignidad; el dolor agudo con sospecha de torsión se identifica como urgencia absoluta y riesgo de pérdida del órgano."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Varicocele sintomático o con impacto en fertilidad; hidrocele grande sintomático, para evaluación quirúrgica electiva"
+              ],
+              "justificacion": "El varicocele produce síntomas o afecta la fertilidad, o el hidrocele es grande y sintomático."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Hidrocele/varicocele/quiste de epidídimo pequeño, asintomático, en seguimiento"
+              ],
+              "justificacion": "El hidrocele, varicocele o quiste es pequeño y asintomático."
+            }
+          },
+          "excepciones_de_urgencia": [
+            {
+              "condicion": "Dolor testicular agudo con sospecha de torsión.",
+              "clasificacion_excepcional": "Urgencia absoluta: derivación inmediata."
+            }
+          ]
+        },
+        {
+          "id": "urologia_07",
+          "enfermedad": "Hematuria microscópica",
+          "niveles": {
+            "alta": {
+              "criterios_detallados": [
+                "Con factores de riesgo urológico alto (edad >50 años, tabaquismo, persistente en múltiples muestras) — sospecha de neoplasia urológica"
+              ],
+              "justificacion": "La hematuria se acompaña de factores de alto riesgo urológico que plantean neoplasia; la fuente menciona edad mayor de 50 años, tabaquismo y persistencia en múltiples muestras sin definir una combinación formal."
+            },
+            "media": {
+              "criterios_detallados": [
+                "Persistente en paciente de riesgo bajo-intermedio, para estudio urológico"
+              ],
+              "justificacion": "La hematuria persiste en una persona clasificada como de riesgo bajo o intermedio."
+            },
+            "baja": {
+              "criterios_detallados": [
+                "Aislada, transitoria, sin factores de riesgo, en seguimiento con repetición de examen"
+              ],
+              "justificacion": "Es un hallazgo aislado y transitorio, sin factores de riesgo."
+            }
+          },
+          "precision_para_clasificar": "No se especifica si edad >50 años, tabaquismo y persistencia deben concurrir ni cómo se define formalmente el riesgo bajo, intermedio o alto."
+        }
+      ]
+    }
+  ]
+}

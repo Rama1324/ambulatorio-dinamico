@@ -43,7 +43,7 @@ def hoy():
         return (datetime.now(timezone.utc) - timedelta(hours=3)).date()
 
 
-TIPOS_EVENTO = {"cambio_farmaco", "control_aps", "examen_alterado", "hospitalizacion", "visita_urgencia", "hallazgo_oncologico"}
+TIPOS_EVENTO = {"cambio_farmaco", "control_aps", "examen_alterado", "hospitalizacion", "visita_urgencia", "hallazgo_oncologico"}  # criterio_clinico: solo lo registra la IA
 # Contacto = lo que hace quien llama (enfermería/administrativo). No es una decisión clínica.
 RESULTADOS_CONTACTO = {
     "citado": "Contactado: citado (sobrecupo o cupo liberado)",
@@ -245,6 +245,7 @@ def _enriquecer(r, perfil, revision, pos_ant, corte=None, contacto=None, decisio
         "categoria_sistema": r["categoria"],
         "estado_clinico": r["estado_clinico"],
         "riesgo_vital": r["riesgo_vital"],
+        "urgencia_hoy": bool(r.get("urgencia_hoy")),
         "lace": r["lace"],
         "antiguedad_mayor_1_anio": r["antiguedad_mayor_1_anio"],
         "ges": r["ges"],
@@ -259,7 +260,7 @@ def _enriquecer(r, perfil, revision, pos_ant, corte=None, contacto=None, decisio
         "explicacion_ia": None,
         "estado_revision": "pendiente",
         "revision_sugerida": [],
-        "contactar_hoy": r["riesgo_vital"],
+        "contactar_hoy": r["riesgo_vital"] or bool(r.get("urgencia_hoy")),
         "contacto": None,
         "decision": None,
         "evaluacion": None,
@@ -313,7 +314,7 @@ def _enriquecer(r, perfil, revision, pos_ant, corte=None, contacto=None, decisio
         out["evaluacion"] = {"estado": "evaluada" if cierre else ("atrasada" if en_revision > puntaje.DIAS_EVALUACION else "pendiente"),
                              "dias_desde_evento": dias, "fecha_evento": r.get("fecha_descompensacion"), "llego_al_sistema": llegada,
                              "dias_en_revision": en_revision, "plazo_dias": puntaje.DIAS_EVALUACION, "cierre": cierre}
-        out["contactar_hoy"] = not cierre
+        out["contactar_hoy"] = not cierre or bool(r.get("urgencia_hoy"))
     return out
 
 
@@ -725,7 +726,8 @@ def post_evento(body):
 
 def catalogo():
     """Diagnósticos de la lista (especialidad, sub-especialidad, CIE-10, texto), tal como vienen en el registro."""
-    vistos = {}
+    import criterios
+    vistos = {d["diagnostico_cie10"]: d for d in criterios.catalogo()}
     for p in perfiles_combinados()[0].values():
         le = p["lista_espera"]
         vistos[le["diagnostico_cie10"]] = {"especialidad": le["especialidad"], "sub_especialidad": le["sub_especialidad"],
@@ -852,9 +854,26 @@ def post_paciente(body):
         "eventos_clinicos": [], "mediciones": [], "citaciones": [],
     }
     guardar({"id_paciente": pid, "sk": "paciente#", "perfil": json.dumps(perfil, ensure_ascii=False)})
+    clasif = _aplicar_criterios(pid, dx["diagnostico_cie10"], (body.get("motivo_interconsulta") or "").strip(), ingreso, body)
     data = lista(corte)
     fila = next((p for p in data["pacientes"] if p["id_paciente"] == pid), None)
-    return 200, {"id_paciente": pid, "paciente": fila}
+    return 200, {"id_paciente": pid, "paciente": fila, "criterio": clasif}
+
+
+def _aplicar_criterios(pid, cie, texto, fecha, body):
+    """Si la enfermedad tiene criterios clínicos y el algoritmo con IA está activo, Claude lee el texto y elige el
+    criterio (criterios.py); el resultado queda como evento y la regla de puntaje lo aplica (solo sube)."""
+    import criterios
+    enf = criterios.enfermedad_de(cie)
+    if not (texto and enf and algoritmo_activo() == "rubrica"):
+        return None
+    c = criterios.clasificar(texto, enf, cliente_llm())
+    ev = criterios.evento(c, fecha)
+    if ev:
+        ev.update(id_evento="EV-CRIT-" + uuid.uuid4().hex[:6].upper(), registrado=datetime.now(timezone.utc).isoformat(timespec="microseconds"),
+                  usuario=body.get("usuario", "equipo clínico"))
+        guardar({"id_paciente": pid, "sk": f"evento#{ev['fecha_evento']}#{ev['id_evento']}", "evento": json.dumps(ev, ensure_ascii=False)})
+    return c
 
 
 def post_importar(body):
@@ -1244,14 +1263,21 @@ def _informe_con_ia(pid, lectura, corte, perfs, avisos, dudoso, menciona, body):
     t0 = time.perf_counter()
     le = perfs[pid]["lista_espera"]
     r = lector_documento.leer_documento(lectura.texto, cliente_llm(), diagnostico=f'{le["diagnostico_texto"]} ({le["diagnostico_cie10"]}, {le["especialidad"]})')
+    clasif = None
+    if not dudoso:
+        pos0 = next((p["posicion"] for p in lista(corte)["pacientes"] if p["id_paciente"] == pid), None)
+        clasif = _aplicar_criterios(pid, le["diagnostico_cie10"], lectura.texto, corte.isoformat(), body)
     aceptados = r["aceptados"]
     if dudoso and aceptados:  # identidad o legibilidad en duda: nada se registra solo
         r["propuestos"] = [{**h, "motivo": "no se pudo confirmar que el documento sea de este paciente o es poco legible"} for h in aceptados] + r["propuestos"]
         aceptados = []
     existentes = {(e["fecha_evento"], e["tipo_evento"], e["subtipo"], e.get("motivo") or "") for e in perfs[pid].get("eventos_clinicos", [])}
     registrados, pos_antes, fila = [], None, None
+    if clasif and (clasif["nivel"] or clasif["urgencia"]):
+        pos_antes = pos0
+        fila = next((p for p in lista(corte)["pacientes"] if p["id_paciente"] == pid), None)
     if aceptados:
-        pos_antes = next((p["posicion"] for p in lista(corte)["pacientes"] if p["id_paciente"] == pid), None)
+        pos_antes = pos_antes if pos_antes is not None else next((p["posicion"] for p in lista(corte)["pacientes"] if p["id_paciente"] == pid), None)
         ahora = datetime.now(timezone.utc).isoformat(timespec="microseconds")
         for h in aceptados:
             ev = lector_documento.evento_registrable(h, corte)
@@ -1281,9 +1307,9 @@ def _informe_con_ia(pid, lectura, corte, perfs, avisos, dudoso, menciona, body):
            "descartados": [{"subtipo": d["tipo"], "motivo": d["motivo"], "cita": d["cita"]} for d in r["descartados"]],
            "informativos": r["informativos"], "advertencias": avisos, "identidad_en_documento": menciona,
            "otro_paciente": any("otro paciente" in a for a in avisos), "fuente": "ia",
-           "ia": {k: r[k] for k in ("version", "lecturas", "errores", "tokens_entrada", "tokens_salida")},
+           "ia": {k: r[k] for k in ("version", "lecturas", "errores", "tokens_entrada", "tokens_salida")}, "criterio": clasif,
            "segundos": round(time.perf_counter() - t0, 1)}
-    if not registrados and not propuestas:
+    if not registrados and not propuestas and not (clasif and (clasif["nivel"] or clasif["urgencia"])):
         out["mensaje"] = ("La IA no encontró en el informe un hallazgo que cambie la prioridad (cáncer, hospitalización, "
                           "descompensación, examen alterado o cambio de tratamiento)." +
                           (" Hubo un error al leerlo: " + r["errores"][0] if r["errores"] else ""))

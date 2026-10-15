@@ -16,7 +16,7 @@ from typing import List, Literal
 from pydantic import BaseModel, Field, ValidationError
 
 import informe
-from modelos import SUBTIPOS, normalizar
+from modelos import SUBTIPOS, buscar_cita, normalizar
 
 VERSION = "lector_documento_v1"
 LECTURAS = 3
@@ -101,7 +101,7 @@ def _leer(texto, cliente, diagnostico=None):
 def verificar(h: Hallazgo, texto):
     """Devuelve (posición de la cita en el documento normalizado, motivo de rechazo o None)."""
     doc, cita = normalizar(texto), normalizar(h.cita)
-    i = doc.find(cita)
+    i = buscar_cita(h.cita, doc)
     if i < 0:
         return None, "la frase citada no está en el documento"
     if h.tipo in ("cancer_confirmado", "sospecha_cancer", "antecedente_cancer") and not ONCOLOGICO.search(cita):

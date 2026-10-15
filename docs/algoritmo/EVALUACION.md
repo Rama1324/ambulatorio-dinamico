@@ -1,6 +1,6 @@
 # Evaluación offline del algoritmo decisor
 
-Generado por `scripts/evaluar_algoritmo.py` · fecha de corte 2026-10-13 · modelo `us.anthropic.claude-sonnet-5` · 409 pacientes en lista · 3 corridas por paciente · duración 1 s.
+Generado por `scripts/evaluar_algoritmo.py` · fecha de corte 2026-10-13 · modelo `us.anthropic.claude-sonnet-5` · 409 pacientes en lista · 3 corridas por paciente · duración 2 s.
 
 ## Brazos
 
@@ -14,11 +14,11 @@ Generado por `scripts/evaluar_algoritmo.py` · fecha de corte 2026-10-13 · mode
 
 | Brazo | Alta / Media / Baja | Iguales a A | Suben | Bajan | κ ponderado vs A |
 |---|---|---|---|---|---|
-| A (reglas) | 92 / 186 / 131 | — | — | — | — |
-| R (rúbrica por código) | 92 / 187 / 130 | 408 | 1 | 0 | 0.998 |
-| **E+F (rúbrica por LLM + fórmula + controles)** | 92 / 187 / 130 | 408 | 1 | 0 | 0.998 |
-| E+F sin controles | 90 / 187 / 132 | 405 | 1 | 3 | 0.984 |
-| E0 (LLM decide solo) | 102 / 156 / 151 | 153 | 124 | 132 | 0.091 |
+| A (reglas) | 95 / 185 / 129 | — | — | — | — |
+| R (rúbrica por código) | 95 / 186 / 128 | 408 | 1 | 0 | 0.998 |
+| **E+F (rúbrica por LLM + fórmula + controles)** | 95 / 186 / 128 | 408 | 1 | 0 | 0.998 |
+| E+F sin controles | 92 / 186 / 131 | 404 | 1 | 4 | 0.975 |
+| E0 (LLM decide solo) | 102 / 156 / 151 | 156 | 121 | 132 | 0.115 |
 
 - κ entre E+F y R: **1.0**.
 - Pacientes que la rúbrica movió sola (todo cuadró): **1**.
@@ -27,16 +27,17 @@ Generado por `scripts/evaluar_algoritmo.py` · fecha de corte 2026-10-13 · mode
 
 ## Controles (pacientes que la IA no mueve solos: se usan las reglas)
 
-Pacientes con un control bloqueante: **3**. De ellos, piden revisión del especialista (el resultado los bajaría): **2**; el resto usó las reglas por un motivo técnico, sin acción humana.
+Pacientes con un control bloqueante: **4**. De ellos, piden revisión del especialista (el resultado los bajaría): **3**; el resto usó las reglas por un motivo técnico, sin acción humana.
 
 | Motivo | Pacientes |
 |---|---|
-| bajaria | 3 |
+| bajaria | 4 |
+| discrepancia | 2 |
 | cita_no_respalda | 1 |
-| discrepancia | 1 |
 
 Ejemplos de `bajaria` (la fórmula los habría bajado; el control lo impidió):
 
+- PAC-HLF-00033: reglas alta → rúbrica baja · la rúbrica daría baja y la categoría vigente es alta: bajar requiere un humano
 - PAC-HLF-00229: reglas alta → rúbrica media · la rúbrica daría media y la categoría vigente es alta: bajar requiere un humano
 - PAC-HLF-00425: reglas media → rúbrica baja · la rúbrica daría baja y la categoría vigente es media: bajar requiere un humano
 - PAC-HLF-00477: reglas alta → rúbrica baja · la rúbrica daría baja y la categoría vigente es alta: bajar requiere un humano

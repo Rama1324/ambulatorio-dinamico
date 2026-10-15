@@ -16,7 +16,7 @@ Criterios en formato EARS. Cada uno indica el test que lo cubre (`tests/test_alg
 
 **Revisión humana:** solo cuando el resultado verificado BAJARÍA a alguien (`requiere_revision`). Los controles técnicos
 (cita inválida o que no respalda, lecturas distintas, falla de Bedrock o de la fórmula) usan las reglas y quedan
-registrados (`respaldo_reglas`), sin pedirle nada al equipo clínico. En el registro: 2 de 409 pacientes.
+registrados (`respaldo_reglas`), sin pedirle nada al equipo clínico. En el registro: 3 de 409 pacientes.
 
 | # | Requisito (EARS) | Test |
 |---|---|---|

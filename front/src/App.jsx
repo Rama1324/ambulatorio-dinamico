@@ -24,8 +24,9 @@ const FACTOR = {
   riesgo_vital: "Descompensación grave: evaluar", prioridad_inicial: "Priorización de la interconsulta", evento: "Evento posterior a la interconsulta",
   tabla_oficial: "Tabla de priorización HLF", dias_espera: "Tiempo de espera", ges: "Garantía GES", medicion: "Última medición",
   lace: "Puntaje LACE (experimental)", oncologico: "Hallazgo oncológico (informe)", ventana: "Vigencia del evento",
+  urgencia: "URGENCIA (criterio clínico)", criterio_clinico: "Criterio clínico de su enfermedad",
 };
-const TIPO_EVENTO = { visita_urgencia: "Urgencia", hospitalizacion: "Hospitalización", examen_alterado: "Examen alterado", cambio_farmaco: "Cambio de fármaco", control_aps: "Control APS", hallazgo_oncologico: "Hallazgo oncológico" };
+const TIPO_EVENTO = { visita_urgencia: "Urgencia", hospitalizacion: "Hospitalización", examen_alterado: "Examen alterado", cambio_farmaco: "Cambio de fármaco", control_aps: "Control APS", hallazgo_oncologico: "Hallazgo oncológico", criterio_clinico: "Criterio clínico" };
 const POR_PAGINA = 25;
 // RUT chileno: dígito verificador módulo 11. Devuelve "12.345.678-5" o null.
 function validarRut(valor) {
@@ -288,7 +289,8 @@ export default function App() {
               </div>
               {nuevo && <NuevoPaciente fecha={fecha} onCerrar={() => setNuevo(false)} onListo={async (r) => {
                 setNuevo(false); limpiarFiltros(); await cargar(); setSel(r.id_paciente);
-                mostrarAviso({ titulo: `${r.paciente?.nombre_fantasia} ingresado a la lista`, despues: r.paciente?.posicion, antes: "—", cat: r.paciente?.categoria });
+                mostrarAviso({ titulo: `${r.paciente?.nombre_fantasia} ingresado a la lista` + (r.criterio?.urgencia ? " · DERIVAR HOY A URGENCIA" : r.criterio?.nivel ? ` · criterio clínico: ${r.criterio.nivel}` : ""),
+                  despues: r.paciente?.posicion, antes: "—", cat: r.paciente?.categoria });
               }} />}
 
               <section className="bg-surface-container-lowest border border-outline-variant rounded relative max-lg:overflow-x-auto" aria-busy={actualizando}>
@@ -325,7 +327,8 @@ export default function App() {
                               <div className="font-semibold">{p.nombre_fantasia} <span className="font-normal text-on-surface-variant text-[13px]">· {p.edad} años · {p.especialidad}</span></div>
                               <div className="text-[13px] text-on-surface-variant">{p.diagnostico_cie10} {p.diagnostico_texto}</div>
                               <div className="flex flex-wrap gap-1 mt-0.5">
-                                {p.contactar_hoy && <Marca tono="rojo" title={`Descompensación grave del ${fmt(p.evaluacion?.fecha_evento)}: su prioridad debe revisarse dentro de 72 h desde que el evento llegó al sistema`}>
+                                {p.urgencia_hoy && <Marca tono="rojo" title="Cumple una excepción de urgencia de los criterios clínicos: no debe esperar cita electiva">Derivar hoy a urgencia</Marca>}
+                                {p.contactar_hoy && p.riesgo_vital && <Marca tono="rojo" title={`Descompensación grave del ${fmt(p.evaluacion?.fecha_evento)}: su prioridad debe revisarse dentro de 72 h desde que el evento llegó al sistema`}>
                                   {p.evaluacion?.estado === "atrasada" ? `Revisión atrasada · ${p.evaluacion.dias_en_revision} d` : "Revisar prioridad ≤ 72 h"}</Marca>}
                                 {p.riesgo_vital && !p.contactar_hoy && <Marca tono="azul" title={p.evaluacion?.cierre?.texto}>Prioridad revisada</Marca>}
                                 {!p.riesgo_vital && p.estado_clinico === "descompensado" && <Marca tono="rojo">Descompensado</Marca>}
@@ -783,7 +786,9 @@ function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso, onDes
           </div>
           <Prioridad cat={p.categoria} />
         </div>
-        {p.contactar_hoy && <div className="mt-3 p-2.5 rounded bg-error-container text-on-error-container text-[14px] flex gap-2"><Icono n="call" className="text-[20px]" /><span>
+        {p.urgencia_hoy && <div className="mt-3 p-2.5 rounded bg-error text-on-error text-[14px] flex gap-2"><Icono n="emergency" className="text-[20px]" /><span>
+          <b>Derivar hoy a urgencia.</b> {p.razones.find((r) => r.factor === "urgencia")?.valor} No corresponde esperar una cita electiva.</span></div>}
+        {p.contactar_hoy && p.riesgo_vital && <div className="mt-3 p-2.5 rounded bg-error-container text-on-error-container text-[14px] flex gap-2"><Icono n="call" className="text-[20px]" /><span>
           <b>Descompensación grave: revisar su prioridad.</b> Evento del {fmt(p.evaluacion?.fecha_evento)}, en el sistema desde el {fmt(p.evaluacion?.llego_al_sistema)}.
           {p.evaluacion?.estado === "atrasada" ? <b> Atrasada: pasaron más de 72 h sin revisión.</b> : " Plazo: 72 h."} No hay registro posterior de estabilización ni de evaluación; el especialista decide.</span></div>}
         {p.riesgo_vital && !p.contactar_hoy && p.evaluacion?.cierre && <div className="mt-3 p-2.5 rounded bg-hlf-claro text-hlf text-[14px] flex gap-2"><Icono n="task_alt" className="text-[20px]" /><span>
@@ -1859,7 +1864,7 @@ function Camara({ onFoto, onCerrar }) {
 
 function NuevoPaciente({ fecha, onCerrar, onListo }) {
   const [cat, setCat] = useState(null);
-  const [f, setF] = useState({ nombre: "", rut: "", edad: "", sexo: "F", comuna: "La Florida", prevision: "FONASA B", especialidad: "", diagnostico_cie10: "", prioridad_inicial: "media", origen_derivacion: "CESFAM/APS", grupo_proteccion: "", acg: "" });
+  const [f, setF] = useState({ nombre: "", rut: "", edad: "", sexo: "F", comuna: "La Florida", prevision: "FONASA B", especialidad: "", diagnostico_cie10: "", prioridad_inicial: "media", origen_derivacion: "CESFAM/APS", grupo_proteccion: "", acg: "", motivo_interconsulta: "" });
   const [error, setError] = useState(null);
   const [enviando, setEnviando] = useState(false);
   useEffect(() => { api.getCatalogo().then(setCat).catch((e) => setError(e.message)); }, []);
@@ -1905,6 +1910,11 @@ function NuevoPaciente({ fecha, onCerrar, onListo }) {
           </Filtro>
           <Filtro label="Origen de la derivación"><select value={f.origen_derivacion} onChange={set("origen_derivacion")} className={campo}>{cat?.origenes.map((c) => <option key={c}>{c}</option>)}</select></Filtro>
           <Filtro label="Grupo de especial protección"><select value={f.grupo_proteccion} onChange={set("grupo_proteccion")} className={campo}><option value="">Ninguno</option>{cat?.grupos_proteccion.map((g) => <option key={g}>{g}</option>)}</select></Filtro>
+          <div className="col-span-2"><Filtro label="Motivo de la interconsulta (lo que escribió quien deriva)">
+            <textarea rows={3} value={f.motivo_interconsulta} onChange={set("motivo_interconsulta")} placeholder="Ej.: Hipoacusia súbita de oído izquierdo de 24 horas de evolución."
+              className="w-full p-2 border border-outline-variant rounded bg-surface-container-lowest text-[14px]" />
+            <span className="text-[12px] text-on-surface-variant">Si la IA está activa y la enfermedad tiene criterios clínicos, se lee con ellos: puede subir la prioridad o marcar "derivar hoy a urgencia". Nunca la baja.</span>
+          </Filtro></div>
           <Filtro label="Riesgo ACG (si se conoce)"><select value={f.acg} onChange={set("acg")} className={campo}><option value="">Sin dato</option>{cat?.acg.map((a) => <option key={a.nivel} value={a.nivel}>{a.nivel} · {a.texto}</option>)}</select></Filtro>
         </div>
         {error && <p className="px-4 text-error text-[13px]">{error}</p>}
@@ -1971,6 +1981,14 @@ function Informe({ p, fecha, cargando, onConfirmar, onAviso, onRegistrado }) {
           ))}
           {res.posicion_antes != null && <p className="text-[13px]">N° {res.posicion_antes} → <b>N° {res.posicion_despues}</b> · prioridad <Prioridad cat={res.paciente?.categoria} /></p>}
           {res.paciente?.razones?.filter((r) => r.factor === "oncologico" || r.factor === "tabla_oficial").map((r, i) => <p key={i} className="text-[12px] text-on-surface-variant">{r.valor} · Fuente: {r.fuente}</p>)}
+        </div>
+      )}
+      {res?.criterio && (res.criterio.nivel || res.criterio.urgencia) && (
+        <div className={`mt-3 rounded p-3 text-[14px] ${res.criterio.urgencia ? "bg-error text-on-error" : "border border-primary bg-primary/5"}`}>
+          <b>{res.criterio.urgencia ? "Derivar hoy a urgencia" : `Criterio clínico (${res.criterio.enfermedad}): ${res.criterio.nivel}`}</b>
+          {res.criterio.urgencia && <div>{res.criterio.urgencia} · “{res.criterio.cita_urgencia}”</div>}
+          {res.criterio.nivel && <div className="text-[13px]">{res.criterio.criterio} · “{res.criterio.cita}”</div>}
+          <div className="text-[12px] opacity-80">{res.criterio.fuente} · solo sube la prioridad, nunca la baja.</div>
         </div>
       )}
       {res?.informativos?.length > 0 && res.informativos.map((h, i) => (
@@ -2434,15 +2452,27 @@ function Criterios({ ia }) {
         <p className="text-[13px] text-ambar mt-1"><b>Equivalencias a validar con los especialistas:</b> K70 (enfermedad hepática alcohólica) se asimila a la fila de cirrosis; I20 incluye toda angina, la fila es solo angina inestable; G40 usa la fila "crisis mensuales" porque no hay fila de epilepsia descompensada.</p>
         <p className="text-[13px] mt-1">Fuente: <a className="text-primary underline" target="_blank" rel="noreferrer" href="https://redsalud.ssmso.cl/wp-content/uploads/2025/07/PRIORIZACION-SSMSO-02.07.2025-I-ETAPA.pdf">Priorización SSMSO 2025 (PDF)</a></p>
       </Caja>
+      <Caja titulo="El motivo del evento importa">
+        <p>Una urgencia o una hospitalización solo sube la prioridad si es por <b>la enfermedad por la que el paciente espera</b> (o una complicación de ella). Una amputación por un accidente en un paciente que espera cardiología <b>no</b> cambia su prioridad de cardiología: queda como alerta para revisar si necesita otra derivación. Las urgencias se clasifican por triage: ESI 1-2 grave, ESI 3 moderada, ESI 4-5 leve (un dolor de dedo no sube a nadie). La IA lee el motivo y la relación en el informe; en las planillas se pueden cargar en las columnas <i>motivo</i> y <i>relacionado</i>.</p>
+      </Caja>
+      <Caja titulo="Criterios clínicos por enfermedad">
+        <p className="mb-2">Para 46 enfermedades de Oftalmología, Otorrinolaringología, Psiquiatría, Reumatología y Urología hay criterios de prioridad <b>dentro</b> de cada enfermedad (no solo por diagnóstico): por ejemplo, hipoacusia gradual → media; hipoacusia súbita de menos de 72 h → <b>urgencia</b>. La IA lee el motivo de la interconsulta o el informe, elige el criterio y copia la frase que lo respalda; el código verifica la frase y aplica el nivel.</p>
+        <ul className="list-disc pl-5 space-y-1">
+          <li>Solo <b>sube</b> la prioridad; si el criterio indica una menor, se mantiene (bajar lo decide el especialista).</li>
+          <li>Si el texto no alcanza para decidir, <b>no se asigna baja</b>: queda la prioridad asignada.</li>
+          <li>Las <b>excepciones de urgencia</b> ("derivar hoy": torsión testicular, desprendimiento de retina agudo, riesgo suicida con plan…) ponen al paciente primero, en alta y con "contactar hoy".</li>
+        </ul>
+        <p className="text-[13px] text-on-surface-variant mt-2">Probado con Claude en 154 notas clínicas (una por nivel de cada enfermedad y una por cada urgencia): 97,8 % del nivel correcto, 0 casos clasificados más bajo de lo que corresponde, 16 de 16 urgencias detectadas y ninguna urgencia falsa.</p>
+      </Caja>
       {ia && <Caja titulo="Algoritmo con IA: la IA lee, el código decide">
         <ol className="list-decimal pl-5 space-y-2">
           <li><b>Lectura.</b> Un modelo de IA (Claude, en Amazon Bedrock) lee el historial del paciente <b>3 veces</b> y responde preguntas cerradas (¿hubo descompensación?, ¿se estabilizó después?, ¿empeora su medición clave?, ¿cambió el tratamiento por mal control?), citando cada registro. La IA no asigna prioridades.</li>
           <li><b>Verificación.</b> El código comprueba en el registro cada cita: que exista, que sea de verdad una descompensación, que la estabilización sea posterior y que la medición realmente empeore (con los valores registrados, no los que escribe la IA).</li>
           <li><b>Fórmula fija.</b> Con lo verificado, la prioridad sale de la tabla del HLF. Un evento sigue vigente durante su ventana con evidencia publicada (PubMed); sin evidencia, no vence.</li>
-          <li><b>Controles.</b> Si la IA no puede leer un dato, lo responde el registro. Si una cita no existe o no respalda lo dicho, las 3 lecturas no coinciden o la IA falla, se usan las reglas <b>sin pedirle nada a nadie</b>. Solo cuando la evidencia indica que un paciente podría <b>bajar</b> de prioridad, el sistema no lo baja: lo deja como está y avisa al especialista (en este registro, 2 de 409 pacientes).</li>
+          <li><b>Controles.</b> Si la IA no puede leer un dato, lo responde el registro. Si una cita no existe o no respalda lo dicho, las 3 lecturas no coinciden o la IA falla, se usan las reglas <b>sin pedirle nada a nadie</b>. Solo cuando la evidencia indica que un paciente podría <b>bajar</b> de prioridad, el sistema no lo baja: lo deja como está y avisa al especialista (en este registro, 3 de 409 pacientes).</li>
           <li><b>Cuándo.</b> Al llegar un evento o un informe, el paciente se reevalúa en segundos (KPI: menos de 72 h). Un barrido nocturno revisa al resto.</li>
         </ol>
-        <p className="text-[13px] text-on-surface-variant mt-2">Probado con 409 pacientes y 2.454 lecturas reales: 0 lecturas fallidas, 3 lecturas iguales en el 100 % de los pacientes, nadie baja sin una persona y solo 2 pacientes requieren al especialista. Cuando la IA decidía sola, concordaba con la tabla oficial apenas κ 0,09; por eso decide la fórmula.</p>
+        <p className="text-[13px] text-on-surface-variant mt-2">Probado con 409 pacientes y 2.454 lecturas reales: 0 lecturas fallidas, 3 lecturas iguales en el 100 % de los pacientes, nadie baja sin una persona y solo 3 pacientes requieren al especialista. Cuando la IA decidía sola, concordaba con la tabla oficial apenas κ 0,09; por eso decide la fórmula.</p>
       </Caja>}
       {!ia && <Caja titulo="Puntaje LACE (experimental, solo desempate)">
         <p className="mb-2">Índice validado para riesgo de muerte o reingreso no planificado tras un alta hospitalaria (<a className="text-primary underline" target="_blank" rel="noreferrer" href="https://pmc.ncbi.nlm.nih.gov/articles/PMC2845681/">van Walraven et al., <i>CMAJ</i> 2010;182(6):551-7</a>). Estadístico C 0,68–0,71 en Ontario. <b>No está validado para listas de espera</b>: por eso aquí solo desempata.</p>

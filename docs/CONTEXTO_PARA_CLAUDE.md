@@ -307,7 +307,16 @@ GES como "verificar"; LACE experimental; equivalencias "a validar"; indicadores 
   (el LLM no decide qué es una descompensación). La lectura se guarda y la fórmula se reaplica a cada fecha de corte.
 - **Revisión humana solo para bajar:** si la IA no lee un dato, lo responde el registro; si la IA lee mal o falla, se usan
   las reglas sin avisar a nadie (`respaldo_reglas`). Solo `bajaria` con lectura verificada pide al especialista
-  (`requiere_revision`): 2 de 409 pacientes en la evaluación con lecturas reales.
+  (`requiere_revision`): 3 de 409 pacientes en la evaluación con lecturas reales.
+- **Motivo del evento** (ambos modos): urgencias por triage ESI 1-5 (4-5 leve); un evento con `relacionado: false` (p. ej.
+  amputación traumática en un paciente de cardiología) no es descompensación de su diagnóstico: no sube, queda como alerta.
+  La IA lee motivo y relación en los informes; las planillas traen columnas `motivo` y `relacionado`.
+- **Criterios clínicos por enfermedad** (`lambda/criterios.py` + `conocimiento/criterios_especialidad.json`, aportado al
+  equipo; no es la tabla oficial): 46 enfermedades de Oftalmología, ORL, Psiquiatría, Reumatología y Urología, con CIE-10 y
+  catálogo. La IA elige el criterio (enum cerrado) con cita verificada (2 de 3 lecturas); solo sube; "no determinable" no
+  asigna baja; las excepciones de urgencia → `urgencia_hoy` (primero, alta, contactar hoy). Evaluación con Claude en 154
+  notas: 97,8 % correcto, 0 subtriage, 16/16 urgencias, 0 falsas (`docs/algoritmo/EVALUACION_CRITERIOS.md`).
+- **F32:** la pág. 110 (verificada en imagen) da "Episodio depresivo" = ALTA: es su fila de descompensación.
 - **Revisión adversaria:** `docs/algoritmo/REVISION_ADVERSARIA.md` (11 hallazgos, todos corregidos con test).
 - **Lector de informes con IA** (`lambda/lector_documento.py`, solo con `ALGORITMO=rubrica`): Claude lee el informe 3 veces
   y lista hallazgos de una lista cerrada (cáncer confirmado/sospecha/antecedente, UCI, hospitalización, descompensación,

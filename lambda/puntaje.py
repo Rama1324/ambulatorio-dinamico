@@ -28,7 +28,7 @@ ORDEN_CAT = {"alta": 3, "media": 2, "baja": 1}
 # Fila oficial de la tabla del HLF que describe el diagnóstico descompensado / no controlado.
 # cie10: (fila tal como aparece en el documento, prioridad oficial, página).
 # Solo se incluyen filas cuyo texto expresa descompensación o falta de control. Los diagnósticos sin esa fila
-# (I10 HTA, K21 ERGE, F32, F41, G43, E66, M17, M54, M75) mantienen su prioridad y quedan marcados para revisión.
+# (I10 HTA, K21 ERGE, F41, G43, E66, M17, M54, M75) mantienen su prioridad y quedan marcados para revisión.
 FILA_DESCOMPENSADO = {
     "I50": ("Insuficiencia cardíaca descompensada", "alta", 85),
     "I20": ("Angina inestable", "alta", 85),
@@ -38,12 +38,14 @@ FILA_DESCOMPENSADO = {
     "E11": ("DM2 descontrolada", "media", 101),
     "E03": ("Hipotiroidismo sintomático", "media", 94),
     "G40": ("Epilepsia con crisis mensuales (deja de ser 'epilepsia controlada', baja)", "media", 103),
+    "F32": ("Episodio depresivo", "alta", 110),  # PSIQUIATRÍA ADULTO, verificado en imagen de la pág. 110
 }
 # Equivalencias CIE-10 → fila de la tabla que son interpretación del equipo y deben validarse con el especialista.
 EQUIVALENCIA_A_VALIDAR = {
     "K70": "K70 es enfermedad hepática alcohólica; se asimila a la fila de cirrosis",
     "I20": "I20 incluye toda angina de pecho; la fila oficial es solo angina inestable",
     "G40": "la tabla no tiene fila 'epilepsia descompensada'; se usa 'crisis mensuales'",
+    "F32": "la fila 'Episodio depresivo' (alta) se usa para el episodio depresivo descompensado",
 }
 # Cáncer activo o sospechoso. En la sección del HLF de la tabla SSMSO 2025 TODA fila de cáncer activo o sospechoso es
 # ALTA (verificado en imagen: págs. 88, 94, 95 y 111); "antecedente de neoplasia en remisión" es BAJA (pág. 102) y no sube.
@@ -140,7 +142,7 @@ def d(s): return date.fromisoformat(s)
 def descompensa(ev):
     """Evento que el propio dataset etiqueta como descompensación o severidad grave
     (urgencia ESI 2, descompensación, hospitalización, UCI). Un hallazgo oncológico no es una descompensación."""
-    if ev.get("tipo_evento") == "hallazgo_oncologico" or no_relacionado(ev):
+    if ev.get("tipo_evento") in ("hallazgo_oncologico", "criterio_clinico") or no_relacionado(ev):
         return False
     return ev.get("severidad") == "grave" or "descompensaci" in (ev.get("subtipo") or "").lower()
 
@@ -158,6 +160,33 @@ def regla_oncologica(eventos, especialidad):
         return None
     fila = FILA_ONCOLOGICA.get(especialidad)
     return {"evento": onco[-1], "fila": fila or PATRON_ONCOLOGICO, "a_validar": fila is None}
+
+
+def regla_criterio(eventos):
+    """Último resultado de los criterios clínicos por enfermedad (criterios.py) y si hubo una excepción de urgencia."""
+    crit = [e for e in eventos if e.get("tipo_evento") == "criterio_clinico"]
+    if not crit:
+        return None
+    u = crit[-1]
+    return {"evento": u, "nivel": u.get("nivel_criterio"), "urgencia": any(e.get("urgencia") for e in crit)}
+
+
+def aplicar_criterio(categoria, c, razones):
+    """Solo sube (nunca baja: lo decide el especialista). La urgencia prevalece: prioridad alta. Devuelve la categoría."""
+    e = c["evento"]
+    nivel = "alta" if c["urgencia"] else c["nivel"]
+    if nivel and ORDEN_CAT[nivel] > ORDEN_CAT[categoria]:
+        texto, nueva = f'{e["detalle"]} → prioridad {nivel}', nivel
+    elif nivel and ORDEN_CAT[nivel] < ORDEN_CAT[categoria]:
+        texto, nueva = f'{e["detalle"]} → sería {nivel}; se mantiene {categoria} (bajar lo decide el especialista)', categoria
+    else:
+        texto, nueva = f'{e["detalle"]} → prioridad {nivel or categoria} (coincide)', categoria
+    razon = {"factor": "urgencia" if c["urgencia"] else "criterio_clinico", "valor": texto, "fuente": e.get("fuente") or "Criterios clínicos por especialidad"}
+    if c["urgencia"]:
+        razones.insert(0, razon)
+    else:
+        razones.append(razon)
+    return nueva
 
 
 def razon_oncologica(o):
@@ -262,6 +291,10 @@ def puntuar(perfil, corte):
     if onco:
         categoria = categoria if ORDEN_CAT[categoria] >= ORDEN_CAT[onco["fila"][1]] else onco["fila"][1]
         razones.append(razon_oncologica(onco))
+    crit = regla_criterio(eventos)
+    if crit:
+        categoria = aplicar_criterio(categoria, crit, razones)
+    urgencia_hoy = bool(crit and crit["urgencia"])
     if riesgo_vital:
         razones.insert(0, {"factor": "riesgo_vital",
                            "valor": f'Descompensación grave ({fila[0]}) sin registro posterior de estabilización: su prioridad '
@@ -337,7 +370,7 @@ def puntuar(perfil, corte):
                         "fuente": "Rangos de referencia del diccionario de datos HLF"})
 
     return {"id_paciente": perfil["id_paciente"], "excluido": False, "categoria": categoria,
-            "estado_clinico": estado, "riesgo_vital": riesgo_vital, "lace": lace, "antiguedad_mayor_1_anio": antiguo, "dias_espera": dias_espera,
+            "estado_clinico": estado, "riesgo_vital": riesgo_vital, "urgencia_hoy": urgencia_hoy, "lace": lace, "antiguedad_mayor_1_anio": antiguo, "dias_espera": dias_espera,
             "ges": ges_info, "medicion_alerta": medicion_alerta, "senales": senales, "grupo_proteccion": grupo, "acg": acg,
             "fecha_descompensacion": ult_desc["fecha_evento"] if estado == "descompensado" else None,
             "dias_desde_descompensacion": (corte - d(ult_desc["fecha_evento"])).days if estado == "descompensado" else None,
@@ -349,7 +382,7 @@ def clave_orden(r, categoria=None):
     """MINSAL Ord. 536/2025: criterio médico (categoría, descompensación grave y cualquier descompensación vigente)
     → grupos de especial protección → antigüedad > 1 año → LACE (componente experimental, solo desempata) → orden de llegada.
     El criterio médico va antes que el grupo de protección: un descompensado no queda bajo uno estable de la misma prioridad."""
-    return (-ORDEN_CAT[categoria or r["categoria"]], not r["riesgo_vital"], r.get("estado_clinico") != "descompensado", not r.get("grupo_proteccion"),
+    return (-ORDEN_CAT[categoria or r["categoria"]], not r.get("urgencia_hoy"), not r["riesgo_vital"], r.get("estado_clinico") != "descompensado", not r.get("grupo_proteccion"),
             not r["antiguedad_mayor_1_anio"], -r["lace"]["total"], -r["dias_espera"], r["id_paciente"])
 
 

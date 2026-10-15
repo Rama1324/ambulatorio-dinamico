@@ -23,6 +23,8 @@ SUBTIPOS = {
     "control_aps": {"estabilización": "leve", "buena respuesta": "leve", "control": "leve"},
     # Hallazgo en un informe (biopsia, epicrisis): no es una descompensación; sube por las filas oncológicas de la tabla HLF
     "hallazgo_oncologico": {"cáncer confirmado": "grave", "sospecha de cáncer": "grave"},
+    # Resultado de los criterios clínicos por enfermedad (criterios.py): solo sube la prioridad; "urgencia" = derivar hoy
+    "criterio_clinico": {"prioridad alta": "moderada", "prioridad media": "leve", "prioridad baja": "leve", "urgencia": "grave"},
 }
 CONFIANZA_MINIMA = 90.0   # % por línea bajo el cual se marca para revisar
 CONFIANZA_LEGIBLE = 80.0  # % promedio bajo el cual se pide repetir la foto
@@ -32,6 +34,23 @@ def normalizar(s: str) -> str:
     """Minúsculas, sin tildes ni espacios repetidos: para comparar la evidencia con el documento."""
     s = unicodedata.normalize("NFKD", s or "").encode("ascii", "ignore").decode().lower()
     return re.sub(r"\s+", " ", s).strip()
+
+
+def buscar_cita(cita: str, texto_normalizado: str) -> int:
+    """Posición de la cita en el texto (ya normalizado) o -1. Si la cita une trozos con "..." o "…", cada trozo (de 4 o más
+    caracteres) debe estar textual en el texto y en el mismo orden: sigue siendo verificable, nada inventado."""
+    trozos = [t.strip(" .,;:") for t in re.split(r"\.\.\.|…", normalizar(cita))]
+    trozos = [t for t in trozos if t]
+    if not trozos or any(len(t) < 4 for t in trozos):
+        return -1
+    pos, inicio = 0, None
+    for t in trozos:
+        i = texto_normalizado.find(t, pos)
+        if i < 0:
+            return -1
+        inicio = i if inicio is None else inicio
+        pos = i + len(t)
+    return inicio
 
 
 class LineaLeida(BaseModel):
@@ -67,7 +86,7 @@ class EventoPropuesto(BaseModel):
     """Evento clínico detectado en un informe. Se valida contra el documento y la fecha de corte (context)."""
     model_config = ConfigDict(extra="ignore")
 
-    tipo_evento: Literal["hospitalizacion", "visita_urgencia", "examen_alterado", "cambio_farmaco", "control_aps", "hallazgo_oncologico"]
+    tipo_evento: Literal["hospitalizacion", "visita_urgencia", "examen_alterado", "cambio_farmaco", "control_aps", "hallazgo_oncologico", "criterio_clinico"]
     subtipo: str
     severidad: Literal["leve", "moderada", "grave"]
     fecha_evento: Optional[date] = None
