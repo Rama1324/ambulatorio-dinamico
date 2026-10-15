@@ -233,7 +233,7 @@ export default function App() {
       <main className="flex-1 max-w-[1400px] w-full mx-auto px-4 sm:px-6 py-5">
         {error && <div className="bg-error-container text-on-error-container p-3 mb-4 rounded">{error}</div>}
 
-        {vista !== "simple" && <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-5">
+        {vista !== "simple" && vista !== "indicadores" && <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-5">
           <Indicador n={data.total} t="Pacientes en espera · ver todos" onClick={() => verLista()} />
           <Indicador n={porContactar.length} t={`Descompensación grave: revisar prioridad${atrasadas ? ` (${atrasadas} con más de 72 h)` : ""}`} tono={porContactar.length ? "rojo" : null} onClick={() => setVista("hoy")} />
           <Indicador n={altas} t="Prioridad alta" onClick={() => verLista(() => setFiltroCat("alta"))} />
@@ -247,10 +247,7 @@ export default function App() {
         {(vista === "hoy" || vista === "box") && <Hoy parte={vista} vitales={vitales} todosPacientes={data.pacientes} fecha={fecha} esp={esp} setEsp={setEsp} onVer={abrir} esApi={esApi} onCambio={cargar} onAviso={mostrarAviso} />}
         {vista === "criterios" && <Criterios />}
         {vista === "medico" && <MedicoDisponible fecha={fecha} esApi={esApi} espInicial={esp} onVer={abrir} onCambio={cargar} onAviso={mostrarAviso} />}
-        {vista === "indicadores" && <div className="flex flex-col gap-6">
-          <Indicadores fecha={fecha} esApi={esApi} data={data} />
-          <Estadisticas fecha={fecha} esp={esp} setEsp={setEsp} onVer={abrir} data={data} />
-        </div>}
+        {vista === "indicadores" && <Indicadores fecha={fecha} esApi={esApi} data={data} esp={esp} setEsp={setEsp} onVer={abrir} />}
         {vista === "cargar" && <CargarDatos esApi={esApi} onListo={async (r) => {
           await cargar();
           mostrarAviso({ titulo: `Datos cargados: ${r.resumen.pacientes_nuevos} pacientes nuevos, ${r.resumen.pacientes_actualizados} actualizados, ${r.resumen.eventos} eventos` });
@@ -701,8 +698,6 @@ const Indicador = ({ n, t, tono, onClick }) => {
 const Filtro = ({ label, children }) => <label className="flex flex-col gap-1"><span className="text-on-surface-variant">{label}</span>{children}</label>;
 
 function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso, onDestacar }) {
-  const [historia, setHistoria] = useState(null);
-  useEffect(() => { api.getHistoria(p.id_paciente, fecha).then(setHistoria).catch(() => setHistoria(null)); }, [p.id_paciente, fecha, p.categoria, p.posicion]);
   const [resumen, setResumen] = useState(null);
   const [cargando, setCargando] = useState(null);
   const [ajuste, setAjuste] = useState(null);
@@ -774,8 +769,8 @@ function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso, onDes
       </div>
 
       {tab === "resumen" && <>
-      <Caja titulo="Cómo se decidió su lugar en la lista">
-        <Camino p={p} total={total} />
+      <Caja titulo={`Por qué está en el N° ${p.posicion} y cómo se ha movido`}>
+        <EvolucionPaciente p={p} fecha={fecha} />
       </Caja>
       </>}
 
@@ -858,9 +853,6 @@ function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso, onDes
         </>
       ) : <Caja><p className="text-on-surface-variant text-[13px]">Registrar informes y novedades requiere conexión al servidor.</p></Caja>)}
 
-      {tab === "historia" && <Caja titulo="Evolución en la lista">
-        {historia ? <GraficoPosicion h={historia} /> : <p className="text-[13px] text-on-surface-variant">Cargando…</p>}
-      </Caja>}
       {tab === "historia" && <Caja titulo="Historia mientras espera">
         <ol className="text-[14px]">
           {timeline.map((x, i) => (
@@ -894,238 +886,6 @@ function clasificarEvento(ev) {
   if (s.includes("farmaco") || s.includes("fármaco") || s.includes("dosis")) return "Cambio de fármaco";
   if (s.includes("aps") || s.includes("control")) return "Control en APS";
   return "Otro evento clínico";
-}
-
-const POR_PAGINA_EST = 25;
-function Estadisticas({ fecha, esp, setEsp, onVer, data }) {
-  const [d, setD] = useState(null);
-  const [err, setErr] = useState(null);
-  const [cargando, setCargando] = useState(true);
-  const [expandido, setExpandido] = useState(null); // id del paciente cuya evolución se muestra en la lista de abajo
-  const [buscaEst, setBuscaEst] = useState("");
-  const [mostrar, setMostrar] = useState(POR_PAGINA_EST);
-  const [verTabla, setVerTabla] = useState(false);
-  useEffect(() => setMostrar(POR_PAGINA_EST), [buscaEst, esp]);
-  useEffect(() => {
-    let vivo = true;
-    setCargando(true); setErr(null);
-    api.getEstadisticas(fecha, esp === "Todas" ? null : esp)
-      .then((r) => { if (vivo) { setD(r); setCargando(false); } })
-      .catch((e) => { if (vivo) { setErr(e.message); setCargando(false); } });
-    return () => { vivo = false; };
-  }, [fecha, esp]);
-
-  if (cargando) return <p className="text-on-surface-variant">Analizando la evolución de la lista…</p>;
-  if (err) return <Caja><p className="text-error">No se pudieron cargar las estadísticas: {err}</p></Caja>;
-  if (!d || d.serie.length === 0) return <Caja><p className="text-on-surface-variant">Aún no hay historia suficiente para analizar.</p></Caja>;
-
-  const serie = d.serie;
-  const pacientesLista = (data?.pacientes || []).map((p) => ({ ...p, evento_causa: d.evento_causa?.[p.id_paciente] || null }));
-  const ini = serie[0], fin = serie[serie.length - 1];
-  const delta = (a, b) => b - a;
-
-  // Pacientes cuyo lugar en la lista mejoró respecto al corte anterior (subieron de prioridad / posición).
-  const subieron = pacientesLista
-    .filter((p) => p.posicion_anterior && p.posicion_anterior - p.posicion >= 10)
-    .map((p) => ({ ...p, salto: p.posicion_anterior - p.posicion }))
-    .sort((a, b) => b.salto - a.salto);
-
-  // Agrupa a los descompensados / que subieron por el tipo de evento que lo causó.
-  const causas = {};
-  for (const p of pacientesLista) {
-    if (p.estado_clinico !== "descompensado" && !(p.posicion_anterior && p.posicion_anterior - p.posicion >= 10)) continue;
-    const cat = clasificarEvento(p.evento_causa || { tipo_evento: "sin_evento" });
-    causas[cat] = (causas[cat] || 0) + 1;
-  }
-  const causasOrden = Object.entries(causas).sort((a, b) => b[1] - a[1]);
-  const totalCausas = causasOrden.reduce((s, [, n]) => s + n, 0) || 1;
-
-  // Lista completa (en orden de la lista) con buscador, para expandir la evolución de cada paciente.
-  const q = buscaEst.trim().toLowerCase();
-  const listaPac = [...pacientesLista]
-    .sort((a, b) => a.posicion - b.posicion)
-    .filter((p) => !q || p.nombre_fantasia.toLowerCase().includes(q) || p.id_paciente.toLowerCase().includes(q) || (p.diagnostico_texto || "").toLowerCase().includes(q));
-
-  const Tarjeta = ({ titulo, valor, sub, tono }) => (
-    <section className={`bg-surface-container-lowest border rounded p-4 border-l-4 ${tono === "rojo" ? "border-l-error" : tono === "verde" ? "border-l-hlf" : "border-l-primary"} border-outline-variant`}>
-      <div className="text-[13px] text-on-surface-variant">{titulo}</div>
-      <div className="text-[30px] font-bold text-primary-container leading-tight mt-0.5">{valor}</div>
-      {sub && <div className="text-[13px] text-on-surface-variant mt-1">{sub}</div>}
-    </section>
-  );
-  const signo = (n) => (n > 0 ? `+${n}` : `${n}`);
-
-  return (
-    <div className="flex flex-col gap-5">
-      <Caja titulo="Estadísticas de la lista de espera"
-        accion={<div className="flex items-center gap-2">
-          <select value={esp} onChange={(e) => setEsp(e.target.value)} aria-label="Especialidad" className="h-8 px-2 border border-outline-variant rounded bg-surface-container-lowest text-[13px]">
-            {ESPECIALIDADES.map((e) => <option key={e}>{e}</option>)}
-          </select>
-          <button onClick={() => descargarExcel(`estadisticas_HLF_${d.fecha_corte}.xlsx`, [
-            { nombre: "Evolución de la lista", filas: [["Fecha", "En lista", "Alta", "Media", "Baja", "Descompensaciones graves", "Egresos acumulados", "Atendidos", "Fallecidos"],
-              ...serie.map((s) => [fmt(s.fecha), s.total, s.alta, s.media, s.baja, s.graves, s.egresos ?? s.excluidos, s.atendidos, s.fallecidos])] },
-            { nombre: "Causas", filas: [["Evento que movió la prioridad", "Pacientes"], ...causasOrden] },
-            { nombre: "Mayores saltos", filas: [["Paciente", "ID", "Especialidad", "Diagnóstico", "N° anterior", "N° actual", "Subió", "Evento", "Fecha del evento"],
-              ...subieron.map((p) => [p.nombre_fantasia, p.id_paciente, p.especialidad, p.diagnostico_texto, p.posicion_anterior, p.posicion, p.salto,
-                clasificarEvento(p.evento_causa) || "", fmt(p.evento_causa?.fecha_evento)])] },
-            { nombre: "Información", filas: [["Dato", "Valor"], ["Fecha", fmt(d.fecha_corte)], ["Especialidad", esp], ["Datos", "Sintéticos de demostración"]] }])}
-            className="h-8 px-2 rounded border border-outline-variant bg-surface-container-lowest font-semibold text-[13px] flex items-center gap-1"><Icono n="download" className="text-[16px]" />Excel</button>
-        </div>}>
-        <p className="text-[13px] text-on-surface-variant">
-          Evolución de la lista entre el <b>{fmt(ini.fecha)}</b> y el <b>{fmt(fin.fecha)}</b>
-          {esp !== "Todas" ? <> · especialidad <b>{esp}</b></> : null}. La lista es dinámica: cada evento clínico la reordena.
-        </p>
-      </Caja>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Tarjeta titulo="Pacientes en espera" valor={fin.total} sub={<>{signo(delta(ini.total, fin.total))} desde el inicio del período</>} />
-        <Tarjeta titulo="Prioridad alta" valor={fin.alta} tono="rojo" sub={<>{signo(delta(ini.alta, fin.alta))} desde el inicio · {Math.round((fin.alta / (fin.total || 1)) * 100)}% de la lista</>} />
-        <Tarjeta titulo="Descompensaciones graves" valor={fin.graves} tono="rojo" sub={<>{signo(delta(ini.graves, fin.graves))} desde el inicio · su prioridad se revisa en 72 h</>} />
-        <Tarjeta titulo="Egresos acumulados" valor={fin.egresos ?? fin.excluidos} tono="verde" sub={<>{fin.atendidos} atendidos · {fin.fallecidos} fallecidos</>} />
-      </div>
-
-      <Caja titulo="Curva de variación: composición de la lista en el tiempo"
-        accion={<button onClick={() => setVerTabla(!verTabla)} className="text-[13px] text-primary font-semibold">{verTabla ? "Ver gráfico" : "Ver como tabla"}</button>}>
-        {verTabla ? (
-          <div className="overflow-x-auto"><table className="w-full text-[13px] text-right border-collapse">
-            <thead><tr className="text-on-surface-variant border-b border-outline-variant">
-              {["Fecha", "En lista", "Alta", "Media", "Baja", "Desc. graves", "Egresos acumulados"].map((c, i) => <th key={c} className={`py-1 px-2 font-semibold ${i ? "" : "text-left"}`}>{c}</th>)}</tr></thead>
-            <tbody>{serie.map((s) => <tr key={s.fecha} className="border-b border-outline-variant/50">
-              <td className="py-1 px-2 text-left">{fmt(s.fecha)}</td><td className="px-2">{s.total}</td><td className="px-2">{s.alta}</td><td className="px-2">{s.media}</td>
-              <td className="px-2">{s.baja}</td><td className="px-2">{s.graves}</td><td className="px-2">{s.egresos ?? s.excluidos}</td></tr>)}</tbody>
-          </table></div>
-        ) : <GraficoComposicion serie={serie} />}
-        <p className="text-[12px] text-on-surface-variant mt-2">
-          Arriba, cada franja es la cantidad de pacientes en cada prioridad al cierre de cada quincena. Abajo, con su propia
-          escala, cuántos tenían una descompensación grave. Los cambios se explican por los eventos clínicos registrados.
-        </p>
-      </Caja>
-
-      <Caja titulo="Por qué cambió la lista: eventos que movieron la prioridad">
-        {causasOrden.length === 0 ? <p className="text-[13px] text-on-surface-variant">No hay cambios de prioridad por eventos en este corte.</p> : (
-          <div className="flex flex-col gap-2">
-            {causasOrden.map(([cat, n]) => (
-              <div key={cat} className="flex items-center gap-3 text-[14px]">
-                <span className="w-44 shrink-0">{cat}</span>
-                <div className="flex-1 h-4 rounded bg-surface-container-high overflow-hidden">
-                  <div className="h-full bg-primary" style={{ width: `${(n / totalCausas) * 100}%` }} />
-                </div>
-                <b className="w-10 text-right">{n}</b>
-              </div>
-            ))}
-            <p className="text-[12px] text-on-surface-variant mt-1">
-              {totalCausas} paciente{totalCausas !== 1 ? "s" : ""} con cambio de prioridad o descompensación, agrupados por el evento
-              clínico grave más reciente que lo originó. El orden lo calculan reglas explicables; el evento es la causa.
-            </p>
-          </div>
-        )}
-      </Caja>
-
-      <Caja titulo={`Mayores saltos en la lista (${subieron.length})`}>
-        {subieron.length === 0 ? <p className="text-[13px] text-on-surface-variant">Nadie subió 10 o más puestos respecto al corte anterior.</p> : (
-          <div className="flex flex-col gap-2">
-            <p className="text-[13px] text-on-surface-variant">
-              Pacientes que avanzaron 10 o más puestos frente al corte anterior. Cada uno con el evento que lo explica. Haga clic para ver la ficha.
-            </p>
-            {subieron.slice(0, 12).map((p) => (
-              <button key={p.id_paciente} onClick={() => onVer(p.id_paciente)}
-                className="text-left border border-outline-variant rounded p-3 hover:bg-surface-container-low flex flex-wrap items-center gap-x-4 gap-y-1">
-                <div className="flex items-center gap-2 min-w-[220px]">
-                  <Prioridad cat={p.categoria} />
-                  <div>
-                    <div className="font-semibold text-[14px]">{p.nombre_fantasia} <span className="font-normal text-on-surface-variant">· {p.especialidad}</span></div>
-                    <div className="text-[13px] text-on-surface-variant">{p.diagnostico_cie10} {p.diagnostico_texto}</div>
-                  </div>
-                </div>
-                <div className="text-[14px] whitespace-nowrap">
-                  N° {p.posicion_anterior} <Icono n="arrow_forward" className="text-[16px] align-middle" /> <b className="text-hlf">N° {p.posicion}</b>
-                  <span className="text-error font-semibold ml-1">▲ {p.salto}</span>
-                </div>
-                <div className="text-[13px] flex-1 min-w-[200px]">
-                  {p.evento_causa
-                    ? <span><b>{clasificarEvento(p.evento_causa)}</b>{p.evento_causa.fecha_evento ? ` · ${fmt(p.evento_causa.fecha_evento)}` : ""}</span>
-                    : <span className="text-on-surface-variant">Sin evento propio: avanzó porque otros salieron de la lista o cumplió más de 1 año</span>}
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-      </Caja>
-
-      <Caja titulo="Lista completa: ver cómo se ha movido cada paciente"
-        accion={
-          <input value={buscaEst} onChange={(e) => setBuscaEst(e.target.value)} placeholder="Buscar nombre, ID o diagnóstico"
-            className="h-8 px-2 w-56 border border-outline-variant rounded text-[13px]" />}>
-        <p className="text-[13px] text-on-surface-variant mb-3">
-          Toda la lista en su orden actual. Haga clic en un paciente para ver su evolución (cómo cambió de puesto y de prioridad en el tiempo).
-          Para la ficha completa, use el botón «Ver ficha».
-        </p>
-        <div className="border border-outline-variant rounded overflow-hidden">
-          <table className="w-full text-left border-collapse text-[14px]">
-            <thead>
-              <tr className="bg-surface-container-low text-[13px] text-on-surface-variant border-b border-outline-variant">
-                <th className="py-2 px-3 font-semibold w-16">N°</th>
-                <th className="py-2 px-2 font-semibold">Prioridad</th>
-                <th className="py-2 px-3 font-semibold">Paciente / diagnóstico</th>
-                <th className="py-2 px-2 font-semibold text-right">Cambio</th>
-                <th className="py-2 px-3 font-semibold text-right">Espera</th>
-                <th className="py-2 px-2 font-semibold w-8" />
-              </tr>
-            </thead>
-            <tbody>
-              {listaPac.slice(0, mostrar).map((p) => {
-                const abierto = expandido === p.id_paciente;
-                const delta = p.posicion_anterior ? p.posicion_anterior - p.posicion : 0;
-                return (
-                  <Fragment key={p.id_paciente}>
-                    <tr onClick={() => setExpandido(abierto ? null : p.id_paciente)}
-                      className={`cursor-pointer border-b border-outline-variant/60 ${abierto ? "bg-primary/10" : "hover:bg-surface-container-low"}`}>
-                      <td className={`py-2.5 px-3 align-top font-semibold ${p.riesgo_vital ? "border-l-4 border-l-error" : "border-l-4 border-l-transparent"}`}>{p.posicion}</td>
-                      <td className="py-2.5 px-2 align-top"><Prioridad cat={p.categoria} /></td>
-                      <td className="py-2.5 px-3 align-top">
-                        <div className="font-semibold">{p.nombre_fantasia} <span className="font-normal text-on-surface-variant text-[13px]">· {p.edad} años</span></div>
-                        <div className="text-[13px] text-on-surface-variant">{p.especialidad} · {p.diagnostico_cie10} {p.diagnostico_texto}</div>
-                      </td>
-                      <td className="py-2.5 px-2 align-top text-right whitespace-nowrap">
-                        {delta > 0 ? <span className="text-error font-semibold">▲ {delta}</span>
-                          : delta < 0 ? <span className="text-on-surface-variant">▼ {-delta}</span>
-                          : <span className="text-on-surface-variant">—</span>}
-                      </td>
-                      <td className="py-2.5 px-3 align-top text-right whitespace-nowrap">{p.dias_espera} días</td>
-                      <td className="py-2.5 px-2 align-top text-on-surface-variant"><Icono n={abierto ? "expand_less" : "expand_more"} className="text-[20px]" /></td>
-                    </tr>
-                    {abierto && (
-                      <tr className="bg-surface-container-lowest">
-                        <td colSpan={6} className="px-4 py-3 border-b border-outline-variant">
-                          <div className="flex items-center justify-between mb-2">
-                            <h3 className="text-[14px] font-semibold">Evolución en la lista — {p.nombre_fantasia}</h3>
-                            <button onClick={(e) => { e.stopPropagation(); onVer(p.id_paciente); }}
-                              className="text-[13px] text-primary font-semibold flex items-center gap-1"><Icono n="open_in_new" className="text-[16px]" />Ver ficha</button>
-                          </div>
-                          <EvolucionPaciente p={p} fecha={fecha} />
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-          {listaPac.length === 0 && <p className="p-5 text-on-surface-variant text-[13px]">No hay pacientes con esa búsqueda.</p>}
-        </div>
-        <div className="flex items-center justify-between mt-2 text-[12px] text-on-surface-variant">
-          <span>Mostrando {Math.min(mostrar, listaPac.length)} de {listaPac.length} pacientes.</span>
-          {mostrar < listaPac.length && <button onClick={() => setMostrar(mostrar + POR_PAGINA_EST * 2)} className="text-primary font-semibold text-[13px]">Mostrar más</button>}
-        </div>
-      </Caja>
-
-      <p className="text-[12px] text-on-surface-variant">
-        Datos al {fmt(d.fecha_corte)}. {d.modo === "mock" ? "Lista precalculada con el mismo motor de reglas que la API." : "Serie calculada en el servidor con el motor de reglas, un corte por quincena."}
-        {" "}El sistema propone y explica según reglas oficiales; el equipo clínico decide.
-      </p>
-    </div>
-  );
 }
 
 // Carga la historia de un paciente (posición/categoría en el tiempo), dibuja el gráfico
@@ -1166,9 +926,16 @@ function EvolucionPaciente({ p, fecha }) {
   if (rz.riesgo_vital) {
     pasos.push({ icon: "priority_high", rojo: true, t: "Descompensación grave", v: "Su prioridad debe revisarse en 72 h", d: rz.riesgo_vital.fuente });
   }
+  if (p.categoria_sistema && p.categoria !== p.categoria_sistema) pasos.push({ icon: "how_to_reg", t: "Decisión del equipo clínico",
+    v: `Prioridad ${ETIQUETA[p.categoria].toLowerCase()} (el sistema proponía ${ETIQUETA[p.categoria_sistema].toLowerCase()})`, d: `${p.revision?.motivo || ""}${p.revision?.usuario ? ` · ${p.revision.usuario}` : ""}` });
+  if (p.grupo_proteccion) pasos.push({ icon: "shield_person", t: "Grupo de especial protección", v: p.grupo_proteccion, d: "MINSAL Ord. 536/2025, criterio 2: ordena antes dentro de la misma prioridad." });
   if (rz.ges) pasos.push({ icon: "verified", t: "Garantía GES", v: rz.ges.valor, d: `Fuente: ${rz.ges.fuente}` });
   if (rz.medicion) pasos.push({ icon: "monitor_heart", t: "Medición fuera de rango", v: rz.medicion.valor, d: `Fuente: ${rz.medicion.fuente}` });
   if (rz.dias_espera) pasos.push({ icon: "schedule", t: "Tiempo de espera", v: rz.dias_espera.valor, d: `Fuente: ${rz.dias_espera.fuente}` });
+  if (p.ajuste_manual) pasos.push({ icon: "swap_vert", t: "Ajuste manual de la posición",
+    v: `N° ${p.ajuste_manual.posicion} en ${p.ajuste_manual.especialidad} (el sistema lo ponía en el N° ${p.ajuste_manual.posicion_anterior})`,
+    d: `${p.ajuste_manual.motivo_texto}: «${p.ajuste_manual.explicacion}» · ${p.ajuste_manual.usuario}` });
+  if (p.ajuste_manual_vencido) pasos.push({ icon: "warning", t: "Ajuste manual sin efecto", v: "Volvió al orden del sistema", d: `Llegó un evento nuevo: ${p.ajuste_manual_vencido.vencido_por}` });
   pasos.push({ icon: "format_list_numbered", final: true, t: "Lugar actual en la lista",
     v: `N° ${p.posicion}${p.posicion_anterior ? ` (antes N° ${p.posicion_anterior})` : ""}`,
     d: delta > 0 ? `Subió ${delta} puesto${delta !== 1 ? "s" : ""} respecto al corte anterior.` : delta < 0 ? `Bajó ${-delta} puesto${-delta !== 1 ? "s" : ""} respecto al corte anterior.` : "Sin cambio de posición respecto al corte anterior." });
@@ -1282,118 +1049,353 @@ function GraficoComposicion({ serie }) {
   );
 }
 
-// KPIs fijados por el hospital: reevaluación < 72 h tras un evento · concordancia con experto kappa ≥ 0,70 · cobertura 100%.
-function Indicadores({ fecha, esApi, data }) {
+// Indicadores para la jefatura del hospital. Un solo filtro de especialidad para toda la página:
+// metas oficiales del HLF, situación de la lista, resumen por especialidad, evolución (gráficos aportados por Diego),
+// tiempos de espera, por qué cambió la lista, trabajo pendiente y evolución de cada paciente.
+const POR_PAGINA_EST = 25;
+function Indicadores({ fecha, esApi, data, esp, setEsp, onVer }) {
   const [k, setK] = useState(null);
+  const [e, setE] = useState(null);
   const [err, setErr] = useState(null);
-  useEffect(() => { if (esApi) api.getKpis(fecha).then(setK).catch((e) => setErr(e.message)); }, [fecha, esApi, data]);
+  const [verTabla, setVerTabla] = useState(false);
+  const [verSaltos, setVerSaltos] = useState(5);
+  const [buscaEst, setBuscaEst] = useState("");
+  const [mostrar, setMostrar] = useState(POR_PAGINA_EST);
+  const [expandido, setExpandido] = useState(null);
+  const espApi = esp === "Todas" ? null : esp;
+  useEffect(() => {
+    if (!esApi) return undefined;
+    let vivo = true;
+    setErr(null);
+    Promise.all([api.getKpis(fecha, espApi), api.getEstadisticas(fecha, espApi)])
+      .then(([a, b]) => { if (vivo) { setK(a); setE(b); } })
+      .catch((x) => { if (vivo) setErr(x.message); });
+    return () => { vivo = false; };
+  }, [fecha, espApi, esApi, data]);
+  useEffect(() => setMostrar(POR_PAGINA_EST), [buscaEst, esp]);
   if (!esApi) return <Caja><p className="text-on-surface-variant">Los indicadores requieren conexión al servidor.</p></Caja>;
-  if (err) return <Caja><p className="text-error">{err}</p></Caja>;
-  if (!k) return <p className="text-on-surface-variant">Calculando indicadores…</p>;
+  if (err) return <Caja><p className="text-error">No se pudieron calcular los indicadores: {err}</p></Caja>;
+  if (!k || !e) return <p className="text-on-surface-variant">Calculando indicadores…</p>;
+
   const kap = k.concordancia.kappa;
-  const re = k.reevaluacion, ci = k.citas, co = k.contactabilidad, cc = k.concordancia;
+  const re = k.reevaluacion, co = k.contactabilidad, cc = k.concordancia, tp = k.trabajo_pendiente, es = k.espera;
   const num = (x, d = 1) => (x == null ? "—" : String(Math.round(x * 10 ** d) / 10 ** d).replace(".", ","));
-  // Cada tarjeta muestra el valor medido y su n; "Sin datos" cuando aún no hay registros para medirlo.
-  const Kpi = ({ titulo, valor, meta, estado, detalle }) => (
-    <section className={`bg-surface-container-lowest border rounded p-4 border-l-4 ${estado === "ok" ? "border-l-hlf" : estado === "mal" ? "border-l-ambar" : "border-l-outline"} border-outline-variant`}>
-      <div className="flex items-start justify-between gap-2">
-        <h3 className="font-semibold text-[15px]">{titulo}</h3>
-        <span className={`text-[12px] font-semibold rounded px-2 py-0.5 ${estado === "ok" ? "bg-hlf-claro text-hlf" : estado === "mal" ? "bg-ambar-container text-ambar" : "bg-surface-container text-on-surface-variant"}`}>
-          {estado === "ok" ? "En meta" : estado === "mal" ? "Bajo la meta" : estado === "info" ? "Sin meta oficial" : "Sin datos suficientes"}</span>
+  const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
+  const signo = (n) => (n > 0 ? `+${n}` : `${n}`);
+  const serie = e.serie, ini = serie[0], fin = serie[serie.length - 1];
+  const alcance = esp === "Todas" ? "todo el hospital" : esp;
+
+  // Pacientes de la lista (misma especialidad) + el evento exacto que entrega el servidor
+  const pacientes = (data?.pacientes || []).map((p) => ({ ...p, evento_causa: e.evento_causa?.[p.id_paciente] || null }));
+  const subieron = pacientes.filter((p) => p.posicion_anterior && p.posicion_anterior - p.posicion >= 10)
+    .map((p) => ({ ...p, salto: p.posicion_anterior - p.posicion })).sort((a, b) => b.salto - a.salto);
+  const causas = {};
+  for (const p of pacientes) {
+    if (p.estado_clinico !== "descompensado" && !(p.posicion_anterior && p.posicion_anterior - p.posicion >= 10)) continue;
+    const c = clasificarEvento(p.evento_causa || { tipo_evento: "sin_evento" });
+    causas[c] = (causas[c] || 0) + 1;
+  }
+  const causasOrden = Object.entries(causas).sort((a, b) => b[1] - a[1]);
+  const totalCausas = causasOrden.reduce((s, [, n]) => s + n, 0) || 1;
+  const q = buscaEst.trim().toLowerCase();
+  const listaPac = pacientes.filter((p) => !q || [p.nombre_fantasia, p.id_paciente, p.rut, p.diagnostico_texto].some((x) => (x || "").toLowerCase().includes(q)));
+  const maxTramo = Math.max(...k.tramos_espera.map((t) => t.pacientes), 1);
+
+  const Seccion = ({ titulo, sub, accion, children }) => (
+    <section className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-end justify-between gap-2 border-b border-outline-variant pb-1.5">
+        <div><h2 className="text-[18px] font-semibold">{titulo}</h2>{sub && <p className="text-[13px] text-on-surface-variant">{sub}</p>}</div>
+        {accion}
       </div>
-      <div className="text-[32px] font-bold text-primary-container mt-1">{valor}</div>
-      <div className="text-[13px] text-on-surface-variant">Meta del hospital: {meta}</div>
-      <p className="text-[13px] mt-2">{detalle}</p>
+      {children}
     </section>
   );
-  const Fila = ({ t, v, c = "" }) => <div className="flex justify-between"><span>{t}</span><b className={c}>{v}</b></div>;
-  const pendientesEval = re.evaluacion_pendiente + re.evaluacion_atrasada;
-  const exportar = () => descargarExcel(`indicadores_HLF_${k.fecha_corte}.xlsx`, [{ nombre: "Indicadores", filas: [["Grupo", "Indicador", "Valor", "Meta"],
-    ["Cobertura", "Pacientes ordenados con criterio común", `${k.cobertura.evaluados} de ${k.cobertura.en_espera} (${k.cobertura.pct}%)`, "100%"],
-    ["Reevaluación", "Mediana de horas evento → revisión de la prioridad", re.mediana_horas ?? "", "< 72 h"],
-    ["Reevaluación", "Eventos graves evaluados en menos de 72 h", `${re.evaluados_menos_72h} de ${re.evaluados}`, ""],
-    ["Reevaluación", "Eventos graves sin evaluar", re.sin_evaluar, ""],
-    ["Descompensaciones", "En la lista", re.descompensados_en_lista, ""], ["Descompensaciones", "Evaluadas", re.evaluacion_hecha, ""],
-    ["Descompensaciones", "Pendientes (≤ 72 h)", re.evaluacion_pendiente, ""], ["Descompensaciones", "Atrasadas (> 72 h)", re.evaluacion_atrasada, ""],
-    ["Concordancia", "Revisiones (n)", cc.revisiones, `≥ ${cc.n_recomendado}`], ["Concordancia", "Acuerdo", cc.acuerdo_pct == null ? "" : `${cc.acuerdo_pct}%`, ""],
-    ["Concordancia", "Kappa de Cohen", kap ?? "", "≥ 0,70"],
-    ...(k.ajustes_manuales ? [["Ajustes manuales", "Vigentes", k.ajustes_manuales.vigentes, ""], ["Ajustes manuales", "Sin efecto por evento nuevo", k.ajustes_manuales.sin_efecto_por_evento, ""]] : []),
-    ["Revisión", "Pacientes que requieren revisión del especialista", k.alertas.revision_sugerida, ""],
-    ["Contactabilidad", "Llamadas registradas", co.intentos, ""], ["Contactabilidad", "Con respuesta", co.efectivos, ""],
-    ["Egresos", "Por fallecimiento (causal 9)", k.egresos.fallecidos, ""], ["Egresos", "Atendidos en consulta nueva", k.egresos.atendidos, ""],
-    ["Información", "Indicadores al", fmt(k.fecha_corte), ""], ["Información", "Datos", "Sintéticos de demostración", ""]] }]);
+  const Meta = ({ titulo, valor, meta, estado, detalle }) => (
+    <article className={`bg-surface-container-lowest border border-outline-variant rounded p-4 border-l-4 ${estado === "ok" ? "border-l-hlf" : estado === "mal" ? "border-l-ambar" : "border-l-outline"}`}>
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="font-semibold text-[15px]">{titulo}</h3>
+        <span className={`text-[12px] font-semibold rounded px-2 py-0.5 whitespace-nowrap ${estado === "ok" ? "bg-hlf-claro text-hlf" : estado === "mal" ? "bg-ambar-container text-ambar" : "bg-surface-container text-on-surface-variant"}`}>
+          {estado === "ok" ? "✓ En meta" : estado === "mal" ? "Bajo la meta" : "Aún sin datos"}</span>
+      </div>
+      <div className="text-[34px] font-bold text-primary-container mt-1 leading-tight">{valor}</div>
+      <div className="text-[13px] text-on-surface-variant">Meta del hospital: <b>{meta}</b></div>
+      <p className="text-[13px] mt-2">{detalle}</p>
+    </article>
+  );
+  const Tarjeta = ({ titulo, valor, sub, tono }) => (
+    <article className={`bg-surface-container-lowest border border-outline-variant rounded p-3.5 border-l-4 ${tono === "rojo" ? "border-l-error" : tono === "ambar" ? "border-l-ambar" : tono === "verde" ? "border-l-hlf" : "border-l-primary"}`}>
+      <div className="text-[13px] text-on-surface-variant">{titulo}</div>
+      <div className="text-[28px] font-bold leading-tight mt-0.5">{valor}</div>
+      {sub && <div className="text-[12px] text-on-surface-variant mt-1">{sub}</div>}
+    </article>
+  );
+  const Fila = ({ t, v, c = "" }) => <div className="flex justify-between gap-2"><span>{t}</span><b className={c}>{v}</b></div>;
+
+  const exportar = () => descargarExcel(`indicadores_HLF_${k.fecha_corte}${espApi ? `_${espApi}` : ""}.xlsx`, [
+    { nombre: "Metas del hospital", filas: [["Meta", "Valor", "Meta del hospital", "Cómo se mide"],
+      ["Reevaluación tras un evento grave", re.evaluados ? `${num(re.mediana_horas)} h (mediana)` : "Sin datos", "< 72 h", "Horas desde que el evento llega al sistema hasta que el especialista revisa la prioridad"],
+      ["Concordancia con el especialista", kap == null ? "Sin datos" : `kappa ${num(kap, 2)} · ${cc.acuerdo_pct}% de acuerdo · n = ${cc.revisiones}`, "kappa ≥ 0,70", "Prioridad propuesta vs. decisión del especialista"],
+      ["Cobertura con criterio común", `${k.cobertura.pct}% (${k.cobertura.evaluados} de ${k.cobertura.en_espera})`, "100%", k.cobertura.criterio]] },
+    { nombre: "Por especialidad", filas: [["Especialidad", "En espera", "Alta", "Media", "Baja", "Más de 1 año", "Más de 500 días", "Mediana (días)", "Máxima (días)",
+      "Descompensaciones graves", "Sin revisar", "Pendientes de revisión", "Sin responsable", "Egresos", "Atendidos", "Fallecidos"],
+      ...[...k.por_especialidad, k.total_hospital].map((r) => [r.especialidad, r.en_espera, r.alta, r.media, r.baja, r.mas_de_1_anio, r.mas_de_500_dias,
+        r.mediana_dias, r.maxima_dias, r.graves, r.graves_sin_revisar, r.pendientes_revision, r.sin_responsable, r.egresos, r.atendidos, r.fallecidos])] },
+    { nombre: "Evolución", filas: [["Fecha", "En lista", "Alta", "Media", "Baja", "Descompensaciones graves", "Egresos acumulados", "Atendidos", "Fallecidos"],
+      ...serie.map((s) => [fmt(s.fecha), s.total, s.alta, s.media, s.baja, s.graves, s.egresos, s.atendidos, s.fallecidos])] },
+    { nombre: "Tiempos de espera", filas: [["Tramo", "Pacientes", "% de la lista"], ...k.tramos_espera.map((t) => [t.tramo, t.pacientes, `${pct(t.pacientes, k.cobertura.en_espera)}%`])] },
+    { nombre: "Causas de los cambios", filas: [["Evento que movió la prioridad", "Pacientes"], ...causasOrden] },
+    { nombre: "Mayores saltos", filas: [["Paciente", "RUT / ID", "Especialidad", "Diagnóstico", "N° anterior", "N° actual", "Subió", "Evento", "Fecha del evento"],
+      ...subieron.map((p) => [p.nombre_fantasia, p.rut || p.id_paciente, p.especialidad, p.diagnostico_texto, p.posicion_anterior, p.posicion, p.salto,
+        clasificarEvento(p.evento_causa) || "", fmt(p.evento_causa?.fecha_evento)])] },
+    { nombre: "Trabajo pendiente", filas: [["Indicador", "Valor"], ["Pendientes de revisión", tp.por_estado.pendiente_revision], ["Pendientes de contacto", tp.por_estado.pendiente_contacto],
+      ["Pendientes de cita", tp.por_estado.pendiente_cita], ["Con cita reservada", tp.por_estado.cita_reservada], ["Sin responsable", tp.sin_responsable],
+      ["Seguimiento vencido", tp.seguimiento_vencido], ["Ajustes manuales vigentes", k.ajustes_manuales.vigentes], ["Ajustes sin efecto por evento nuevo", k.ajustes_manuales.sin_efecto_por_evento],
+      ["Llamadas registradas", co.intentos], ["Llamadas con respuesta", co.efectivos], ["Egresos por fallecimiento (causal 9)", k.egresos.fallecidos], ["Atendidos en consulta nueva", k.egresos.atendidos]] },
+    { nombre: "Información", filas: [["Dato", "Valor"], ["Alcance", alcance], ["Indicadores al", fmt(k.fecha_corte)], ["Evolución desde", fmt(ini.fecha)],
+      ["Generado por", api.getUsuario() || "(sin nombre)"], ["Generado el", new Date().toLocaleString("es-CL")], ["Datos", "Sintéticos de demostración: no son pacientes reales"]] }]);
+
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex justify-end"><button onClick={exportar} className="h-9 px-3 rounded border border-outline-variant bg-surface-container-lowest font-semibold flex items-center gap-1 text-[14px]"><Icono n="download" className="text-[18px]" />Exportar a Excel</button></div>
-      <div className="grid gap-4 md:grid-cols-3">
-        <Kpi titulo="Reevaluación tras un evento grave" valor={re.evaluados ? `${num(re.mediana_horas)} h` : "—"} meta="< 72 horas"
-          estado={!re.evaluados ? null : re.evaluados_menos_72h === re.evaluados ? "ok" : "mal"}
-          detalle={<>Solo eventos registrados en la herramienta: {re.eventos_graves_registrados} en total; {re.evaluados} con la prioridad revisada ({re.evaluados_menos_72h} en menos de 72 h) y {re.sin_evaluar} todavía sin revisar. El valor es la mediana de horas entre el registro y la revisión.</>} />
-        <Kpi titulo="Concordancia con el especialista" valor={cc.revisiones ? `${cc.acuerdo_pct}% de acuerdo` : "—"} meta={`kappa ≥ 0,70 (con n ≥ ${cc.n_recomendado})`}
-          estado={!cc.suficiente ? null : kap >= cc.meta ? "ok" : "mal"}
-          detalle={<>{cc.acuerdos} acuerdos en n = {cc.revisiones} revisiones (confirmar = acuerdo; cambiar prioridad = desacuerdo). Kappa de Cohen: <b>{kap == null ? "—" : num(kap, 2)}</b>.
-            {!cc.suficiente && ` Con menos de ${cc.n_recomendado} revisiones el kappa es solo orientativo.`}</>} />
-        <Kpi titulo="Espera prolongada" valor={`${k.espera?.mas_de_1_anio ?? "—"}`} meta="no definida (indicador de gestión)" estado="info"
-          detalle={<>Pacientes que siguen esperando más de 1 año ({k.espera?.mas_de_500_dias} con más de 500 días; máxima {k.espera?.maxima_dias} días). Mediana de espera: {k.espera?.mediana_dias} días.</>} />
+    <div className="flex flex-col gap-8">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-[22px] font-bold">Indicadores de la lista de espera</h1>
+          <p className="text-[14px] text-on-surface-variant">{esp === "Todas" ? "Todo el hospital" : <b>{esp}</b>} · al {fmt(k.fecha_corte)} · evolución desde el {fmt(ini.fecha)} · datos sintéticos de demostración</p>
+        </div>
+        <div className="flex flex-wrap items-end gap-2 text-[14px]">
+          <Filtro label="Especialidad">
+            <select value={esp} onChange={(x) => setEsp(x.target.value)} className="h-10 px-2 border border-outline-variant rounded bg-surface-container-lowest">{ESPECIALIDADES.map((x) => <option key={x}>{x}</option>)}</select>
+          </Filtro>
+          <button onClick={exportar} className="h-10 px-4 rounded bg-primary text-on-primary font-semibold flex items-center gap-1"><Icono n="download" className="text-[18px]" />Exportar todo a Excel</button>
+        </div>
       </div>
-      <div className="grid gap-4 md:grid-cols-3">
-        <Caja titulo="Trabajo pendiente">
-          <div className="text-[14px] space-y-1">
-            {k.trabajo_pendiente && <>
-            <Fila t="Pendientes de revisión" v={k.trabajo_pendiente.por_estado.pendiente_revision} c="text-ambar" />
-            <Fila t="Pendientes de contacto" v={k.trabajo_pendiente.por_estado.pendiente_contacto} />
-            <Fila t="Pendientes de cita" v={k.trabajo_pendiente.por_estado.pendiente_cita} />
-            <Fila t="Con cita reservada" v={k.trabajo_pendiente.por_estado.cita_reservada} c="text-hlf" />
-            <Fila t="Sin responsable" v={k.trabajo_pendiente.sin_responsable} c="text-ambar" />
-            <Fila t="Seguimiento vencido" v={k.trabajo_pendiente.seguimiento_vencido} c={k.trabajo_pendiente.seguimiento_vencido ? "text-error" : ""} />
-            </>}
-          </div>
+
+      <Seccion titulo="Metas del hospital" sub="Los tres indicadores que fijó el HLF para el desafío. Se miden con lo registrado en la herramienta.">
+        <div className="grid gap-4 lg:grid-cols-3">
+          <Meta titulo="Reevaluación tras un evento grave" valor={re.evaluados ? `${num(re.mediana_horas)} h` : "—"} meta="menos de 72 horas"
+            estado={!re.evaluados ? null : re.evaluados_menos_72h === re.evaluados ? "ok" : "mal"}
+            detalle={<>{re.evaluados
+              ? <>Mediana de horas entre la llegada del evento y la revisión de la prioridad: {re.evaluados_menos_72h} de {re.evaluados} revisadas en menos de 72 h; {re.sin_evaluar} sin revisar.</>
+              : <>Todavía no hay eventos registrados en la herramienta que el especialista haya revisado. Se mide desde que el evento llega hasta que se confirma, ajusta o mueve la prioridad.</>}
+              {" "}Hoy hay <b>{re.descompensados_en_lista}</b> descompensaciones graves: {re.evaluacion_hecha} revisadas, {re.evaluacion_pendiente} en plazo y <b className={re.evaluacion_atrasada ? "text-error" : ""}>{re.evaluacion_atrasada} atrasadas</b>.</>} />
+          <Meta titulo="Concordancia con el especialista" valor={kap == null ? "—" : `κ ${num(kap, 2)}`} meta="kappa ≥ 0,70"
+            estado={!cc.suficiente ? null : kap >= cc.meta ? "ok" : "mal"}
+            detalle={cc.revisiones
+              ? <>{cc.acuerdo_pct}% de acuerdo en {cc.revisiones} revisiones (confirmar = acuerdo; cambiar = desacuerdo).{!cc.suficiente && ` Con menos de ${cc.n_recomendado} revisiones el kappa es solo orientativo.`}</>
+              : <>Todavía no hay revisiones. Se calcula cuando los especialistas confirman o cambian la prioridad que propone el sistema (se recomiendan al menos {cc.n_recomendado}).</>} />
+          <Meta titulo="Cobertura con criterio común" valor={`${k.cobertura.pct}%`} meta="100% de la lista"
+            estado={k.cobertura.pct === 100 ? "ok" : "mal"}
+            detalle={<>{k.cobertura.evaluados} de {k.cobertura.en_espera} pacientes ordenados con el mismo criterio: {k.cobertura.criterio}.</>} />
+        </div>
+      </Seccion>
+
+      <Seccion titulo="Situación de la lista hoy" sub={`${alcance === "todo el hospital" ? "Todo el hospital" : alcance}. Cambios comparados con el ${fmt(ini.fecha)}.`}>
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+          <Tarjeta titulo="Pacientes en espera" valor={fin.total} sub={`${signo(fin.total - ini.total)} desde el ${fmt(ini.fecha)}`} />
+          <Tarjeta titulo="Prioridad alta" valor={fin.alta} tono="rojo" sub={`${pct(fin.alta, fin.total)}% de la lista · ${signo(fin.alta - ini.alta)}`} />
+          <Tarjeta titulo="Esperan más de 1 año" valor={es.mas_de_1_anio} tono="ambar" sub={`${pct(es.mas_de_1_anio, fin.total)}% · ${es.mas_de_500_dias} con más de 500 días`} />
+          <Tarjeta titulo="Mediana de espera" valor={`${num(es.mediana_dias, 0)} días`} sub={`Máxima: ${es.maxima_dias} días`} />
+          <Tarjeta titulo="Descompensaciones graves" valor={fin.graves} tono="rojo" sub={`${re.evaluacion_hecha} revisadas · ${re.evaluacion_pendiente} en plazo · ${re.evaluacion_atrasada} atrasadas`} />
+          <Tarjeta titulo="Egresos del período" valor={fin.egresos - ini.egresos} tono="verde" sub={`${fin.atendidos - ini.atendidos} atendidos · ${fin.fallecidos - ini.fallecidos} fallecidos`} />
+        </div>
+      </Seccion>
+
+      <Seccion titulo="Resumen por especialidad" sub="Haga clic en una especialidad para ver toda la página solo con ella.">
+        <div className="bg-surface-container-lowest border border-outline-variant rounded overflow-x-auto">
+          <table className="w-full text-[14px] border-collapse min-w-[860px]">
+            <thead><tr className="bg-surface-container-low text-on-surface-variant text-[13px] border-b border-outline-variant text-right">
+              <th className="py-2 px-3 text-left font-semibold">Especialidad</th><th className="px-2 font-semibold">En espera</th><th className="px-2 font-semibold">Alta</th>
+              <th className="px-2 font-semibold">Más de 1 año</th><th className="px-2 font-semibold">Más de 500 días</th><th className="px-2 font-semibold">Mediana</th>
+              <th className="px-2 font-semibold">Máxima</th><th className="px-2 font-semibold">Desc. graves</th><th className="px-2 font-semibold">Pend. revisión</th>
+              <th className="px-2 font-semibold">Sin responsable</th><th className="px-3 font-semibold">Egresos</th></tr></thead>
+            <tbody>
+              {k.por_especialidad.map((r) => (
+                <tr key={r.especialidad} onClick={() => setEsp(esp === r.especialidad ? "Todas" : r.especialidad)} tabIndex={0}
+                  onKeyDown={(x) => { if (x.key === "Enter") setEsp(esp === r.especialidad ? "Todas" : r.especialidad); }}
+                  className={`cursor-pointer border-b border-outline-variant/60 text-right ${esp === r.especialidad ? "bg-primary/10 font-semibold" : "hover:bg-surface-container-low"}`}>
+                  <td className="py-2 px-3 text-left text-primary font-semibold">{r.especialidad}</td>
+                  <td className="px-2">{r.en_espera}</td><td className="px-2">{r.alta}</td>
+                  <td className="px-2">{r.mas_de_1_anio} <span className="text-[12px] text-on-surface-variant">({pct(r.mas_de_1_anio, r.en_espera)}%)</span></td>
+                  <td className={`px-2 ${r.mas_de_500_dias ? "text-error font-semibold" : ""}`}>{r.mas_de_500_dias}</td>
+                  <td className="px-2">{num(r.mediana_dias, 0)} d</td><td className="px-2">{r.maxima_dias} d</td>
+                  <td className="px-2">{r.graves ? <span className={r.graves_sin_revisar ? "text-error font-semibold" : ""}>{r.graves}{r.graves_sin_revisar ? ` (${r.graves_sin_revisar} sin revisar)` : ""}</span> : "0"}</td>
+                  <td className={`px-2 ${r.pendientes_revision ? "text-ambar" : ""}`}>{r.pendientes_revision}</td>
+                  <td className="px-2">{r.sin_responsable}</td><td className="px-3">{r.egresos}</td>
+                </tr>
+              ))}
+              {(() => { const r = k.total_hospital; return (
+                <tr className="bg-surface-container-low font-semibold text-right">
+                  <td className="py-2 px-3 text-left">Todo el hospital</td><td className="px-2">{r.en_espera}</td><td className="px-2">{r.alta}</td>
+                  <td className="px-2">{r.mas_de_1_anio} <span className="text-[12px] text-on-surface-variant">({pct(r.mas_de_1_anio, r.en_espera)}%)</span></td>
+                  <td className="px-2">{r.mas_de_500_dias}</td><td className="px-2">{num(r.mediana_dias, 0)} d</td><td className="px-2">{r.maxima_dias} d</td>
+                  <td className="px-2">{r.graves}</td><td className="px-2">{r.pendientes_revision}</td><td className="px-2">{r.sin_responsable}</td><td className="px-3">{r.egresos}</td>
+                </tr>); })()}
+            </tbody>
+          </table>
+        </div>
+      </Seccion>
+
+      <Seccion titulo="Evolución de la lista" sub={`Cómo cambió la lista cada quincena, del ${fmt(ini.fecha)} al ${fmt(fin.fecha)}.`}
+        accion={<button onClick={() => setVerTabla(!verTabla)} className="text-[13px] text-primary font-semibold">{verTabla ? "Ver gráfico" : "Ver como tabla"}</button>}>
+        <Caja>
+          {verTabla ? (
+            <div className="overflow-x-auto"><table className="w-full text-[13px] text-right border-collapse">
+              <thead><tr className="text-on-surface-variant border-b border-outline-variant">
+                {["Fecha", "En lista", "Alta", "Media", "Baja", "Desc. graves", "Egresos acumulados"].map((c, i) => <th key={c} className={`py-1 px-2 font-semibold ${i ? "" : "text-left"}`}>{c}</th>)}</tr></thead>
+              <tbody>{serie.map((s) => <tr key={s.fecha} className="border-b border-outline-variant/50">
+                <td className="py-1 px-2 text-left">{fmt(s.fecha)}</td><td className="px-2">{s.total}</td><td className="px-2">{s.alta}</td><td className="px-2">{s.media}</td>
+                <td className="px-2">{s.baja}</td><td className="px-2">{s.graves}</td><td className="px-2">{s.egresos}</td></tr>)}</tbody>
+            </table></div>
+          ) : <GraficoComposicion serie={serie} />}
         </Caja>
-        <Caja titulo="Citas de hoy por estado">
-          <div className="text-[14px] space-y-1">
-            <Fila t="Cupos reservados (aún no prueban atención)" v={ci.horas_recuperadas} />
-            <Fila t="Propuestas (sin llamar)" v={ci.propuestas_sin_reservar} />
-            <Fila t="Reservadas" v={ci.reservada} />
-            <Fila t="Confirmadas por el paciente" v={ci.confirmada} c="text-hlf" />
-            <Fila t="Atendidas" v={ci.atendida} c="text-hlf" />
-            <Fila t="No asistió" v={ci.no_asistio} c={ci.no_asistio ? "text-ambar" : ""} />
-            <Fila t="Canceladas (hora liberada)" v={ci.cancelada} />
-          </div>
-        </Caja>
-        <Caja titulo="Contactabilidad">
-          <div className="text-[14px] space-y-1">
-            <Fila t="Llamadas registradas" v={co.intentos} />
-            <Fila t="Con respuesta" v={co.pct == null ? "—" : `${co.efectivos} (${co.pct}%)`} />
-            <Fila t="Pacientes con reintentos" v={co.pacientes_con_reintentos} c={co.pacientes_con_reintentos ? "text-ambar" : ""} />
-          </div>
-        </Caja>
-        <Caja titulo="Descompensaciones graves">
-          <div className="text-[14px] space-y-1">
-            <Fila t="En la lista" v={re.descompensados_en_lista} />
-            <Fila t="Prioridad revisada" v={re.evaluacion_hecha} c="text-hlf" />
-            <Fila t="Nuevas, en plazo (≤ 72 h)" v={re.evaluacion_pendiente} />
-            <Fila t="Atrasadas (> 72 h)" v={re.evaluacion_atrasada} c={re.evaluacion_atrasada ? "text-error" : ""} />
-            <p className="text-[12px] text-on-surface-variant">{pendientesEval} sin revisión del especialista. El plazo cuenta desde que el evento llegó al sistema.</p>
-          </div>
-        </Caja>
-        <Caja titulo="Revisión del especialista">
-          <div className="text-[14px] space-y-1">
-            <div className="flex justify-between"><span>Pacientes que requieren revisión</span><b className="text-ambar">{k.alertas.revision_sugerida}</b></div>
-            <p className="text-[12px] text-on-surface-variant">Descompensaciones, exámenes alterados o aumentos de dosis posteriores a la interconsulta o a la última revisión.</p>
-            {k.ajustes_manuales && <div className="pt-2 mt-1 border-t border-outline-variant/60 space-y-1">
-              <div className="flex justify-between"><span>Ajustes manuales vigentes</span><b>{k.ajustes_manuales.vigentes}</b></div>
-              <div className="flex justify-between"><span>Sin efecto por un evento nuevo</span><b className={k.ajustes_manuales.sin_efecto_por_evento ? "text-ambar" : ""}>{k.ajustes_manuales.sin_efecto_por_evento}</b></div>
-            </div>}
-          </div>
-        </Caja>
-        <Caja titulo="Egresos de la lista">
-          <div className="text-[14px] space-y-1">
-            <div className="flex justify-between"><span>Por fallecimiento (causal 9)</span><b>{k.egresos.fallecidos}</b></div>
-            <div className="flex justify-between"><span>Atendidos en consulta nueva</span><b>{k.egresos.atendidos}</b></div>
-          </div>
-        </Caja>
+      </Seccion>
+
+      <div className="grid gap-8 lg:grid-cols-2">
+        <Seccion titulo="Tiempos de espera" sub="Cuántos pacientes hay en cada tramo de días esperando.">
+          <Caja>
+            <div className="flex flex-col gap-2.5">
+              {k.tramos_espera.map((t) => (
+                <div key={t.tramo} className="grid grid-cols-[150px_1fr_90px] items-center gap-3 text-[14px]" title={`${t.pacientes} pacientes`}>
+                  <span>{t.tramo}</span>
+                  <div className="h-5 rounded bg-surface-container-high overflow-hidden">
+                    <div className={`h-full ${t.desde >= 365 ? "bg-error" : "bg-primary"}`} style={{ width: `${(t.pacientes / maxTramo) * 100}%` }} />
+                  </div>
+                  <span className="text-right"><b>{t.pacientes}</b> <span className="text-[12px] text-on-surface-variant">({pct(t.pacientes, k.cobertura.en_espera)}%)</span></span>
+                </div>
+              ))}
+            </div>
+            <p className="text-[12px] text-on-surface-variant mt-3">En rojo, los tramos de más de 1 año (criterio de antigüedad MINSAL Ord. 536/2025).</p>
+          </Caja>
+        </Seccion>
+
+        <Seccion titulo="Por qué cambió la lista" sub="Pacientes descompensados o que subieron 10+ puestos, por el evento clínico que lo explica.">
+          <Caja>
+            {causasOrden.length === 0 ? <p className="text-[13px] text-on-surface-variant">No hay cambios de prioridad por eventos en este corte.</p> : (
+              <div className="flex flex-col gap-2.5">
+                {causasOrden.map(([c, n]) => (
+                  <div key={c} className="grid grid-cols-[180px_1fr_40px] items-center gap-3 text-[14px]">
+                    <span>{c}</span>
+                    <div className="h-5 rounded bg-surface-container-high overflow-hidden"><div className="h-full bg-primary" style={{ width: `${(n / totalCausas) * 100}%` }} /></div>
+                    <b className="text-right">{n}</b>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="text-[12px] text-on-surface-variant mt-3">El orden lo calculan reglas oficiales; el evento clínico es la causa del cambio.</p>
+          </Caja>
+        </Seccion>
       </div>
-      <p className="text-[12px] text-on-surface-variant">Cobertura: {k.cobertura.evaluados} de {k.cobertura.en_espera} pacientes ordenados con el mismo criterio ({k.cobertura.criterio}). Kappa de Cohen entre la prioridad que propone el sistema y la decisión del especialista (Alta / Media / Baja). Indicadores al {fmt(k.fecha_corte)} · todo el hospital (todas las especialidades) · medidos sobre lo registrado en la herramienta.</p>
+
+      <Seccion titulo={`Mayores saltos en la lista (${subieron.length})`} sub="Pacientes que avanzaron 10 o más puestos en las últimas dos semanas, con el evento que lo explica. Clic para ver su ficha.">
+        {subieron.length === 0 ? <p className="text-[13px] text-on-surface-variant">Nadie avanzó 10 o más puestos en las últimas dos semanas.</p> : (
+          <div className="flex flex-col gap-2">
+            {subieron.slice(0, verSaltos).map((p) => (
+              <button key={p.id_paciente} onClick={() => onVer(p.id_paciente)}
+                className="text-left bg-surface-container-lowest border border-outline-variant rounded p-3 hover:bg-surface-container-low flex flex-wrap items-center gap-x-5 gap-y-1">
+                <div className="flex items-center gap-2 min-w-[260px] flex-1">
+                  <Prioridad cat={p.categoria} />
+                  <div>
+                    <div className="font-semibold text-[14px]">{p.nombre_fantasia} <span className="font-normal text-on-surface-variant">· {p.especialidad}</span></div>
+                    <div className="text-[13px] text-on-surface-variant">{p.diagnostico_cie10} {p.diagnostico_texto}</div>
+                  </div>
+                </div>
+                <div className="text-[14px] whitespace-nowrap">N° {p.posicion_anterior} <Icono n="arrow_forward" className="text-[16px]" /> <b>N° {p.posicion}</b> <span className="text-error font-semibold ml-1">▲ {p.salto}</span></div>
+                <div className="text-[13px] flex-1 min-w-[240px]">
+                  {p.evento_causa ? <span><b>{clasificarEvento(p.evento_causa)}</b> · {fmt(p.evento_causa.fecha_evento)}</span>
+                    : <span className="text-on-surface-variant">Sin evento propio: avanzó porque otros salieron de la lista o cumplió más de 1 año</span>}
+                </div>
+              </button>
+            ))}
+            {subieron.length > 5 && <button onClick={() => setVerSaltos(verSaltos > 5 ? 5 : subieron.length)} className="self-start text-[13px] text-primary font-semibold">
+              {verSaltos > 5 ? "Ver menos" : `Ver los ${subieron.length}`}</button>}
+          </div>
+        )}
+      </Seccion>
+
+      <Seccion titulo="Trabajo pendiente y seguimiento" sub="Lo que falta hacer con los pacientes de la lista y lo que ya se registró.">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <Caja titulo="Gestión de los casos">
+            <div className="text-[14px] space-y-1">
+              <Fila t="Pendientes de revisión" v={tp.por_estado.pendiente_revision} c="text-ambar" />
+              <Fila t="Pendientes de contacto" v={tp.por_estado.pendiente_contacto} />
+              <Fila t="Pendientes de cita" v={tp.por_estado.pendiente_cita} />
+              <Fila t="Con cita reservada" v={tp.por_estado.cita_reservada} c="text-hlf" />
+              <Fila t="Sin responsable asignado" v={tp.sin_responsable} c={tp.sin_responsable ? "text-ambar" : ""} />
+              <Fila t="Seguimiento vencido" v={tp.seguimiento_vencido} c={tp.seguimiento_vencido ? "text-error" : ""} />
+            </div>
+          </Caja>
+          <Caja titulo="Revisión del especialista">
+            <div className="text-[14px] space-y-1">
+              <Fila t="Requieren revisión" v={k.alertas.revision_sugerida} c="text-ambar" />
+              <Fila t="Revisiones registradas" v={cc.revisiones} />
+              <Fila t="Ajustes manuales vigentes" v={k.ajustes_manuales.vigentes} />
+              <Fila t="Ajustes sin efecto por evento nuevo" v={k.ajustes_manuales.sin_efecto_por_evento} c={k.ajustes_manuales.sin_efecto_por_evento ? "text-ambar" : ""} />
+            </div>
+          </Caja>
+          <Caja titulo="Contacto con pacientes">
+            <div className="text-[14px] space-y-1">
+              <Fila t="Llamadas registradas" v={co.intentos} />
+              <Fila t="Con respuesta" v={co.pct == null ? "—" : `${co.efectivos} (${co.pct}%)`} />
+              <Fila t="Pacientes con reintentos" v={co.pacientes_con_reintentos} c={co.pacientes_con_reintentos ? "text-ambar" : ""} />
+            </div>
+          </Caja>
+          <Caja titulo="Egresos de la lista">
+            <div className="text-[14px] space-y-1">
+              <Fila t="Atendidos en consulta nueva" v={k.egresos.atendidos} c="text-hlf" />
+              <Fila t="Fallecimiento (causal 9)" v={k.egresos.fallecidos} />
+              <p className="text-[12px] text-on-surface-variant pt-1">Acumulado al {fmt(k.fecha_corte)}.</p>
+            </div>
+          </Caja>
+        </div>
+      </Seccion>
+
+      <details className="bg-surface-container-lowest border border-outline-variant rounded group">
+        <summary className="px-4 py-3 cursor-pointer text-[16px] font-semibold flex items-center gap-2">
+          <Icono n="expand_more" className="text-[20px] group-open:rotate-180 transition-transform" />Evolución de cada paciente ({pacientes.length})
+          <span className="text-[13px] font-normal text-on-surface-variant">· por qué está en su lugar y cómo se ha movido</span>
+        </summary>
+        <div className="px-4 pb-4">
+          <div className="flex justify-end mb-2"><input value={buscaEst} onChange={(x) => setBuscaEst(x.target.value)} placeholder="Buscar nombre, RUT o diagnóstico"
+            className="h-9 px-2 w-64 border border-outline-variant rounded text-[14px]" /></div>
+          <div className="border border-outline-variant rounded overflow-x-auto">
+            <table className="w-full text-left border-collapse text-[14px] min-w-[640px]">
+              <thead><tr className="bg-surface-container-low text-[13px] text-on-surface-variant border-b border-outline-variant">
+                <th className="py-2 px-3 font-semibold w-14">N°</th><th className="py-2 px-2 font-semibold">Prioridad</th><th className="py-2 px-3 font-semibold">Paciente / diagnóstico</th>
+                <th className="py-2 px-2 font-semibold text-right">Cambio (14 días)</th><th className="py-2 px-3 font-semibold text-right">Espera</th><th className="w-8" /></tr></thead>
+              <tbody>
+                {listaPac.slice(0, mostrar).map((p) => {
+                  const abierto = expandido === p.id_paciente;
+                  const dl = p.posicion_anterior ? p.posicion_anterior - p.posicion : 0;
+                  return (
+                    <Fragment key={p.id_paciente}>
+                      <tr onClick={() => setExpandido(abierto ? null : p.id_paciente)} tabIndex={0} onKeyDown={(x) => { if (x.key === "Enter") setExpandido(abierto ? null : p.id_paciente); }}
+                        className={`cursor-pointer border-b border-outline-variant/60 ${abierto ? "bg-primary/10" : "hover:bg-surface-container-low"}`}>
+                        <td className={`py-2 px-3 font-semibold ${p.riesgo_vital ? "border-l-4 border-l-error" : "border-l-4 border-l-transparent"}`}>{p.posicion}</td>
+                        <td className="py-2 px-2"><Prioridad cat={p.categoria} /></td>
+                        <td className="py-2 px-3"><div className="font-semibold">{p.nombre_fantasia}</div><div className="text-[13px] text-on-surface-variant">{p.especialidad} · {p.diagnostico_cie10} {p.diagnostico_texto}</div></td>
+                        <td className="py-2 px-2 text-right whitespace-nowrap">{dl > 0 ? <span className="text-error font-semibold">▲ {dl}</span> : dl < 0 ? <span className="text-on-surface-variant">▼ {-dl}</span> : <span className="text-on-surface-variant">—</span>}</td>
+                        <td className="py-2 px-3 text-right whitespace-nowrap">{p.dias_espera} días</td>
+                        <td className="py-2 px-2 text-on-surface-variant"><Icono n={abierto ? "expand_less" : "expand_more"} className="text-[20px]" /></td>
+                      </tr>
+                      {abierto && <tr><td colSpan={6} className="px-4 py-3 border-b border-outline-variant">
+                        <div className="flex justify-end"><button onClick={() => onVer(p.id_paciente)} className="text-[13px] text-primary font-semibold flex items-center gap-1"><Icono n="open_in_new" className="text-[16px]" />Ver ficha completa</button></div>
+                        <EvolucionPaciente p={p} fecha={fecha} />
+                      </td></tr>}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+            {listaPac.length === 0 && <p className="p-5 text-on-surface-variant text-[13px]">No hay pacientes con esa búsqueda.</p>}
+          </div>
+          <div className="flex items-center justify-between mt-2 text-[13px] text-on-surface-variant">
+            <span>Mostrando {Math.min(mostrar, listaPac.length)} de {listaPac.length} pacientes.</span>
+            {mostrar < listaPac.length && <button onClick={() => setMostrar(mostrar + POR_PAGINA_EST * 2)} className="text-primary font-semibold">Mostrar más</button>}
+          </div>
+        </div>
+      </details>
+
+      <p className="text-[12px] text-on-surface-variant">Indicadores de {alcance} al {fmt(k.fecha_corte)}, calculados en el servidor con el mismo motor de reglas de la lista
+        (Tabla SSMSO 2025 del HLF y MINSAL Ord. 536/2025). La herramienta propone y explica; el equipo clínico decide. Datos sintéticos de demostración.</p>
     </div>
   );
 }
@@ -1662,37 +1664,6 @@ function BoletaLace({ lace }) {
   );
 }
 
-// Camino de la decisión: cada paso con su fuente (sin puntos ni pesos).
-function Camino({ p, total }) {
-  const rz = Object.fromEntries(p.razones.map((r) => [r.factor, r]));
-  const subio = rz.tabla_oficial && rz.tabla_oficial.valor.startsWith('"') && !rz.tabla_oficial.valor.includes("no supera");
-  const pasos = [{ t: "Interconsulta", v: `Prioridad ${p.prioridad_inicial}`, f: "Especialista al priorizar la SIC", cat: p.prioridad_inicial }];
-  if (p.estado_clinico === "descompensado" && rz.evento) pasos.push({ t: "Evento posterior", v: rz.evento.valor, f: "Registro clínico", icon: "emergency" });
-  if (p.estado_clinico === "estabilizado" && rz.evento) pasos.push({ t: "Evolución", v: rz.evento.valor.split(":")[0], f: "Registro clínico", icon: "trending_down" });
-  if (subio) pasos.push({ t: "Tabla de priorización HLF", v: rz.tabla_oficial.valor.split("→")[0].replaceAll('"', "").trim(), f: rz.tabla_oficial.fuente.replace("Tabla SSMSO 2025, HLF, ", "SSMSO 2025, "), cat: p.categoria_sistema });
-  else if (rz.tabla_oficial) pasos.push({ t: "Tabla de priorización HLF", v: "Sin cambio de prioridad", f: "Revisión clínica sugerida", icon: "rate_review" });
-  if (p.categoria !== p.categoria_sistema) pasos.push({ t: "Decisión clínica", v: `Prioridad ${p.categoria}`, f: p.revision?.motivo, cat: p.categoria });
-  if (p.riesgo_vital) pasos.push(p.contactar_hoy ? { t: "Descompensación grave", v: p.evaluacion?.estado === "atrasada" ? "Evaluación atrasada" : "Evaluar ≤ 72 h", f: "Criterio médico MINSAL", icon: "call", rojo: true }
-    : { t: "Descompensación grave", v: "Evaluada", f: p.evaluacion?.cierre?.texto, icon: "task_alt", cat: "alta" });
-  if (p.ajuste_manual) pasos.push({ t: "Ajuste manual", v: `N° ${p.ajuste_manual.posicion} en ${p.ajuste_manual.especialidad}`, f: `${p.ajuste_manual.motivo_texto} · ${p.ajuste_manual.usuario}`, icon: "swap_vert" });
-  if (p.grupo_proteccion) pasos.push({ t: "Grupo de especial protección", v: p.grupo_proteccion, f: "MINSAL criterio 2", icon: "shield_person" });
-  pasos.push({ t: "Lugar en la lista", v: `N° ${p.posicion} de ${total}`, f: p.antiguedad_mayor_1_anio ? "Más de 1 año en espera" : `${p.dias_espera} días en espera`, final: true });
-  return (
-    <div className="flex flex-wrap items-stretch gap-1">
-      {pasos.map((s, i) => (
-        <div key={i} className="flex items-center gap-1">
-          <div className={`rounded border px-2.5 py-1.5 min-w-[96px] max-w-[160px] ${s.rojo ? "bg-error text-on-error border-error" : s.final ? "bg-primary text-on-primary border-primary" : "bg-surface-container-lowest border-outline-variant"}`}
-            style={s.cat && !s.rojo && !s.final ? { borderTop: `4px solid ${COLOR_HEX[s.cat]}` } : undefined}>
-            <div className={`text-[11px] ${s.rojo || s.final ? "opacity-90" : "text-on-surface-variant"}`}>{s.icon && <Icono n={s.icon} className="text-[14px] mr-0.5" />}{s.t}</div>
-            <div className="text-[14px] font-semibold leading-tight">{s.v}</div>
-            {s.f && <div className={`text-[11px] leading-tight mt-0.5 ${s.rojo || s.final ? "opacity-80" : "text-on-surface-variant"}`}>{s.f}</div>}
-          </div>
-          {i < pasos.length - 1 && <Icono n="arrow_forward" className="text-[18px] text-outline" />}
-        </div>
-      ))}
-    </div>
-  );
-}
 
 // Posición en la lista a lo largo del tiempo (N° 1 arriba). Una sola serie: sin leyenda; el color del punto es la prioridad.
 function GraficoPosicion({ h }) {

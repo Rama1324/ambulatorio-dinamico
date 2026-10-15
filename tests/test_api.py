@@ -549,6 +549,15 @@ def test_estadisticas_en_una_llamada():
     s, c = call("GET", "/estadisticas", {"fecha_corte": "2026-10-13", "especialidad": "Cardiología"})
     assert c["serie"][-1]["total"] < e["serie"][-1]["total"]
 
+def test_indicadores_por_especialidad_y_tramos():
+    _, k = call("GET", "/kpis", {"fecha_corte": "2026-10-13"})
+    assert sum(r["en_espera"] for r in k["por_especialidad"]) == k["total_hospital"]["en_espera"] == k["cobertura"]["en_espera"]
+    assert sum(t["pacientes"] for t in k["tramos_espera"]) == k["cobertura"]["en_espera"]
+    assert k["tramos_espera"][3]["pacientes"] + k["tramos_espera"][4]["pacientes"] == k["total_hospital"]["mas_de_1_anio"]
+    _, c = call("GET", "/kpis", {"fecha_corte": "2026-10-13", "especialidad": "Cardiología"})
+    card = next(r for r in k["por_especialidad"] if r["especialidad"] == "Cardiología")
+    assert c["especialidad"] == "Cardiología" and c["cobertura"]["en_espera"] == card["en_espera"]
+
 def test_health_informa_fecha_y_modo():
     s, h = call("GET", "/health")
     assert s == 200 and h["datos"] == "sinteticos" and h["modo"] in ("simulacion", "tiempo_real") and h["fecha_hoy"]

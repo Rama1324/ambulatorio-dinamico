@@ -169,7 +169,7 @@ y corre sin servidores propios en AWS (Lambda, API Gateway, DynamoDB, S3, Textra
 | `front/src/excel.js` | Genera .xlsx reales en el navegador, sin librerías |
 | `front/src/api.js` | Llamadas a la API (agrega `usuario` a cada POST) |
 | `contrato.md` | **Contrato de la API y del JSON. No cambiar campos sin avisar al equipo.** |
-| `tests/test_api.py` | 52 tests (estilo pytest) |
+| `tests/test_api.py` | 54 tests (estilo pytest) |
 | `scripts/deploy_aws.ps1` | Publica backend, datos y página |
 | `scripts/limpiar_demo.py` | Borra lo registrado desde la app (deja la demo en su estado inicial) |
 | `scripts/validar_priorizacion.py` | Validación con fallecidos y eventos graves |
@@ -213,7 +213,13 @@ y corre sin servidores propios en AWS (Lambda, API Gateway, DynamoDB, S3, Textra
   - *Historia:* gráfico de posición en la lista y línea de tiempo.
 - **Alertas pendientes:** descompensaciones graves para revisar la prioridad (nuevas vs. atrasadas), agrupadas por
   especialidad, y "Avisar al especialista". Selector de especialidad y exportación a Excel.
-- **Indicadores**, **Cargar datos** (Excel/CSV) y **Criterios** (fuentes con enlaces).
+- **Indicadores** (una sola especialidad elegida para toda la página, "Exportar todo a Excel"): metas del hospital (reevaluación
+  < 72 h, kappa ≥ 0,70, cobertura 100 %), situación de la lista hoy, resumen por especialidad (clic filtra), evolución de la
+  lista (gráficos aportados por Diego: composición por prioridad y descompensaciones graves con su propia escala), tiempos de
+  espera por tramo, por qué cambió la lista, mayores saltos, trabajo pendiente y evolución de cada paciente (plegada).
+- **Ficha del paciente → Resumen:** "Por qué está en el N° X y cómo se ha movido": gráfico de subidas y bajadas en la lista
+  y paso a paso con fuentes (prioridad inicial, eventos, tabla HLF, decisión del equipo, ajuste manual, GES, espera).
+- **Cargar datos** (Excel/CSV) y **Criterios** (fuentes con enlaces).
 - **Explorar fechas anteriores:** un control deslizante muestra la lista en fechas pasadas (cada 14 días, desde abril).
 - Arriba: campo **"Su nombre y cargo"** (queda en cada registro), botón de tema y franja fija con "Datos sintéticos" y las
   fechas (lista calculada al X · registro del hospital al 13-10 · último dato clínico 10-10).

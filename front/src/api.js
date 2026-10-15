@@ -93,7 +93,8 @@ export const postDecision = (id, body) => req("POST", `/pacientes/${id}/decision
 export const postCita = (id, body) => req("POST", `/pacientes/${id}/cita`, body);
 export const postOrden = (id, body) => req("POST", `/pacientes/${id}/orden`, body);
 export const postGestion = (id, body) => req("POST", `/pacientes/${id}/gestion`, body);
-export const getKpis = (fechaCorte) => req("GET", `/kpis?fecha_corte=${fechaCorte}`);
+export const getKpis = (fechaCorte, especialidad) =>
+  req("GET", `/kpis?${new URLSearchParams({ fecha_corte: fechaCorte, ...(especialidad ? { especialidad } : {}) })}`);
 export const postNovedad = (id, body) => req("POST", `/pacientes/${id}/novedad`, body);
 export const postImportar = (archivos, confirmar) => req("POST", "/importar", { archivos, confirmar });
 export const urlPlantilla = (tabla) => `${API_URL}/plantillas/${tabla}`;
