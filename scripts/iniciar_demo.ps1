@@ -1,8 +1,10 @@
 # Levanta la demo en local: API (localhost:3001) y front (localhost:5174), cada uno en su ventana.
 # Uso, desde la raíz del repo:
-#   powershell -ExecutionPolicy Bypass -File scripts\iniciar_demo.ps1              # sin IA (plantilla y palabras clave)
-#   powershell -ExecutionPolicy Bypass -File scripts\iniciar_demo.ps1 -ConBedrock  # con Bedrock (perfil AWS "hack")
-param([switch]$ConBedrock, [string]$Modelo = "us.anthropic.claude-sonnet-5", [string]$Perfil = "hack")
+#   powershell -ExecutionPolicy Bypass -File scripts\iniciar_demo.ps1          # sin AWS: informes escritos por reglas; fotos no
+#   powershell -ExecutionPolicy Bypass -File scripts\iniciar_demo.ps1 -ConAWS  # con AWS (perfil "hack"): fotos con Textract (OCR)
+#                                                                              # y Bedrock como respaldo y para el resumen
+param([Alias("ConBedrock")][switch]$ConAWS, [string]$Modelo = "us.anthropic.claude-sonnet-5", [string]$Perfil = "hack")
+$ConBedrock = $ConAWS
 
 $raiz = Split-Path -Parent $PSScriptRoot
 $ia = ""
@@ -19,4 +21,4 @@ Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$ra
 Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$raiz\front'; npm run dev -- --port 5174"
 Start-Sleep 6
 Start-Process "http://localhost:5174"
-Write-Host ("Demo iniciada " + ($(if ($ConBedrock) { "CON Bedrock ($Modelo)" } else { "sin Bedrock" })))
+Write-Host ("Demo iniciada " + ($(if ($ConBedrock) { "CON AWS: Textract (fotos) + Bedrock $Modelo (respaldo y resumen)" } else { "sin AWS" })))

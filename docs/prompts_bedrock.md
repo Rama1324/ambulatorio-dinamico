@@ -1,15 +1,23 @@
-# Prompts de Amazon Bedrock
+# Lectura de informes y uso de IA
 
-El LLM **nunca prioriza**: solo redacta, transcribe o extrae. La prioridad la calculan las reglas de `lambda/puntaje.py`.
-Los textos vigentes viven en el código; aquí se resumen para revisión clínica y para el pitch.
+Prioridad de diseño: **un error en el hospital puede ser crítico.** Por eso la lectura de informes es determinística y
+la IA generativa solo es un respaldo opcional, siempre validado y confirmado por una persona.
 
-| Uso | Archivo | Qué hace | Si Bedrock falla |
-|---|---|---|---|
-| Resumen para el equipo | `lambda/explicar.py` (`PROMPT_SISTEMA`) | Redacta en 3 frases las razones ya calculadas, con fuente | Plantilla fija |
-| Lectura de informe escrito | `lambda/informe.py` (`PROMPT`) | Extrae **un** evento con el vocabulario del registro y cita la frase del informe; ignora hallazgos negados | Reglas de palabras clave con negación (estilo NegEx) |
-| Foto de un informe | `lambda/informe.py` (`PROMPT_FOTO`) | Transcribe textual el documento; luego se aplica la lectura de informe | Aviso: "requiere Bedrock" |
+## Flujo (lambda/informe.py + lambda/modelos.py)
+| Paso | Herramienta | Tipo |
+|---|---|---|
+| 1. Foto → texto | **Amazon Textract** `DetectDocumentText` (OCR), con confianza por línea | Determinístico (no generativo) |
+| 2. Texto → eventos | **Reglas** de palabras clave + negación estilo NegEx; devuelve **todos** los eventos, del más grave al menos grave | Determinístico |
+| 3. Validación | **Pydantic** (`EventoPropuesto`): tipo/subtipo del registro, severidad coherente, frase de evidencia textual en el documento, fecha no futura | Determinístico |
+| 4. Respaldo opcional | **Amazon Bedrock** solo si las reglas no encuentran nada y hay `MODEL_ID`; pasa por la MISMA validación y se marca "sugerido por IA" | Generativo, acotado |
+| 5. Decisión | La enfermera elige el evento y confirma que el documento es del paciente | Humano |
 
-Salvaguardas:
-- La evidencia citada debe existir textualmente en el informe; si no, la extracción se descarta.
-- Solo se aceptan `tipo_evento` / `subtipo` del vocabulario del dataset.
-- Todo evento extraído lo confirma el equipo clínico antes de recalcular la lista.
+## Salvaguardas contra errores críticos
+- **Paciente equivocado:** si el documento menciona otro ID de paciente, se bloquea el registro; si no menciona al paciente, se advierte. Siempre hay que marcar "confirmo que el documento corresponde a …".
+- **Foto ilegible:** confianza media < 80 % → se pide repetir la foto y se bloquea el registro; líneas < 90 % se marcan.
+- **Fecha:** se toma de la línea del evento o de una línea "Fecha"; nunca de una línea de nacimiento/edad. Si no hay, se avisa.
+- **Negaciones:** "se descarta…", "no requiere…", "niega…" no generan eventos.
+- **Nada se guarda** hasta que la persona confirma; cada evento queda con quién y cuándo lo registró.
+
+## Resumen para el equipo (lambda/explicar.py)
+Plantilla fija por defecto. Si hay `MODEL_ID`, Bedrock redacta el mismo fundamento en lenguaje simple. No cambia la prioridad.

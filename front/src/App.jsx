@@ -1080,14 +1080,19 @@ function Informe({ p, fecha, cargando, onConfirmar, onAviso }) {
   const [res, setRes] = useState(null);
   const [leyendo, setLeyendo] = useState(false);
   const [camara, setCamara] = useState(false);
+  const [elegido, setElegido] = useState(0);
+  const [esDelPaciente, setEsDelPaciente] = useState(false);
   const analizar = async (body) => {
-    setLeyendo(true); setRes(null);
+    setLeyendo(true); setRes(null); setElegido(0); setEsDelPaciente(false);
     try { setRes(await api.postInforme(p.id_paciente, { ...body, fecha_corte: fecha })); }
     catch (e) { onAviso({ titulo: "No se pudo leer el informe: " + e.message }); }
     finally { setLeyendo(false); }
   };
   const foto = (b64) => { setCamara(false); analizar({ imagen_base64: b64, media_type: "image/jpeg" }); };
-  const ev = res?.evento;
+  const eventos = res?.eventos || [];
+  const ev = eventos[elegido];
+  const dudosas = new Set((res?.lectura?.lineas_dudosas || []).map((l) => l.texto));
+  const bloqueado = res?.otro_paciente || (res?.lectura && !res.lectura.legible);
   return (
     <Caja titulo="Registrar informe recibido">
       <p className="text-[13px] text-on-surface-variant mb-2">Epicrisis, DAU de urgencia o nota clínica. Se propone el evento y usted confirma antes de actualizar la lista.</p>
@@ -1099,20 +1104,56 @@ function Informe({ p, fecha, cargando, onConfirmar, onAviso }) {
       </div>
       {camara && <Camara onFoto={foto} onCerrar={() => setCamara(false)} />}
       {leyendo && <p className="mt-2 text-[13px] text-on-surface-variant flex items-center gap-1"><Icono n="hourglass_top" className="text-[16px] animate-spin" />Leyendo el documento…</p>}
+      {res?.advertencias?.length > 0 && (
+        <div className="mt-3 space-y-1">
+          {res.advertencias.map((a, i) => (
+            <div key={i} className={`rounded p-2 text-[13px] flex gap-1.5 ${res.otro_paciente && i === 0 ? "bg-error text-on-error font-semibold" : "bg-ambar-container text-ambar"}`}>
+              <Icono n="warning" className="text-[18px]" /><span>{a}</span></div>
+          ))}
+        </div>
+      )}
       {res && !ev && <p className="mt-2 text-[13px] text-on-surface-variant">{res.mensaje}</p>}
-      {res?.transcripcion && <details className="mt-2 text-[13px]"><summary className="cursor-pointer text-on-surface-variant">Texto leído del documento</summary><p className="whitespace-pre-wrap mt-1">{res.transcripcion}</p></details>}
+      {res?.transcripcion && (
+        <details className="mt-2 text-[13px]" open={dudosas.size > 0}>
+          <summary className="cursor-pointer text-on-surface-variant">
+            Texto leído del documento (Amazon Textract{res.lectura?.confianza_media != null && ` · confianza ${res.lectura.confianza_media}%`})
+          </summary>
+          <div className="mt-1 rounded border border-outline-variant p-2 font-mono text-[12px]">
+            {res.transcripcion.split("\n").map((l, i) => <div key={i} className={dudosas.has(l) ? "bg-ambar-container text-ambar" : ""} title={dudosas.has(l) ? "Leída con baja confianza: verifique" : ""}>{l}</div>)}
+          </div>
+        </details>
+      )}
+      {res?.descartados?.length > 0 && <p className="mt-1 text-[12px] text-on-surface-variant">Descartados por la validación: {res.descartados.map((d) => `${d.subtipo} (${d.motivo})`).join("; ")}</p>}
       {ev && (
         <div className="mt-3 border border-outline-variant rounded p-3 space-y-2 text-[14px]">
-          <div><span className="text-on-surface-variant">Evento:</span> <b>{TIPO_EVENTO[ev.tipo_evento]}</b> · {ev.subtipo} · {fmt(ev.fecha_evento)}</div>
+          {eventos.length > 1 && <p className="text-[13px] font-semibold">Se encontraron {eventos.length} eventos en el documento. Elija cuál registrar:</p>}
+          <div className="space-y-1">
+            {eventos.map((e, i) => (
+              <label key={i} className={`flex items-start gap-2 rounded p-1.5 cursor-pointer ${i === elegido ? "bg-primary/10" : "hover:bg-surface-container-low"}`}>
+                {eventos.length > 1 && <input type="radio" checked={i === elegido} onChange={() => setElegido(i)} className="mt-1" />}
+                <span>
+                  <b>{TIPO_EVENTO[e.tipo_evento]}</b> · {e.subtipo} · {fmt(e.fecha_evento)}
+                  {!e.fecha_en_documento && <span className="text-ambar text-[12px]"> (fecha no encontrada: verificar)</span>}
+                  {e.detectado_por === "bedrock" && <span className="ml-1 text-[11px] rounded bg-tertiary-fixed text-on-tertiary-fixed-variant px-1">sugerido por IA</span>}
+                </span>
+              </label>
+            ))}
+          </div>
           <blockquote className="border-l-4 border-ambar bg-ambar-container/40 px-2 py-1 italic">“{ev.evidencia}”</blockquote>
-          <div className="flex items-center gap-2"><span className="text-on-surface-variant">Prioridad:</span><Prioridad cat={res.categoria_actual} /><span>→</span><Prioridad cat={res.categoria_propuesta} /></div>
-          {res.razones_propuestas?.map((r, i) => <div key={i} className="text-[13px] text-on-surface-variant">{r.valor} · {r.fuente}</div>)}
+          <div className="flex items-center gap-2"><span className="text-on-surface-variant">Prioridad:</span><Prioridad cat={res.categoria_actual} /><span>→</span><Prioridad cat={ev.categoria_propuesta} /></div>
+          {ev.razones_propuestas?.map((r, i) => <div key={i} className="text-[13px] text-on-surface-variant">{r.valor} · {r.fuente}</div>)}
+          <label className={`flex items-start gap-2 rounded p-2 text-[13px] ${bloqueado ? "opacity-50" : "bg-surface-container-low"}`}>
+            <input type="checkbox" checked={esDelPaciente} disabled={bloqueado} onChange={(e) => setEsDelPaciente(e.target.checked)} className="mt-0.5" />
+            <span>Confirmo que el documento corresponde a <b>{p.nombre_fantasia}</b> ({p.id_paciente}) y que el evento está bien leído.</span>
+          </label>
           <div className="flex gap-2 pt-1">
-            <button disabled={cargando} onClick={async () => { await onConfirmar({ ...ev, detalle: `Informe: ${ev.evidencia}` }); setRes(null); setTexto(""); }}
-              className="flex-1 py-2 rounded bg-primary text-on-primary font-semibold disabled:opacity-50">Confirmar y actualizar lista</button>
+            <button disabled={cargando || !esDelPaciente || bloqueado} onClick={async () => { await onConfirmar({ ...ev, detalle: `Informe: ${ev.evidencia}` }); setRes(null); setTexto(""); }}
+              className="flex-1 py-2 rounded bg-primary text-on-primary font-semibold disabled:opacity-40">Confirmar y actualizar lista</button>
             <button onClick={() => setRes(null)} className="flex-1 py-2 rounded border border-outline-variant font-semibold">Descartar</button>
           </div>
-          <p className="text-[12px] text-on-surface-variant">Lectura {res.fuente === "bedrock" ? "automática (Amazon Bedrock)" : "por palabras clave"}; verifique antes de confirmar.</p>
+          <p className="text-[12px] text-on-surface-variant">
+            {res.transcripcion ? "Leído con Amazon Textract (OCR). " : ""}Evento detectado por {ev.detectado_por === "bedrock" ? "IA (respaldo)" : "reglas"} y validado (Pydantic): tipo y severidad del registro, frase presente en el documento, fecha no futura.
+          </p>
         </div>
       )}
     </Caja>

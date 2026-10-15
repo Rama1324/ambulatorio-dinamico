@@ -15,6 +15,7 @@ Modo AWS:   BUCKET, PERFILES_KEY, BOX_KEY, TABLE (DynamoDB pk=id_paciente, sk=te
 import copy
 import json
 import os
+import re
 import time
 import uuid
 from datetime import date, datetime, timedelta, timezone
@@ -23,6 +24,7 @@ import puntaje
 import explicar
 import importar
 import informe
+from modelos import Lectura, normalizar
 
 LOCAL = os.environ.get("LOCAL") == "1"
 # Fecha de referencia del dataset (2026-10-13). En la clínica: FECHA_REFERENCIA=hoy → se usa la fecha del día.
@@ -493,35 +495,59 @@ def kpis(corte):
 
 
 def post_informe(pid, body):
-    """Lee un informe en texto libre y PROPONE un evento. No guarda nada: el equipo clínico confirma con POST /eventos."""
+    """Lee un informe (texto o foto con Amazon Textract), PROPONE eventos validados con Pydantic y no guarda nada:
+    el equipo clínico elige y confirma con POST /eventos."""
     perfs, _ = perfiles_combinados()
     if pid not in perfs:
         return 404, {"error": "paciente no existe"}
-    texto = (body.get("texto") or "").strip()
-    transcripcion = None
-    if not texto and body.get("imagen_base64"):  # foto de un informe en papel
-        texto, motivo = informe.transcribir_foto(body["imagen_base64"], body.get("media_type", "image/jpeg"))
-        if not texto:
-            return 200, {"id_paciente": pid, "evento": None, "fuente": None, "mensaje": motivo}
-        transcripcion = texto
-    if not texto:
-        return 400, {"error": "falta 'texto' o 'imagen_base64' del informe"}
     corte = date.fromisoformat(body.get("fecha_corte") or FECHA_REFERENCIA.isoformat())
-    ev, fuente = informe.extraer(texto)
-    if not ev:
-        return 200, {"id_paciente": pid, "evento": None, "fuente": fuente, "transcripcion": transcripcion,
-                     "mensaje": "No encontré en el informe un evento del registro (urgencia, hospitalización, examen alterado, "
-                                "cambio de fármaco o control APS). Puedes registrarlo manualmente."}
-    if not ev.get("fecha_evento") or ev["fecha_evento"] > corte.isoformat():
-        ev["fecha_evento"] = corte.isoformat()
+    texto = (body.get("texto") or "").strip()
+    try:
+        if texto:
+            lectura = Lectura(origen="texto", texto=texto)
+        elif body.get("imagen_base64"):
+            lectura = informe.leer_foto(body["imagen_base64"])
+        else:
+            return 400, {"error": "falta 'texto' o 'imagen_base64' del informe"}
+    except Exception as e:
+        print(f"Textract no pudo leer la foto: {e}")
+        return 200, {"id_paciente": pid, "eventos": [], "evento": None,
+                     "mensaje": "No se pudo leer la foto con Amazon Textract (OCR). Verifique la conexión a AWS o "
+                                "escriba el texto del informe."}
+    eventos, descartados, avisos = informe.analizar(lectura, corte)
+
+    # Identidad: el error más grave sería registrar el evento en otro paciente
+    pac = perfs[pid]["paciente"]
+    doc = normalizar(lectura.texto)
+    menciona = normalizar(pac["nombre_fantasia"]) in doc or normalizar(pid) in doc
+    otros = sorted({o for o in re.findall(r"pac-[a-z]+-\d{3,}", doc) if o != normalizar(pid)})
+    if otros:
+        avisos.insert(0, f"¡Atención! El documento menciona a otro paciente ({', '.join(o.upper() for o in otros)}). No lo registre aquí.")
+    elif lectura.origen == "foto" and not menciona:
+        avisos.insert(0, f"El documento no menciona a {pac['nombre_fantasia']} ni su ID: confirme que corresponde a este paciente.")
+
     antes = puntaje.puntuar(perfs[pid], corte)
-    sim = copy.deepcopy(perfs[pid])
-    sim.setdefault("eventos_clinicos", []).append({**ev, "id_evento": "EV-PREVIEW", "detalle": ev["evidencia"]})
-    despues = puntaje.puntuar(sim, corte)
-    return 200, {"id_paciente": pid, "evento": ev, "fuente": fuente, "transcripcion": transcripcion,
-                 "categoria_actual": antes and antes.get("categoria"),
-                 "categoria_propuesta": despues and despues.get("categoria"),
-                 "razones_propuestas": despues and [r for r in despues["razones"] if r["factor"] == "tabla_oficial"]}
+    propuestas = []
+    for ev in eventos:
+        e = ev.model_dump(mode="json")
+        e["fecha_evento"] = e["fecha_evento"] or corte.isoformat()
+        sim = copy.deepcopy(perfs[pid])
+        sim.setdefault("eventos_clinicos", []).append({**e, "id_evento": "EV-PREVIEW", "detalle": e["evidencia"]})
+        despues = puntaje.puntuar(sim, corte)
+        propuestas.append({**e, "categoria_propuesta": despues and despues.get("categoria"),
+                           "razones_propuestas": despues and [r for r in despues["razones"] if r["factor"] == "tabla_oficial"]})
+    out = {"id_paciente": pid, "lectura": lectura.resumen(), "transcripcion": lectura.texto if lectura.origen == "foto" else None,
+           "eventos": propuestas, "evento": propuestas[0] if propuestas else None, "descartados": descartados,
+           "advertencias": avisos, "identidad_en_documento": menciona, "otro_paciente": bool(otros),
+           "categoria_actual": antes and antes.get("categoria"),
+           "fuente": propuestas[0]["detectado_por"] if propuestas else "reglas"}
+    if propuestas:
+        out["categoria_propuesta"] = propuestas[0]["categoria_propuesta"]
+        out["razones_propuestas"] = propuestas[0]["razones_propuestas"]
+    else:
+        out["mensaje"] = ("No encontré en el informe un evento del registro (urgencia, hospitalización, examen alterado, "
+                          "cambio de fármaco o control APS). Puede registrarlo manualmente.")
+    return 200, out
 
 
 def post_explicar(pid, corte):

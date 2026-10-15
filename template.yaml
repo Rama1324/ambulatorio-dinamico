@@ -82,6 +82,7 @@ Resources:
               Action:
                 - bedrock:InvokeModel
                 - bedrock:InvokeModelWithResponseStream
+                - textract:DetectDocumentText
               Resource: "*"
       Events:
         Todo:

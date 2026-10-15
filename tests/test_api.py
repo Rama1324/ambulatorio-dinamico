@@ -91,9 +91,54 @@ def test_informe_sin_evento():
     s, d = call("POST", "/pacientes/PAC-HLF-00003/informe", body={"texto": "Paciente refiere cefalea leve."})
     assert s == 200 and d["evento"] is None and d["mensaje"]
 
-def test_foto_sin_bedrock_avisa():
+LEER_FOTO_REAL = app.informe.leer_foto
+
+def test_foto_sin_aws_avisa():
+    app.informe.leer_foto = LEER_FOTO_REAL   # Textract real: sin credenciales AWS en las pruebas debe avisar, no caerse
     s, d = call("POST", "/pacientes/PAC-HLF-00003/informe", body={"imagen_base64": "aGVsbG8=", "media_type": "image/png"})
-    assert s == 200 and d["evento"] is None and "Bedrock" in d["mensaje"]
+    assert s == 200 and d["evento"] is None and "Textract" in d["mensaje"]
+
+def _foto_simulada(texto, confianza=99.0):
+    """Reemplaza Textract por un OCR simulado (las pruebas no usan AWS)."""
+    from modelos import Lectura, LineaLeida
+    lineas = [LineaLeida(texto=l, confianza=confianza) for l in texto.splitlines() if l.strip()]
+    app.informe.leer_foto = lambda b64: Lectura(origen="foto", motor="textract", texto=texto, lineas=lineas)
+
+def test_foto_varios_eventos_y_fecha_correcta():
+    _foto_simulada("DAU Urgencia - Paciente PAC-HLF-00003\nFecha de nacimiento: 01/02/1960\nFecha: 11/10/2026\n"
+                   "Categorizacion: ESI 2.\nSe descarta sindrome coronario.\nSe hospitaliza en medicina por disnea.")
+    s, d = call("POST", "/pacientes/PAC-HLF-00003/informe", body={"imagen_base64": "x", "fecha_corte": "2026-10-13"})
+    subt = [e["subtipo"] for e in d["eventos"]]
+    assert subt[0] == "ingreso hospitalario" and "triage ESI 2" in subt          # muestra todos, el más grave primero
+    assert all(e["fecha_evento"] == "2026-10-11" for e in d["eventos"])           # no toma la fecha de nacimiento
+    assert d["identidad_en_documento"] and not d["otro_paciente"] and d["lectura"]["motor"] == "textract"
+
+def test_foto_de_otro_paciente_alerta():
+    _foto_simulada("Paciente PAC-HLF-00444\nSe hospitaliza por neumonia.")
+    s, d = call("POST", "/pacientes/PAC-HLF-00003/informe", body={"imagen_base64": "x"})
+    assert d["otro_paciente"] and "otro paciente" in d["advertencias"][0]
+
+def test_foto_poco_legible_pide_repetir():
+    _foto_simulada("Se hospitaliza en medicina.", confianza=55.0)
+    s, d = call("POST", "/pacientes/PAC-HLF-00003/informe", body={"imagen_base64": "x"})
+    assert not d["lectura"]["legible"] and any("repita la foto" in a for a in d["advertencias"])
+
+def test_pydantic_rechaza_evento_invalido():
+    from datetime import date as _d
+    from pydantic import ValidationError
+    from modelos import EventoPropuesto
+    base = {"tipo_evento": "hospitalizacion", "subtipo": "ingreso hospitalario", "severidad": "grave",
+            "evidencia": "Se hospitaliza en medicina", "detectado_por": "reglas"}
+    EventoPropuesto.model_validate(base, context={"texto": "Hoy. Se hospitaliza en medicina.", "corte": _d(2026, 10, 13)})
+    for malo, ctx in [({**base, "subtipo": "cirugía"}, {}),                                   # subtipo fuera del registro
+                      ({**base, "severidad": "leve"}, {}),                                    # severidad incoherente
+                      (base, {"texto": "Paciente estable, control en APS."}),                 # evidencia no está en el documento
+                      ({**base, "fecha_evento": "2026-12-01"}, {"corte": _d(2026, 10, 13)})]:  # fecha futura
+        try:
+            EventoPropuesto.model_validate(malo, context=ctx)
+            assert False, f"debió rechazar {malo}"
+        except ValidationError:
+            pass
 
 def test_revision():
     s, _ = call("POST", "/pacientes/PAC-HLF-00001/revision", body={"accion": "confirmar"})
