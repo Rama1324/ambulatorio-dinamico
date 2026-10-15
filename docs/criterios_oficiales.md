@@ -111,13 +111,21 @@ Código: `lambda/criticidad.py`; se aplica en `app.lista()` sin tocar `puntaje.p
   vs 16 % base (3,4 veces). **No anticipa bien los eventos graves agudos** (7 % vs 4,5 %): esos llegan sin aviso y los
   cubren la tabla HLF y el riesgo vital. Debe recalibrarse con datos reales.
 
-## 9. Chat de seguimiento del paciente (autoreporte)
-El paciente responde un flujo guiado (vigencia, cómo se siente, urgencias, fármacos, una medición según la especialidad:
-PHQ-2/PHQ-9, dolor EVA, presión, glicemia o saturación; actividades diarias y asistencia). Todo queda **por validar**:
-- Solo se aceptan eventos y mediciones del vocabulario del registro; el texto libre se lee con las mismas palabras clave y
-  negación que los informes (`informe.por_reglas`).
-- **Bandera roja** (PHQ-9 ítem 9 > 0, dolor de pecho o falta de aire en reposo): el chat muestra SAMU 131, Salud Responde
-  600 360 7777 y *4141, y el paciente pasa a "contactar hoy" (se apaga al registrar el contacto). No cambia la categoría.
-- Al **validar**, los eventos y mediciones entran como registros con `fuente: "autoreporte"` y se aplican las reglas
-  oficiales (tabla HLF, LACE). Al **descartar**, no entran. Un reporte nuevo reemplaza al anterior pendiente sin perder datos.
-- La asistencia y el horario preferido sirven para gestionar box; no cambian la prioridad.
+## 9. Box del día (operación con la agenda real)
+- **Fecha de operación:** un día hábil con agenda (`GET /dias`, 131 días del 14-04 al 13-10-2026). Lista, ficha y box se
+  calculan con los registros de fecha ≤ ese día.
+- **Cupos libres reales** de cada box = capacidad − cupos usados en `agenda_box` − citas activas asignadas desde la lista.
+- Los cupos libres se sugieren a los siguientes de la lista de su especialidad (mismo orden MINSAL; el riesgo vital va primero).
+  Cada sugerencia trae su motivo y la alternativa explica por qué va después.
+- Resultado de la cita: **asistió** → sale de la lista desde esa fecha (la SIC se resolvió); **no asistió** y **canceló** →
+  el cupo se libera y se sugiere al siguiente; la inasistencia se suma a `citaciones` y alimenta la causal 8, **sin bajar
+  la prioridad**.
+- La agenda manda: 118 de las 257 citas históricas no tienen bloque en la agenda ese día y 121 están en un box de otra
+  especialidad; esas citas solo se usan para la causal 8 y para la atención.
+
+## 10. Validación con el registro (`scripts/validar_priorizacion.py`)
+- **Fallecidos** (15): 7 días antes de morir estaban en la mediana del **5 %** superior de la lista con estas reglas
+  (8 de 15 en el 10 % superior) vs **47 %** en la lista estática (prioridad inicial + orden de llegada).
+- **Eventos graves en los 60 días siguientes** (119, cortes mensuales): mediana 35 % vs 41 % en la estática. Los eventos
+  agudos llegan sin aviso; la lista los recoge en cuanto se registran (reevaluación inmediata).
+- Usar la criticidad como desempate no mejoró estos resultados: por eso queda como señal de revisión y no como orden.

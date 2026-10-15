@@ -15,7 +15,7 @@ ambulatorio/
 Terminal 1 (raíz del proyecto):
 ```powershell
 python scripts/generar_box.py data          # crea data/box.json (una vez)
-pip install pytest; python -m pytest -q tests   # deben pasar 33 tests
+pip install pytest; python -m pytest -q tests   # deben pasar 35 tests
 $env:LOCAL="1"; $env:DATA_DIR="data"; python lambda/local_server.py
 ```
 Terminal 2:

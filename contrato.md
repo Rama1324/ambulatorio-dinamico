@@ -42,11 +42,11 @@ Fecha de referencia del dataset: 2026-10-13. Todo cálculo usa una `fecha_corte`
 - `ges`: `null` o `{"problema": 34, "nombre": "Depresión", "plazo_dias": 30, "vencida": true}`.
 - `razones[].factor`: `prioridad_inicial | evento | tabla_oficial | dias_espera | ges | medicion`. Cada razón trae su `fuente`.
 - `estado_revision`: `pendiente | confirmado | ajustado`.
-- Campos de la capa dinámica (no cambian el orden; ver `docs/criterios_oficiales.md` §8–9):
+- Campos de la capa dinámica (no cambian el orden; ver `docs/criterios_oficiales.md` §8–10):
   `criticidad` (0–100), `senal_temprana` (bool, agrega "mediciones empeorando" a `revision_sugerida`),
   `criticidad_detalle` (`eventos`, `mediciones`, `mejora`, `tendencia`, `fuera_de_rango_90d`),
-  `autoreporte` (último reporte del chat por validar o `null`) y `alerta_chat` (bandera roja del chat → `contactar_hoy`).
-  `razones[].factor` suma `criticidad` y `autoreporte`.
+  `cita` (cupo de box asignado y aún sin resultado: `{id_cita, id_box, fecha, estado, pendiente_resultado}` o `null`).
+  `razones[].factor` suma `criticidad`. `posicion_anterior` = posición el día hábil anterior.
 
 ## Endpoints
 | Método | Ruta | Qué hace |
@@ -66,8 +66,9 @@ Fecha de referencia del dataset: 2026-10-13. Todo cálculo usa una `fecha_corte`
 | POST | `/pacientes/{id}/revision` | `{"accion":"confirmar"}` o `{"accion":"ajustar","categoria_ajustada":"alta|media|baja","motivo":"..."}` |
 | POST | `/pacientes/{id}/explicar` | Bedrock redacta `explicacion_ia` desde `razones` |
 | GET | `/boxes?fecha_corte=AAAA-MM-DD` | Ocupación de box por especialidad + pacientes sugeridos para cupos libres |
-| POST | `/pacientes/{id}/autoreporte` | Chat del paciente: `eventos[]`, `mediciones[]`, `bandera_roja` (`ideacion_suicida` · `dolor_pecho` · `disnea_reposo`), `texto_libre`, `tendencia_autoreporte`, `limitacion_funcional`, `egreso_propuesto`, `confirma_asistencia`, `preferencia_horario`, `resumen[]`. Queda **por validar**; no cambia la prioridad |
-| POST | `/pacientes/{id}/autoreporte/validar` | `{"accion":"validar"\|"descartar"}`: al validar, sus eventos y mediciones entran al cálculo con `fuente: "autoreporte"`. Responde como `POST /eventos` (`posicion_antes`, `posicion_despues`, `paciente`) |
+| GET | `/dias` | Días hábiles con agenda de box (fecha de operación): `{dias:[…], referencia}` |
+| POST | `/boxes/asignar` | `{fecha, id_box, id_paciente?}`: asigna un cupo libre real del box ese día; sin `id_paciente` toma al siguiente de la lista. 400 si el box no tiene agenda o es de otra especialidad; 409 sin cupo o si el paciente ya tiene cita. Devuelve `{cita, boxes}` |
+| POST | `/citas/{id_cita}/estado` | `{estado}`: `confirmado` · `asistio` (sale de la lista desde esa fecha) · `no_asistio` · `cancelo` (liberan el cupo; la inasistencia alimenta la causal 8). Devuelve `{cita, texto, paciente, boxes}` |
 | GET | `/health` | `{ok, pacientes}` para verificar el deploy |
 
 ## Respuesta POST /pacientes/{id}/informe

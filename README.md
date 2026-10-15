@@ -24,10 +24,11 @@ ambulatorio-dinamico/
 │   ├── importar.py        Excel/CSV → formato del sistema (sin librerías)
 │   └── local_server.py    corre la API en localhost:3001 sin AWS
 ├── front/                 React + Vite + Tailwind, responsive (barra inferior en móvil, tema claro/oscuro)
-│   └── src/               App.jsx (navegación) · pantallas/ (Hoy, Chat, Lista, Ficha, Cargar datos, Indicadores,
-│                          Criterios) · components/ · lib/ (chatFlujo.js, constantes) · styles/tokens.css · api.js · mock.json
-├── tests/test_api.py      33 pruebas de punta a punta
-├── scripts/               generar_box.py (agenda de box) · generar_mock.py (datos de demo del front)
+│   └── src/               App.jsx (navegación y día de operación) · pantallas/ (Hoy = Box del día, Lista, Ficha,
+│                          NuevoPaciente) · components/ · lib/ · styles/tokens.css · api.js · mock.json
+├── tests/test_api.py      35 pruebas de punta a punta
+├── scripts/               generar_box.py (agenda de box) · generar_mock.py (demo sin API) · validar_priorizacion.py
+│                          (backtest con el registro) · desplegar_lab.sh (AWS Academy)
 ├── docs/                  criterios_oficiales.md (todas las fuentes) · arquitectura.md · prompts_bedrock.md
 ├── data/                  perfiles.json, box.json y CSV (NO van a git)
 ├── template.yaml          infraestructura AWS (SAM): Lambda, API Gateway, S3, DynamoDB, permisos Bedrock
