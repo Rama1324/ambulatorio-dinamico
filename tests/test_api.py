@@ -283,36 +283,53 @@ def test_criticidad_senal_temprana():
     assert not q["senal_temprana"] and 0 <= q["criticidad"] <= 100
     assert any(r["factor"] == "criticidad" and "PHQ-9" in r["valor"] for r in p["razones"])
 
-def test_chat_autoreporte_por_validar_y_validar():
-    """El chat propone; la lista cambia recién cuando el equipo valida (los eventos entran a las reglas oficiales)."""
-    pid = "PAC-HLF-00028"
-    _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
-    antes = fila(d, pid)
-    s, r = call("POST", f"/pacientes/{pid}/autoreporte", body={
-        "fecha_corte": "2026-10-13", "tendencia_autoreporte": 1,
-        "eventos": [{"tipo_evento": "hospitalizacion", "subtipo": "ingreso hospitalario", "fecha_evento": "2026-10-10"}],
-        "mediciones": [{"tipo_medicion": "PHQ9", "valor": 15, "unidad": "pts"}]})
-    assert s == 200 and r["autoreporte"]["estado"] == "por_validar" and r["autoreporte"]["mediciones"][0]["fuera_de_rango"]
-    assert r["paciente"]["autoreporte"] and r["paciente"]["categoria"] == antes["categoria"]   # aún no cambia
-    s, v = call("POST", f"/pacientes/{pid}/autoreporte/validar", body={"fecha_corte": "2026-10-13"})
-    assert s == 200 and v["posicion_despues"] < v["posicion_antes"] and v["paciente"]["estado_clinico"] == "descompensado"
-    assert not v["paciente"]["autoreporte"]
-    _, det = call("GET", f"/pacientes/{pid}", {"fecha_corte": "2026-10-13"})
-    assert any(e.get("fuente") == "autoreporte" for e in det["eventos_clinicos"])
-    assert any(m.get("fuente") == "autoreporte" for m in det["mediciones"])
+# ---------- box del día: disponibilidad real ----------
+def _box(d, id_box):
+    return next(a for e in d["especialidades"] for a in e["asignaciones"] if a["id_box"] == id_box)
 
-def test_chat_bandera_roja_contactar_hoy_y_vocabulario():
-    pid = "PAC-HLF-00020"
-    s, r = call("POST", f"/pacientes/{pid}/autoreporte", body={"fecha_corte": "2026-10-13", "bandera_roja": "dolor_pecho"})
-    assert s == 200 and r["paciente"]["contactar_hoy"] and r["paciente"]["alerta_chat"]
-    assert r["paciente"]["razones"][0]["factor"] == "autoreporte"
-    s, r = call("POST", f"/pacientes/{pid}/contacto", body={"resultado": "citado", "fecha_corte": "2026-10-13"})
-    assert not r["paciente"]["contactar_hoy"]
-    s, _ = call("POST", f"/pacientes/{pid}/autoreporte", body={"eventos": [{"tipo_evento": "visita_urgencia", "subtipo": "me siento mal"}]})
-    assert s == 400
-    s, r = call("POST", f"/pacientes/{pid}/autoreporte", body={"fecha_corte": "2026-10-13", "texto_libre": "No me hospitalizaron, pero fui a urgencia por descompensación"})
-    assert s == 200 and [e["tipo_evento"] for e in r["autoreporte"]["eventos"]] == ["visita_urgencia"]
-    assert r["autoreporte"]["bandera_roja"]   # el reporte nuevo conserva la bandera del anterior pendiente
-    call("POST", f"/pacientes/{pid}/autoreporte/validar", body={"accion": "descartar", "fecha_corte": "2026-10-13"})
+def test_dias_de_operacion():
+    s, d = call("GET", "/dias")
+    assert s == 200 and d["dias"][-1] == "2026-10-13" and len(d["dias"]) == 131 and d["dias"] == sorted(d["dias"])
+
+def test_box_asignar_y_liberar():
+    """Asignar ocupa un cupo; 'no asistió' lo libera, suma la inasistencia (causal 8) y NO baja la prioridad."""
+    dia = "2026-10-12"
+    _, b = call("GET", "/boxes", {"fecha_corte": dia})
+    bx = next(a for e in b["especialidades"] for a in e["asignaciones"] if a["libres"] > 0 and a["pacientes"])
+    libres, sugerido = bx["libres"], bx["pacientes"][0]["id_paciente"]
+    s, r = call("POST", "/boxes/asignar", body={"fecha": dia, "id_box": bx["id_box"]})
+    assert s == 200 and r["cita"]["id_paciente"] == sugerido and _box(r["boxes"], bx["id_box"])["libres"] == libres - 1
+    _, d = call("GET", "/pacientes", {"fecha_corte": dia})
+    p = fila(d, sugerido)
+    assert p["cita"]["id_box"] == bx["id_box"]
+    s, _ = call("POST", "/boxes/asignar", body={"fecha": dia, "id_box": bx["id_box"], "id_paciente": sugerido})
+    assert s == 409                                  # ya tiene cita
+    s, r = call("POST", f'/citas/{r["cita"]["id_cita"]}/estado', body={"estado": "no_asistio"})
+    assert s == 200 and _box(r["boxes"], bx["id_box"])["libres"] == libres          # cupo liberado
+    assert r["paciente"]["categoria"] == p["categoria"] and not r["paciente"]["cita"]
+    _, det = call("GET", f"/pacientes/{sugerido}", {"fecha_corte": dia})
+    assert any(c.get("fuente") == "box del día" and c["estado_cita"] == "no_asistio" for c in det["citaciones"])
+    s, _ = call("POST", f'/citas/{r["cita"]["id_cita"]}/estado', body={"estado": "asistio"})
+    assert s == 409                                  # cerrada
+
+def test_box_asistio_sale_de_la_lista_desde_esa_fecha():
+    dia = "2026-10-09"
+    _, b = call("GET", "/boxes", {"fecha_corte": dia})
+    bx = next(a for e in b["especialidades"] for a in e["asignaciones"] if a["libres"] > 0 and a["pacientes"])
+    _, r = call("POST", "/boxes/asignar", body={"fecha": dia, "id_box": bx["id_box"]})
+    pid = r["cita"]["id_paciente"]
+    s, r = call("POST", f'/citas/{r["cita"]["id_cita"]}/estado', body={"estado": "asistio"})
+    assert s == 200 and r["paciente"] is None
+    _, d = call("GET", "/pacientes", {"fecha_corte": dia})
+    assert any(e["id_paciente"] == pid and e["motivo"] == "atendido" for e in d["excluidos"])
+    _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-08"})       # el día anterior seguía en espera
+    assert pid in [p["id_paciente"] for p in d["pacientes"]]
+
+def test_box_validaciones():
     _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
-    assert not fila(d, pid)["autoreporte"]     # descartado: no reaparece el reporte reemplazado
+    cardio = next(p for p in d["pacientes"] if p["especialidad"] == "Cardiología" and not p.get("cita"))
+    s, _ = call("POST", "/boxes/asignar", body={"fecha": "2026-10-13", "id_box": "BOX-04", "id_paciente": cardio["id_paciente"]})
+    assert s == 400                                  # BOX-04 es de Salud Mental
+    s, _ = call("POST", "/boxes/asignar", body={"fecha": "2026-10-13", "id_box": "BOX-09"})
+    assert s == 400                                  # sin agenda ese día
+
