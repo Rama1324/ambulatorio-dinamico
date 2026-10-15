@@ -38,6 +38,16 @@ def _mayor(a, b):
     return a if ORDEN_CAT[a] >= ORDEN_CAT[b] else b
 
 
+def _severidad(perfil, cita):
+    """Severidad registrada del evento citado (se busca en el registro; la cita ya fue validada)."""
+    if not cita:
+        return None
+    for e in perfil.get("eventos_clinicos", []):
+        if e["fecha_evento"] == cita.fecha and e["tipo_evento"] == cita.tipo:
+            return e.get("severidad")
+    return None
+
+
 def decidir(perfil, resp, corte, kb):
     """perfil: dict del paciente · resp: RespuestaRubrica · corte: date · kb: rubrica_v1.
     Devuelve {categoria, descompensacion_grave, estado_clinico, razones[], revision[]} (revision = motivos no bloqueantes
@@ -81,7 +91,9 @@ def decidir(perfil, resp, corte, kb):
                                     "fuente": v["fuente"]})
                 if fila:
                     categoria = _mayor(base, fila["prioridad"])
-                    grave = fila["prioridad"] == "alta"
+                    # la gravedad la decide el código con el registro citado (no el LLM): severidad 'grave' en el historial
+                    sev = _severidad(perfil, cita_ult)
+                    grave = fila["prioridad"] == "alta" and sev == "grave"
                     nota = " (no supera la actual)" if categoria == base and ORDEN_CAT[fila["prioridad"]] <= ORDEN_CAT[base] else ""
                     eq = dx.get("equivalencia")
                     razones.append({"factor": "tabla_oficial", "valor": f'"{fila["texto_pdf"].capitalize()}" → prioridad {fila["prioridad"]}{nota}' +

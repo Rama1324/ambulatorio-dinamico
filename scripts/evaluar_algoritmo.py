@@ -137,7 +137,7 @@ def main():
     t0 = time.perf_counter()
 
     def eval_ef(p):
-        return algoritmo.evaluar_paciente(p, corte, ClienteCache(real, "EF", p["id_paciente"]), kb, args.corridas)
+        return algoritmo.evaluar_paciente(p, corte, ClienteCache(real, f"EF-{rubrica.VERSION_RUBRICA}", p["id_paciente"]), kb, args.corridas)
 
     def eval_e0(p):
         cli = ClienteCache(real, "E0", p["id_paciente"])

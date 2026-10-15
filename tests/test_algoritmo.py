@@ -47,6 +47,19 @@ def test_00002_sube_a_alta_por_angina_inestable():
     assert all(r.get("fuente") for r in reg["razones"])
 
 
+def test_descompensacion_moderada_sube_a_la_fila_pero_no_es_grave():
+    """Como las reglas: una urgencia por 'descompensación' moderada sube a la fila de la tabla; la gravedad la decide el
+    código mirando la severidad registrada del evento citado, no el LLM."""
+    p = next(x for x in app.perfiles().values() if x["lista_espera"]["diagnostico_cie10"] == "I50" and x["lista_espera"]["prioridad_inicial"] != "alta"
+             and any(e["subtipo"] == "descompensación" and e["severidad"] == "moderada" and e["fecha_evento"] >= x["lista_espera"]["fecha_ingreso_lista"]
+                     for e in x.get("eventos_clinicos", [])))
+    e = next(e for e in p["eventos_clinicos"] if e["subtipo"] == "descompensación" and e["severidad"] == "moderada"
+             and e["fecha_evento"] >= p["lista_espera"]["fecha_ingreso_lista"])
+    fc = date.fromisoformat(e["fecha_evento"])
+    r = decisor.decidir(p, resp(evento="si", citas_ev=[{"fecha": e["fecha_evento"], "tipo": e["tipo_evento"], "valor": e["subtipo"]}]), fc, KB)
+    assert r["categoria"] == "alta" and not r["descompensacion_grave"]
+
+
 def test_00028_no_baja_solo():
     p = perfil("PAC-HLF-00028")
     reg = algoritmo.evaluar_paciente(p, CORTE, oraculo(p))

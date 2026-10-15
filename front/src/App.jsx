@@ -786,6 +786,17 @@ function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso, onDes
       </> : <Caja><p className="text-on-surface-variant text-[13px]">Gestionar pacientes requiere conexión al servidor.</p></Caja>)}
 
       {tab === "puntaje" && <>
+      {p.algoritmo && <Caja titulo="Cómo se calculó esta prioridad">
+        {p.algoritmo === "rubrica" && p.rubrica ? <div className="text-[14px] space-y-1.5">
+          <p><b>Algoritmo con rúbrica:</b> un modelo de IA (Amazon Bedrock) leyó el historial {p.rubrica.categorias_corridas?.length || 3} veces y
+            respondió preguntas cerradas con citas; una fórmula fija con la tabla del HLF calculó la prioridad. La IA no decide.</p>
+          <p className="text-[13px] text-on-surface-variant">Reglas: {p.rubrica.categoria_reglas} · rúbrica: {p.rubrica.categoria_rubrica ?? "—"} ·
+            lecturas: {(p.rubrica.categorias_corridas || []).map((c) => c || "falló").join(" / ")} · {p.rubrica.modelo} · {p.rubrica.version_kb}</p>
+          {p.controles?.length > 0
+            ? <div className="rounded bg-ambar-container/60 text-ambar p-2 text-[13px]"><b>Requiere revisión humana:</b> {p.controles.map((m) => m.detalle).join(" · ")}. Se mantiene la prioridad de las reglas.</div>
+            : <div className="rounded bg-hlf-claro text-hlf p-2 text-[13px]">Controles OK: citas verificadas, 3 lecturas iguales, no baja a nadie.</div>}
+        </div> : <p className="text-[13px] text-on-surface-variant">Sin evaluación vigente del algoritmo con rúbrica: se usan las reglas actuales.</p>}
+      </Caja>}
       <Caja titulo={`Fundamento de la prioridad ${ETIQUETA[p.categoria].toLowerCase()}`}>
         <ul className="space-y-2.5 text-[14px]">
           {p.razones.map((r, i) => (

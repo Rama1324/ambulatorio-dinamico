@@ -15,7 +15,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, ValidationError
 
-VERSION_RUBRICA = "rubrica_v1"
+VERSION_RUBRICA = "rubrica_v1.1"  # v1.1: evento = descompensación de cualquier severidad (como la tabla)
 
 SND = Literal["si", "no", "desconocido"]
 
@@ -111,10 +111,12 @@ Responde SIEMPRE con la herramienta responder_rubrica."""
 def preguntas(dx_kb):
     medicion = dx_kb.get("medicion_clave")
     return [
-        ("evento_grave", "¿Hay, después del ingreso a la lista, una visita a urgencia, hospitalización o descompensación "
-                         f"de severidad grave atribuible a {dx_kb['texto']}? (si/no/desconocido)"),
-        ("estabilizado_despues", "¿Hay un control posterior al último evento grave que registre estabilización o buena "
-                                 "respuesta? (si/no/desconocido; 'no' si no hubo evento grave)"),
+        ("evento_grave", "¿Hay, después del ingreso a la lista, un evento de DESCOMPENSACIÓN de "
+                         f"{dx_kb['texto']}: una visita a urgencia u hospitalización (de cualquier severidad) o cualquier "
+                         "evento registrado como 'descompensación'? Cita el más reciente. (si/no/desconocido; si no hay "
+                         "ningún evento registrado desde el ingreso, responde 'no' y deja la observación en senal_no_cubierta)"),
+        ("estabilizado_despues", "¿Hay un control posterior a esa descompensación que registre estabilización o buena "
+                                 "respuesta? (si/no/desconocido; 'no' si no hubo descompensación)"),
         ("tendencia_medicion", f"La medición clave de este diagnóstico es '{medicion}'. ¿Empeora, se mantiene o mejora en "
                                "el tiempo? (empeora/estable/mejora/desconocido)" if medicion else
                                "Este diagnóstico no tiene medición clave definida: responde 'desconocido' sin citas."),
@@ -173,7 +175,8 @@ def _desenvolver(crudo):
 
 
 def hash_prompt():
-    return hashlib.sha256((SISTEMA + json.dumps(HERRAMIENTA, sort_keys=True)).encode()).hexdigest()[:12]
+    plantilla = json.dumps(preguntas({"texto": "{dx}", "medicion_clave": "{medicion}"}), ensure_ascii=False)
+    return hashlib.sha256((VERSION_RUBRICA + SISTEMA + plantilla + json.dumps(HERRAMIENTA, sort_keys=True)).encode()).hexdigest()[:12]
 
 
 # ---------- clientes ----------
@@ -226,7 +229,7 @@ def respuesta_determinista(hist, dx_kb, tolerancia=0.05):
     en la evaluación: si el LLM no supera a este lector, no aporta con datos estructurados."""
     def cita(r):
         return {"fecha": r["fecha"], "tipo": r["tipo"], "valor": r["valor"]}
-    graves = [e for e in hist["eventos"] if e["severidad"] == "grave" or "descompensaci" in _norm(e["valor"])]
+    graves = [e for e in hist["eventos"] if e["severidad"] == "grave" or "descompensaci" in _norm(e["valor"])]  # = puntaje.descompensa
     ultimo = graves[-1] if graves else None
     estab = [e for e in hist["eventos"] if e["tipo"] == "control_aps" and _norm(e["valor"]) in ("estabilizacion", "buena respuesta")
              and ultimo and e["fecha"] > ultimo["fecha"]]
