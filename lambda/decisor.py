@@ -56,7 +56,8 @@ def decidir(perfil, resp, corte, kb):
     if ev.valor == "desconocido":
         revision.append({"motivo": "dato_desconocido", "detalle": "no se pudo determinar si hubo un evento grave", "bloqueante": True})
     elif ev.valor == "si":
-        fecha_ev = max((c.fecha for c in ev.citas), default=None)
+        cita_ult = max(ev.citas, key=lambda c: c.fecha, default=None)
+        fecha_ev = cita_ult.fecha if cita_ult else None
         cita_txt = "; ".join(f"{c.fecha} {c.tipo} {c.valor}" for c in ev.citas)
         razones.append({"factor": "evento", "valor": f"evento grave: {cita_txt}", "fuente": "Registro clínico posterior a la SIC (cita verificada)"})
         if est.valor == "si":
@@ -66,7 +67,8 @@ def decidir(perfil, resp, corte, kb):
         elif est.valor == "desconocido":
             revision.append({"motivo": "dato_desconocido", "detalle": "no se pudo determinar si se estabilizó", "bloqueante": True})
         else:
-            v = dx.get("ventana")
+            # ventana del tipo de evento citado; si ese tipo no tiene ventana con fuente, no vence (conservador)
+            v = (dx.get("ventanas") or {}).get(cita_ult.tipo) if cita_ult else None
             vigente = not (v and v.get("valor") and fecha_ev and (corte - _fecha(fecha_ev)).days > v["valor"])
             if not vigente:
                 estado = "evento_fuera_de_ventana"
@@ -102,7 +104,7 @@ def decidir(perfil, resp, corte, kb):
         sobre = None
         if ultima and u.get("valor") is not None:
             x = float(ultima.valor)
-            sobre = x >= u["valor"] if u.get("sentido", "mayor_igual") == "mayor_igual" else x <= u["valor"]
+            sobre = {"mayor_igual": x >= u["valor"], "menor": x < u["valor"], "menor_igual": x <= u["valor"]}[u.get("sentido", "mayor_igual")]
         if sobre and med.get("sube_a_fila") and u.get("estado") == "con_fuente" and dx.get("fila_por_medicion"):
             f2 = dx["fila_por_medicion"]
             categoria = _mayor(categoria, f2["prioridad"])

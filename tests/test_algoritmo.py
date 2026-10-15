@@ -83,11 +83,11 @@ def test_si_sin_cita_es_cita_invalida():
 
 
 def test_tres_corridas_distintas_es_inestable():
-    p = perfil("PAC-HLF-00002")
-    buena = rubrica.respuesta_determinista(rubrica.historial(p, CORTE), decisor.kb_diagnostico(KB, "I20"))
+    p, fc = perfil("PAC-HLF-00002"), date(2026, 8, 10)
+    buena = rubrica.respuesta_determinista(rubrica.historial(p, fc), decisor.kb_diagnostico(KB, "I20"))
     vacia = resp().model_dump()
     ciclo = itertools.cycle([buena, vacia, buena])
-    reg = algoritmo.evaluar_paciente(p, CORTE, rubrica.ClienteFalso(lambda _t: next(ciclo)))
+    reg = algoritmo.evaluar_paciente(p, fc, rubrica.ClienteFalso(lambda _t: next(ciclo)))
     assert reg["requiere_revision"] and any(m["motivo"] == "inestable" for m in reg["controles"])
     assert reg["categoria_final"] == reg["categoria_reglas"]
 
@@ -148,7 +148,7 @@ def test_discrepancia_de_mas_de_un_nivel_pide_revision():
 # ---------- R: ventana del evento y medición clave (solo con fuente) ----------
 def test_evento_fuera_de_ventana_no_mantiene_descompensado():
     kb = copy.deepcopy(KB)
-    kb["diagnosticos"]["I20"]["ventana"] = {"valor": 30, "fuente": "PMID de prueba", "estado": "con_fuente"}
+    kb["diagnosticos"]["I20"]["ventanas"] = {x: {"valor": 30, "fuente": "PMID de prueba", "estado": "con_fuente"} for x in ("hospitalizacion", "visita_urgencia")}
     p = perfil("PAC-HLF-00002")
     h = rubrica.historial(p, CORTE)
     g = [e for e in h["eventos"] if e["severidad"] == "grave"][-1]
@@ -162,12 +162,16 @@ def test_evento_fuera_de_ventana_no_mantiene_descompensado():
 def test_medicion_sube_solo_con_umbral_con_fuente():
     p = next(x for x in app.perfiles().values() if x["lista_espera"]["diagnostico_cie10"] == "E11" and x["lista_espera"]["prioridad_inicial"] == "baja")
     cita = [{"fecha": "2026-09-01", "tipo": "HbA1c", "valor": "9.5"}]
-    sin = decisor.decidir(p, resp(tend="empeora", citas_tend=cita), CORTE, KB)
+    kb_sin = copy.deepcopy(KB)
+    kb_sin["diagnosticos"]["E11"]["medicion"]["umbral"] = {"valor": None, "sentido": "mayor_igual", "estado": "a_validar_por_medico", "fuente": "sin fuente"}
+    sin = decisor.decidir(p, resp(tend="empeora", citas_tend=cita), CORTE, kb_sin)
     assert sin["categoria"] == "baja" and any(x["motivo"] == "medicion_empeora" for x in sin["revision"])   # sin fuente: solo revisión
-    kb = copy.deepcopy(KB)
-    kb["diagnosticos"]["E11"]["medicion"]["umbral"] = {"valor": 9.0, "sentido": "mayor_igual", "estado": "con_fuente", "fuente": "guía de prueba"}
-    con = decisor.decidir(p, resp(tend="empeora", citas_tend=cita), CORTE, kb)
+    u = KB["diagnosticos"]["E11"]["medicion"]["umbral"]
+    assert u["estado"] == "con_fuente" and u["valor"] == 7          # guía MINSAL DM2: compensado si HbA1c < 7 %
+    con = decisor.decidir(p, resp(tend="empeora", citas_tend=cita), CORTE, KB)
     assert con["categoria"] == "media" and any("pág. 101" in r["fuente"] for r in con["razones"] if r["factor"] == "medicion")
+    estable = decisor.decidir(p, resp(tend="estable", citas_tend=cita), CORTE, KB)
+    assert estable["categoria"] == "baja"                           # supera el umbral pero no empeora: no sube
 
 
 # ---------- R: orden Ord. 536 sin LACE ----------
@@ -182,13 +186,22 @@ def test_cada_valor_tiene_fuente_o_esta_a_validar():
     for cie, d in KB["diagnosticos"].items():
         if d.get("fila_descompensado"):
             assert d["fila_descompensado"]["pagina"] and d["estado"] in ("con_fuente", "a_validar_por_medico")
-        assert d["ventana"]["estado"] in ("con_fuente", "a_validar_por_medico")
-        if d["ventana"]["estado"] == "con_fuente":
-            assert d["ventana"]["valor"] and d["ventana"]["fuente"]
+        for v in d["ventanas"].values():
+            assert v["estado"] == "con_fuente" and v["valor"] and v["fuente"]
         if d.get("medicion"):
             u = d["medicion"]["umbral"]
             assert u["estado"] in ("con_fuente", "a_validar_por_medico") and (u["valor"] is None) == (u["estado"] != "con_fuente")
     assert KB["pendientes_medicos"]
+
+
+def test_esquema_sin_referencias_y_envoltorio_corregido():
+    assert "$ref" not in json.dumps(rubrica.HERRAMIENTA) and "$defs" not in json.dumps(rubrica.HERRAMIENTA)
+    p = perfil("PAC-HLF-00002")
+    buena = rubrica.respuesta_determinista(rubrica.historial(p, CORTE), decisor.kb_diagnostico(KB, "I20"))
+    r, meta = rubrica.leer_rubrica(p, CORTE, decisor.kb_diagnostico(KB, "I20"), rubrica.ClienteFalso({"valor": buena}))
+    assert r is not None and meta["envoltorio_corregido"]
+    r, meta = rubrica.leer_rubrica(p, CORTE, decisor.kb_diagnostico(KB, "I20"), rubrica.ClienteFalso({"otra": {"x": 1}}))
+    assert r is None and "json_invalido" in meta["error"]          # solo se desenvuelve si adentro están las preguntas
 
 
 def test_prompt_no_ve_etiquetas_medicas():
@@ -205,11 +218,14 @@ def test_api_con_rubrica_aplica_evaluacion_vigente_y_reglas_sin_cambios():
         app._llm["cliente"] = oraculo(pid)
         res = app.handler({"requestContext": {"http": {"method": "POST"}}, "rawPath": f"/pacientes/{pid}/evaluar",
                            "body": json.dumps({"fecha_corte": "2026-10-13"})})
-        assert res["statusCode"] == 200 and json.loads(res["body"])["evaluacion"]["categoria_final"] == "alta"
+        ev = json.loads(res["body"])["evaluacion"]
+        assert res["statusCode"] == 200 and ev["categoria_final"] == "alta" and ev["categoria_rubrica"] == "baja"
+        assert ev["requiere_revision"] and any(m["motivo"] == "bajaria" for m in ev["controles"])   # fuera de ventana: decide un humano
         d = json.loads(app.handler({"requestContext": {"http": {"method": "GET"}}, "rawPath": "/pacientes",
                                     "queryStringParameters": {"fecha_corte": "2026-10-13"}})["body"])
         f = next(p for p in d["pacientes"] if p["id_paciente"] == pid)
-        assert f["algoritmo"] == "rubrica" and f["rubrica"]["categoria_rubrica"] == "alta"
+        assert f["algoritmo"] == "rubrica" and f["categoria"] == "alta" and f["rubrica"]["requiere_revision"]
+        assert any("bajaria" in s["motivo"] for s in f["revision_sugerida"])
         otro = next(p for p in d["pacientes"] if p["id_paciente"] != pid)
         assert otro["algoritmo"].startswith("reglas")
     finally:

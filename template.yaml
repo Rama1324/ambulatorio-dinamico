@@ -12,6 +12,17 @@ Parameters:
     Default: ""
     Description: Region de Bedrock si es distinta a la del stack. Vacio = misma region.
 
+  Algoritmo:
+    Type: String
+    Default: reglas
+    AllowedValues: [reglas, rubrica]
+    Description: reglas = motor actual (puntaje.py). rubrica = LLM con rubrica + formula fija (requiere aprobacion del equipo).
+  BarridoActivo:
+    Type: String
+    Default: DISABLED
+    AllowedValues: [ENABLED, DISABLED]
+    Description: Barrido nocturno del algoritmo (EventBridge Scheduler). Apagado hasta aprobar.
+
 Conditions:
   HasBedrockRegion: !Not [!Equals [!Ref BedrockRegion, ""]]
 
@@ -73,6 +84,7 @@ Resources:
           MODEL_ID: !Ref ModelId
           FECHA_REFERENCIA: hoy  # fecha real de Chile; AAAA-MM-DD para simular
           BEDROCK_REGION: !If [HasBedrockRegion, !Ref BedrockRegion, !Ref AWS::Region]
+          ALGORITMO: !Ref Algoritmo
       Policies:
         - S3ReadPolicy:
             BucketName: !Ref DataBucket
@@ -92,6 +104,41 @@ Resources:
             ApiId: !Ref Api
             Path: /{proxy+}
             Method: ANY
+
+  # Barrido del algoritmo decisor: reevalua a quienes no tienen evaluacion vigente (misma imagen de codigo).
+  BarridoFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambda/
+      Handler: app.barrido_handler
+      Timeout: 900
+      Environment:
+        Variables:
+          BUCKET: !Ref DataBucket
+          PERFILES_KEY: perfiles.json
+          BOX_KEY: box.json
+          TABLE: !Ref RegistrosTable
+          MODEL_ID: !Ref ModelId
+          FECHA_REFERENCIA: hoy
+          BEDROCK_REGION: !If [HasBedrockRegion, !Ref BedrockRegion, !Ref AWS::Region]
+          ALGORITMO: rubrica
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref DataBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RegistrosTable
+        - Statement:
+            - Effect: Allow
+              Action: [bedrock:InvokeModel]
+              Resource: "*"
+      Events:
+        Nocturno:
+          Type: ScheduleV2
+          Properties:
+            ScheduleExpression: cron(0 4 * * ? *)
+            ScheduleExpressionTimezone: America/Santiago
+            State: !Ref BarridoActivo
+            Input: '{"limite": 400, "en_paralelo": 6}'
 
 Outputs:
   ApiUrl:

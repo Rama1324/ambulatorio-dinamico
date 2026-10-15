@@ -138,8 +138,38 @@ def armar_prompt(perfil, corte, dx_kb):
     return SISTEMA, texto, hist
 
 
-HERRAMIENTA = {"toolSpec": {"name": "responder_rubrica", "description": "Respuestas de la rúbrica, con citas exactas del historial.",
-                            "inputSchema": {"json": RespuestaRubrica.model_json_schema()}}}
+def _esquema_plano(modelo):
+    """Esquema JSON sin $defs/$ref: el modelo a veces envolvía la respuesta en 'valor' al leer referencias anidadas."""
+    s = modelo.model_json_schema()
+    defs = s.pop("$defs", {})
+
+    def resolver(x):
+        if isinstance(x, dict):
+            if "$ref" in x:
+                return resolver(defs[x["$ref"].split("/")[-1]])
+            return {k: resolver(v) for k, v in x.items() if k != "title"}
+        if isinstance(x, list):
+            return [resolver(v) for v in x]
+        return x
+    return resolver(s)
+
+
+HERRAMIENTA = {"toolSpec": {"name": "responder_rubrica",
+                            "description": "Respuestas de la rúbrica, con citas exactas del historial. Las claves de primer nivel "
+                                           "son evento_grave, estabilizado_despues, tendencia_medicion, "
+                                           "cambio_tratamiento_por_mal_control y senal_no_cubierta.",
+                            "inputSchema": {"json": _esquema_plano(RespuestaRubrica)}}}
+PREGUNTAS_CLAVE = {"evento_grave", "estabilizado_despues", "tendencia_medicion", "cambio_tratamiento_por_mal_control"}
+
+
+def _desenvolver(crudo):
+    """Si el modelo envolvió las respuestas en una sola clave (p. ej. {"valor": {...}}), las saca SOLO cuando adentro
+    están exactamente las preguntas esperadas. No altera el contenido. Devuelve (dict, se_corrigio)."""
+    if isinstance(crudo, dict) and not PREGUNTAS_CLAVE & set(crudo) and len(crudo) == 1:
+        interior = next(iter(crudo.values()))
+        if isinstance(interior, dict) and PREGUNTAS_CLAVE <= set(interior):
+            return interior, True
+    return crudo, False
 
 
 def hash_prompt():
@@ -226,6 +256,9 @@ def leer_rubrica(perfil, corte, dx_kb, cliente):
     try:
         crudo, uso = cliente.leer(sistema, texto, HERRAMIENTA)
         meta.update(uso)
+        crudo, corregido = _desenvolver(crudo)
+        if corregido:
+            meta["envoltorio_corregido"] = True
         return RespuestaRubrica.model_validate(crudo), meta
     except ValidationError as e:
         meta["error"] = f"json_invalido: {e.errors()[0]['msg']}"

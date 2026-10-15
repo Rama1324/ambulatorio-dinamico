@@ -1,0 +1,585 @@
+{
+ "version": "evidencia_v1",
+ "generado": "2026-10-15",
+ "script": "scripts/buscar_pubmed.py",
+ "entradas": [
+  {
+   "id": "I50.hospitalizacion.ventana_dias",
+   "diagnostico": "I50",
+   "evento": "hospitalizacion",
+   "concepto": "Fase vulnerable post-alta por insuficiencia cardíaca: mantener 'descompensado' sin control_aps de estabilización",
+   "valor": 90,
+   "unidad": "días",
+   "fuente": {
+    "tipo": "pubmed",
+    "ref": "PMID:25666406",
+    "detalle": "Greene SJ et al., 2015, Nat Rev Cardiol, revisión narrativa: 'mortality and readmission rates within 60-90 days of discharge for patients hospitalized with heart failure (HF) approach 15% and 30%, respectively. This early postdischarge period has been termed the vulnerable phase'.",
+    "consultado": "2026-10-15",
+    "verificado_ncbi": {
+     "titulo": "The vulnerable phase after hospitalization for heart failure.",
+     "revista": "Nat Rev Cardiol",
+     "anio": "2015",
+     "consultado": "2026-10-15"
+    }
+   },
+   "fuentes_adicionales": [
+    {
+     "tipo": "pubmed",
+     "ref": "PMID:25656852",
+     "detalle": "Dharmarajan K et al., 2015, BMJ, cohorte retrospectiva >3 millones de altas Medicare (IC, IAM, neumonía): tras hospitalización por IC el riesgo de primera readmisión cae 50% recién al día 38; el cambio diario de riesgo de readmisión se estabiliza (95%) al día 45; riesgo relativo de ingreso en los primeros 90 días 8 veces y de muerte 11 veces el de la población mayor general.",
+     "consultado": "2026-10-15"
+    },
+    {
+     "tipo": "pubmed",
+     "ref": "PMID:33866827",
+     "detalle": "Khan MS et al., 2021, Circ Heart Fail, Nationwide Readmissions Database (6.669.313 hospitalizaciones índice por IC): readmisión 18,2% a 30 días y 31,2% a 90 días.",
+     "consultado": "2026-10-15"
+    },
+    {
+     "tipo": "pubmed",
+     "ref": "PMID:17724259",
+     "detalle": "Solomon SD et al., 2007, Circulation, análisis del ensayo CHARM (n=7.572): HR de muerte tras hospitalización por IC 3,15 (IC95% 2,83-3,50); 'risk of death was highest within a month of discharge and then declined progressively over time'.",
+     "consultado": "2026-10-15"
+    }
+   ],
+   "justificacion": "La literatura define la 'fase vulnerable' como 60-90 días; 90 días cubre el pico de mortalidad (primer mes) y la meseta de readmisión (día 38-45).",
+   "confianza": "alta",
+   "estado": "con_fuente"
+  },
+  {
+   "id": "J44.hospitalizacion.ventana_dias",
+   "diagnostico": "J44",
+   "evento": "hospitalizacion",
+   "concepto": "Riesgo elevado tras hospitalización por exacerbación de EPOC",
+   "valor": 90,
+   "unidad": "días",
+   "fuente": {
+    "tipo": "pubmed",
+    "ref": "PMID:22684094",
+    "detalle": "Suissa S et al., 2012, Thorax, cohorte poblacional Quebec n=73.106 desde la primera hospitalización por EPOC: 'Mortality after a severe exacerbation peaked to 40 deaths per 10 000 per day in the first week after admission, dropping gradually to 5 after 3 months'.",
+    "consultado": "2026-10-15",
+    "verificado_ncbi": {
+     "titulo": "Long-term natural history of chronic obstructive pulmonary disease: severe exacerbations and mortality.",
+     "revista": "Thorax",
+     "anio": "2012",
+     "consultado": "2026-10-15"
+    }
+   },
+   "fuentes_adicionales": [
+    {
+     "tipo": "pubmed",
+     "ref": "PMID:37822218",
+     "detalle": "Ruan H et al., 2023, Ther Adv Respir Dis, revisión sistemática y metaanálisis de 28 estudios: readmisión por todas las causas 18% a 30 días y 31% a 90 días.",
+     "consultado": "2026-10-15"
+    },
+    {
+     "tipo": "pubmed",
+     "ref": "PMID:36528962",
+     "detalle": "Ruan H et al., 2023, Respir Med, revisión sistemática y metaanálisis de 46 estudios: readmisión por exacerbación 11% (30 d), 17% (60 d), 17% (90 d), 30% (180 d), 37% (365 d).",
+     "consultado": "2026-10-15"
+    },
+    {
+     "tipo": "pubmed",
+     "ref": "PMID:32499306",
+     "detalle": "Alqahtani JS et al., 2020, Eur Respir Rev, revisión sistemática y metaanálisis de 32 estudios: readmisión 8,8-26,0% a 30 días y 17,5-39,0% a 90 días.",
+     "consultado": "2026-10-15"
+    }
+   ],
+   "justificacion": "La mortalidad diaria tras una exacerbación grave vuelve a niveles basales cerca de los 3 meses (Suissa); 90 días es además la ventana estándar de readmisión.",
+   "confianza": "alta",
+   "estado": "con_fuente"
+  },
+  {
+   "id": "J45.visita_urgencia.ventana_dias",
+   "diagnostico": "J45",
+   "evento": "visita_urgencia",
+   "concepto": "Recaída tras alta de urgencia por crisis asmática",
+   "valor": 28,
+   "unidad": "días",
+   "fuente": {
+    "tipo": "pubmed",
+    "ref": "PMID:28176972",
+    "detalle": "Hill J et al., 2017, BMJ Open Respir Res, revisión sistemática de 10 estudios (n=32.923): recaída 8±3%, 12±4% y 14±6% a 1, 2 y 4 semanas; 'A median of 17% of patients who are discharged from the ED will relapse within the first 4 weeks'.",
+    "consultado": "2026-10-15",
+    "verificado_ncbi": {
+     "titulo": "Factors associated with relapse in adult patients discharged from the emergency department following acute asthma: a systematic review.",
+     "revista": "BMJ Open Respir Res",
+     "anio": "2017",
+     "consultado": "2026-10-15"
+    }
+   },
+   "fuentes_adicionales": [
+    {
+     "tipo": "pubmed",
+     "ref": "PMID:18637082",
+     "detalle": "Rowe BH et al., 2008, Acad Emerg Med, cohorte prospectiva multicéntrica de 20 servicios de urgencia canadienses (529 con seguimiento): recaída 9,2% a 1 semana y 13,9% a 2 semanas.",
+     "consultado": "2026-10-15"
+    },
+    {
+     "tipo": "guia_internacional",
+     "ref": "https://ginasthma.org/wp-content/uploads/2024/12/GINA-Summary-Guide-2024-WEB-WMS.pdf",
+     "detalle": "GINA 2024 Summary Guide, manejo de exacerbación en atención primaria: 'Follow up: within 2–7 days (1–2 days for children)'.",
+     "consultado": "2026-10-15"
+    }
+   ],
+   "justificacion": "Las recaídas se concentran en las primeras 4 semanas (Hill); por eso 28 días.",
+   "confianza": "alta",
+   "estado": "con_fuente"
+  },
+  {
+   "id": "J45.hospitalizacion.ventana_dias",
+   "diagnostico": "J45",
+   "evento": "hospitalizacion",
+   "concepto": "Readmisión tras hospitalización por asma",
+   "valor": 30,
+   "unidad": "días",
+   "fuente": {
+    "tipo": "pubmed",
+    "ref": "PMID:34593626",
+    "detalle": "Patel N et al., 2022, Postgrad Med J, Nationwide Readmissions Database 2013 (130.490 ingresos; N ponderado 311.173): readmisión no planificada a 30 días 11,9%; 'One-fourth of the revisits occurred in the first week, while half of the revisits took place in the first 2 weeks'.",
+    "consultado": "2026-10-15",
+    "verificado_ncbi": {
+     "titulo": "Thirty-day unplanned readmission in hospitalised asthma patients in the USA.",
+     "revista": "Postgrad Med J",
+     "anio": "2022",
+     "consultado": "2026-10-15"
+    }
+   },
+   "fuentes_adicionales": [],
+   "justificacion": "Es un solo registro de EE.UU. y no hay metaanálisis de adultos; la mitad de las readmisiones ocurre antes de 2 semanas. Se propone 30 días.",
+   "confianza": "media",
+   "estado": "con_fuente"
+  },
+  {
+   "id": "K70.hospitalizacion.ventana_dias",
+   "diagnostico": "K70",
+   "evento": "hospitalizacion",
+   "concepto": "Riesgo de readmisión y muerte tras hospitalización por cirrosis descompensada",
+   "valor": 90,
+   "unidad": "días",
+   "fuente": {
+    "tipo": "pubmed",
+    "ref": "PMID:30673983",
+    "detalle": "Tansel A et al., 2019, Dig Dis Sci, cohorte VA n=38.955: 'Daily risk of readmission was the highest on day 1 (1.23%) and declined 50% by day 71 and 75% by day 260 ... Daily risk of death was the highest on day 1 (0.78%) and declined 50% by day 31 and 75% by day 64'.",
+    "consultado": "2026-10-15",
+    "verificado_ncbi": {
+     "titulo": "Risk Trajectories for Readmission and Death After Cirrhosis-Related Hospitalization.",
+     "revista": "Dig Dis Sci",
+     "anio": "2019",
+     "consultado": "2026-10-15"
+    }
+   },
+   "fuentes_adicionales": [
+    {
+     "tipo": "pubmed",
+     "ref": "PMID:42787764",
+     "detalle": "Xie R et al., 2026, Open Med (Wars), revisión sistemática y metaanálisis de 13 cohortes (n=316.705): readmisión 27% a 30 días (IC95% 20-35) y 34% a 90 días (IC95% 29-40); heterogeneidad extrema (I2 ~100%).",
+     "consultado": "2026-10-15"
+    },
+    {
+     "tipo": "pubmed",
+     "ref": "PMID:21931378",
+     "detalle": "Volk ML et al., 2012, Am J Gastroenterol, cohorte n=402 con cirrosis descompensada: 14% readmitido a 1 semana y 37% a 1 mes; mediana hasta la primera readmisión 67 días.",
+     "consultado": "2026-10-15"
+    }
+   ],
+   "justificacion": "El riesgo de muerte se reduce 75% al día 64 y el de readmisión 50% al día 71 (Tansel); 90 días cubre ambos. Podría justificarse una ventana más larga, porque el riesgo de readmisión no llega a meseta en 1 año.",
+   "confianza": "alta",
+   "estado": "con_fuente"
+  },
+  {
+   "id": "I20.visita_urgencia_o_hospitalizacion.ventana_dias",
+   "diagnostico": "I20",
+   "evento": "visita_urgencia_o_hospitalizacion",
+   "concepto": "Ventana de riesgo precoz tras síndrome coronario agudo / angina inestable",
+   "valor": 45,
+   "unidad": "días",
+   "fuente": {
+    "tipo": "pubmed",
+    "ref": "PMID:25656852",
+    "detalle": "Dharmarajan K et al., 2015, BMJ, cohorte Medicare: tras hospitalización por IAM el riesgo de readmisión cae 50% al día 13 y el de muerte al día 6; el cambio diario de riesgo de readmisión se estabiliza (95%) al día 38 y el de muerte al día 19.",
+    "consultado": "2026-10-15",
+    "verificado_ncbi": {
+     "titulo": "Trajectories of risk after hospitalization for heart failure, acute myocardial infarction, or pneumonia: retrospective cohort study.",
+     "revista": "BMJ",
+     "anio": "2015",
+     "consultado": "2026-10-15"
+    }
+   },
+   "fuentes_adicionales": [
+    {
+     "tipo": "pubmed",
+     "ref": "PMID:31407368",
+     "detalle": "Wang H et al., 2019, Clin Cardiol, revisión sistemática y metaanálisis de 14 estudios: readmisión a 30 días tras IAM 12% (IC95% 11-14%).",
+     "consultado": "2026-10-15"
+    },
+    {
+     "tipo": "pubmed",
+     "ref": "PMID:10938172",
+     "detalle": "Antman EM et al., 2000, JAMA (TIMI 11B/ESSENCE, angina inestable/IAMSEST): el puntaje TIMI predice muerte, (re)infarto o isquemia recurrente grave 'through 14 days'; eventos 4,7% (puntaje 0/1) a 40,9% (6/7).",
+     "consultado": "2026-10-15"
+    },
+    {
+     "tipo": "pubmed",
+     "ref": "PMID:17032691",
+     "detalle": "Fox KA et al., 2006, BMJ (GRACE, n=43.810): el riesgo de muerte o IAM se estima hasta 6 meses post-alta; 1.466 muertes entre el alta y los 6 meses.",
+     "consultado": "2026-10-15"
+    }
+   ],
+   "justificacion": "La evidencia de trayectoria es de IAM, no de angina inestable aislada. El riesgo de readmisión llega a meseta cerca del día 38 (Dharmarajan), así que se propone 45 días. GRACE usa un horizonte de 6 meses si se quiere ser más conservador.",
+   "confianza": "media",
+   "estado": "con_fuente"
+  },
+  {
+   "id": "E11.hospitalizacion.ventana_dias",
+   "diagnostico": "E11",
+   "evento": "hospitalizacion",
+   "concepto": "Readmisión tras hospitalización por crisis hiperglicémica (CAD/EHH) o hiperglicemia",
+   "valor": 30,
+   "unidad": "días",
+   "fuente": {
+    "tipo": "pubmed",
+    "ref": "PMID:30913009",
+    "detalle": "Hurtado CR et al., 2019, Endocr Pract, Nationwide Readmission Database 2010-2014 (479.590 ingresos por CAD en adultos, DM1 y DM2): 12,3% readmitidos a 30 días; 40,8% por CAD recurrente; 'About 50% of patients were re-admitted within 2 weeks after discharge'.",
+    "consultado": "2026-10-15",
+    "verificado_ncbi": {
+     "titulo": "CAUSES AND PREDICTORS FOR 30-DAY RE-ADMISSIONS IN ADULT PATIENTS WITH DIABETIC KETOACIDOSIS IN THE UNITED STATES: A NATIONWIDE ANALYSIS, 2010-2014.",
+     "revista": "Endocr Pract",
+     "anio": "2019",
+     "consultado": "2026-10-15"
+    }
+   },
+   "fuentes_adicionales": [
+    {
+     "tipo": "pubmed",
+     "ref": "PMID:38907161",
+     "detalle": "Umpierrez GE et al., 2024, Diabetologia (consenso ADA/EASD/JBDS/AACE/DTS; versión gemela en Diabetes Care, PMID:39052901): 'the all-cause readmission rate after episodes of DKA or hyperglycaemic crises in general ranges between 10% and 20%, with 40–65% of these readmissions being for recurrent hyperglycaemic crises ... mostly occurring within 2 weeks of discharge'.",
+     "consultado": "2026-10-15"
+    },
+    {
+     "tipo": "pubmed",
+     "ref": "PMID:29751961",
+     "detalle": "McCoy RG et al., 2018, J Diabetes Complications, OptumLabs (6.872 hospitalizaciones índice por hiperglicemia): 4,0% readmitidos por hiperglicemia recurrente y 5,4% por otras causas a 30 días.",
+     "consultado": "2026-10-15"
+    }
+   ],
+   "justificacion": "Las readmisiones se concentran en 2 semanas y la ventana estándar es 30 días. Hurtado mezcla DM1 y DM2; no hay datos separados solo de DM2.",
+   "confianza": "media",
+   "estado": "con_fuente"
+  },
+  {
+   "id": "E11.visita_urgencia.ventana_dias",
+   "diagnostico": "E11",
+   "evento": "visita_urgencia",
+   "concepto": "Reconsulta tras visita a urgencia por hiperglicemia",
+   "valor": 30,
+   "unidad": "días",
+   "fuente": {
+    "tipo": "pubmed",
+    "ref": "PMID:40279059",
+    "detalle": "Yan JW et al., 2025, CJEM, cohorte prospectiva multicéntrica en 4 servicios de urgencia de Ontario (657 visitas, DM1 o DM2): en 30 días 14,7% reconsultó por hiperglicemia, 7,5% fue hospitalizado y 0,6% falleció.",
+    "consultado": "2026-10-15",
+    "verificado_ncbi": {
+     "titulo": "A multicenter prospective cohort study evaluating 30-day outcomes after an emergency department visit for hyperglycemia in Canadian adults with type 1 or 2 diabetes.",
+     "revista": "CJEM",
+     "anio": "2025",
+     "consultado": "2026-10-15"
+    }
+   },
+   "fuentes_adicionales": [],
+   "justificacion": "Es un solo estudio prospectivo de 594 pacientes con DM1 y DM2 mezclados.",
+   "confianza": "media",
+   "estado": "con_fuente"
+  },
+  {
+   "id": "G40.visita_urgencia.ventana_dias",
+   "diagnostico": "G40",
+   "evento": "visita_urgencia",
+   "concepto": "Recurrencia de crisis tras visita a urgencia por convulsión",
+   "valor": 30,
+   "unidad": "días",
+   "fuente": {
+    "tipo": "pubmed",
+    "ref": "PMID:33661526",
+    "detalle": "Roussel M et al., 2021, Acad Emerg Med, estudio retrospectivo en 8 servicios de urgencia franceses (n=1.820 dados de alta): 8% reconsultó por recurrencia de crisis a 30 días; el tratamiento antiepiléptico crónico (ORa 2,58) y la crisis focal (ORa 2,16) se asociaron a recurrencia.",
+    "consultado": "2026-10-15",
+    "verificado_ncbi": {
+     "titulo": "Association between benzodiazepine outpatient treatment and risk of early seizure recurrence in emergency patients with seizure: A multicenter retrospective study.",
+     "revista": "Acad Emerg Med",
+     "anio": "2021",
+     "consultado": "2026-10-15"
+    }
+   },
+   "fuentes_adicionales": [],
+   "justificacion": "No se encontró un metaanálisis sobre recurrencia de crisis tras una visita a urgencia en epilepsia conocida; se usa la ventana de 30 días del estudio.",
+   "confianza": "media",
+   "estado": "con_fuente"
+  },
+  {
+   "id": "G40.hospitalizacion.ventana_dias",
+   "diagnostico": "G40",
+   "evento": "hospitalizacion",
+   "concepto": "Readmisión tras hospitalización por crisis/epilepsia",
+   "valor": 30,
+   "unidad": "días",
+   "fuente": {
+    "tipo": "pubmed",
+    "ref": "PMID:32309030",
+    "detalle": "Terman SW et al., 2020, Neurol Clin Pract, State Inpatient Databases (n=98.712): 14% readmitidos a 30 días; 30% de las readmisiones por epilepsia/convulsiones.",
+    "consultado": "2026-10-15",
+    "verificado_ncbi": {
+     "titulo": "Factors associated with 30-day readmission for patients hospitalized for seizures.",
+     "revista": "Neurol Clin Pract",
+     "anio": "2020",
+     "consultado": "2026-10-15"
+    }
+   },
+   "fuentes_adicionales": [
+    {
+     "tipo": "pubmed",
+     "ref": "PMID:40340379",
+     "detalle": "Blank LJ et al., 2025, Neurology, Medicare ≥65 años (n=80.620): 17,72% readmitidos a 30 días; 22% sin seguimiento ambulatorio vs 6% con cualquier control.",
+     "consultado": "2026-10-15"
+    }
+   ],
+   "justificacion": "Ambos estudios usan una ventana fija de 30 días; no se encontró una trayectoria de riesgo en el tiempo.",
+   "confianza": "media",
+   "estado": "con_fuente"
+  },
+  {
+   "id": "F32.hospitalizacion.ventana_dias",
+   "diagnostico": "F32",
+   "evento": "hospitalizacion",
+   "concepto": "Riesgo de suicidio tras alta de hospitalización psiquiátrica",
+   "valor": 90,
+   "unidad": "días",
+   "fuente": {
+    "tipo": "pubmed",
+    "ref": "PMID:28564699",
+    "detalle": "Chung DT et al., 2017, JAMA Psychiatry, revisión sistemática y metaanálisis de 100 estudios (17.857 suicidios; 4.725.445 personas-año): tasa global 484/100.000 personas-año; 'The suicide rate was highest within 3 months after discharge (1132; 95% CI, 874-1467)' y 2.078 en ingresados por ideación o conducta suicida.",
+    "consultado": "2026-10-15",
+    "verificado_ncbi": {
+     "titulo": "Suicide Rates After Discharge From Psychiatric Facilities: A Systematic Review and Meta-analysis.",
+     "revista": "JAMA Psychiatry",
+     "anio": "2017",
+     "consultado": "2026-10-15"
+    }
+   },
+   "fuentes_adicionales": [],
+   "justificacion": "La tasa de suicidio en los primeros 3 meses es unas 2,3 veces la tasa global post-alta (Chung).",
+   "confianza": "alta",
+   "estado": "con_fuente"
+  },
+  {
+   "id": "F32.visita_urgencia.ventana_dias",
+   "diagnostico": "F32",
+   "evento": "visita_urgencia",
+   "concepto": "Riesgo de suicidio/repetición tras consulta en urgencia por autolesión",
+   "valor": 30,
+   "unidad": "días",
+   "fuente": {
+    "tipo": "pubmed",
+    "ref": "PMID:28320225",
+    "detalle": "Olfson M et al., 2017, Am J Psychiatry, cohorte Medicaid de adultos con autolesión (n=61.297): suicidio 439,1/100.000 personas-año en 12 meses (37,2 veces la población general); con método violento HR 17,5 en los primeros 30 días, pero no en los 335 días siguientes.",
+    "consultado": "2026-10-15",
+    "verificado_ncbi": {
+     "titulo": "Suicide Following Deliberate Self-Harm.",
+     "revista": "Am J Psychiatry",
+     "anio": "2017",
+     "consultado": "2026-10-15"
+    }
+   },
+   "fuentes_adicionales": [
+    {
+     "tipo": "pubmed",
+     "ref": "PMID:24587141",
+     "detalle": "Carroll R et al., 2014, PLoS One, revisión sistemática y metaanálisis (177 artículos): suicidio 1,6% a 12 meses tras autolesión atendida en hospital; repetición no fatal 16,3% al año.",
+     "consultado": "2026-10-15"
+    }
+   ],
+   "justificacion": "La evidencia es de autolesión, no de cualquier consulta en urgencia por depresión. El riesgo sigue elevado todo el año; 30 días capta el pico precoz y conviene que el equipo de salud mental lo valide (alternativa: 90 días, igual que tras hospitalización).",
+   "confianza": "baja",
+   "estado": "con_fuente"
+  },
+  {
+   "id": "I50.visita_urgencia.ventana_dias",
+   "diagnostico": "I50",
+   "concepto": "Ventana de riesgo tras visita_urgencia sin hospitalización",
+   "valor": null,
+   "unidad": "días",
+   "fuente": {
+    "tipo": "no_encontrado",
+    "ref": null,
+    "detalle": "No encontrado: no se buscó evidencia específica de visitas a urgencia sin ingreso para este diagnóstico. Opción a validar: usar la misma ventana que hospitalización o la mitad.",
+    "consultado": "2026-10-15"
+   },
+   "estado": "a_validar_por_medico",
+   "evento": "visita_urgencia"
+  },
+  {
+   "id": "J44.visita_urgencia.ventana_dias",
+   "diagnostico": "J44",
+   "concepto": "Ventana de riesgo tras visita_urgencia sin hospitalización",
+   "valor": null,
+   "unidad": "días",
+   "fuente": {
+    "tipo": "no_encontrado",
+    "ref": null,
+    "detalle": "No encontrado: no se buscó evidencia específica de visitas a urgencia sin ingreso para este diagnóstico. Opción a validar: usar la misma ventana que hospitalización o la mitad.",
+    "consultado": "2026-10-15"
+   },
+   "estado": "a_validar_por_medico",
+   "evento": "visita_urgencia"
+  },
+  {
+   "id": "K70.visita_urgencia.ventana_dias",
+   "diagnostico": "K70",
+   "concepto": "Ventana de riesgo tras visita_urgencia sin hospitalización",
+   "valor": null,
+   "unidad": "días",
+   "fuente": {
+    "tipo": "no_encontrado",
+    "ref": null,
+    "detalle": "No encontrado: no se buscó evidencia específica de visitas a urgencia sin ingreso para este diagnóstico. Opción a validar: usar la misma ventana que hospitalización o la mitad.",
+    "consultado": "2026-10-15"
+   },
+   "estado": "a_validar_por_medico",
+   "evento": "visita_urgencia"
+  },
+  {
+   "id": "E03.evento_grave.ventana_dias",
+   "diagnostico": "E03",
+   "concepto": "Ventana de 'descompensado' tras evento grave",
+   "valor": null,
+   "unidad": "días",
+   "fuente": {
+    "tipo": "no_encontrado",
+    "ref": null,
+    "detalle": "No encontrado: no se buscó trayectoria de riesgo post-evento para este diagnóstico de menor riesgo. Valor por defecto a definir por el equipo clínico.",
+    "consultado": "2026-10-15"
+   },
+   "estado": "a_validar_por_medico",
+   "evento": "visita_urgencia|hospitalizacion"
+  },
+  {
+   "id": "E66.evento_grave.ventana_dias",
+   "diagnostico": "E66",
+   "concepto": "Ventana de 'descompensado' tras evento grave",
+   "valor": null,
+   "unidad": "días",
+   "fuente": {
+    "tipo": "no_encontrado",
+    "ref": null,
+    "detalle": "No encontrado: no se buscó trayectoria de riesgo post-evento para este diagnóstico de menor riesgo. Valor por defecto a definir por el equipo clínico.",
+    "consultado": "2026-10-15"
+   },
+   "estado": "a_validar_por_medico",
+   "evento": "visita_urgencia|hospitalizacion"
+  },
+  {
+   "id": "F41.evento_grave.ventana_dias",
+   "diagnostico": "F41",
+   "concepto": "Ventana de 'descompensado' tras evento grave",
+   "valor": null,
+   "unidad": "días",
+   "fuente": {
+    "tipo": "no_encontrado",
+    "ref": null,
+    "detalle": "No encontrado: no se buscó trayectoria de riesgo post-evento para este diagnóstico de menor riesgo. Valor por defecto a definir por el equipo clínico.",
+    "consultado": "2026-10-15"
+   },
+   "estado": "a_validar_por_medico",
+   "evento": "visita_urgencia|hospitalizacion"
+  },
+  {
+   "id": "G43.evento_grave.ventana_dias",
+   "diagnostico": "G43",
+   "concepto": "Ventana de 'descompensado' tras evento grave",
+   "valor": null,
+   "unidad": "días",
+   "fuente": {
+    "tipo": "no_encontrado",
+    "ref": null,
+    "detalle": "No encontrado: no se buscó trayectoria de riesgo post-evento para este diagnóstico de menor riesgo. Valor por defecto a definir por el equipo clínico.",
+    "consultado": "2026-10-15"
+   },
+   "estado": "a_validar_por_medico",
+   "evento": "visita_urgencia|hospitalizacion"
+  },
+  {
+   "id": "I10.evento_grave.ventana_dias",
+   "diagnostico": "I10",
+   "concepto": "Ventana de 'descompensado' tras evento grave",
+   "valor": null,
+   "unidad": "días",
+   "fuente": {
+    "tipo": "no_encontrado",
+    "ref": null,
+    "detalle": "No encontrado: no se buscó trayectoria de riesgo post-evento para este diagnóstico de menor riesgo. Valor por defecto a definir por el equipo clínico.",
+    "consultado": "2026-10-15"
+   },
+   "estado": "a_validar_por_medico",
+   "evento": "visita_urgencia|hospitalizacion"
+  },
+  {
+   "id": "K21.evento_grave.ventana_dias",
+   "diagnostico": "K21",
+   "concepto": "Ventana de 'descompensado' tras evento grave",
+   "valor": null,
+   "unidad": "días",
+   "fuente": {
+    "tipo": "no_encontrado",
+    "ref": null,
+    "detalle": "No encontrado: no se buscó trayectoria de riesgo post-evento para este diagnóstico de menor riesgo. Valor por defecto a definir por el equipo clínico.",
+    "consultado": "2026-10-15"
+   },
+   "estado": "a_validar_por_medico",
+   "evento": "visita_urgencia|hospitalizacion"
+  },
+  {
+   "id": "M17.evento_grave.ventana_dias",
+   "diagnostico": "M17",
+   "concepto": "Ventana de 'descompensado' tras evento grave",
+   "valor": null,
+   "unidad": "días",
+   "fuente": {
+    "tipo": "no_encontrado",
+    "ref": null,
+    "detalle": "No encontrado: no se buscó trayectoria de riesgo post-evento para este diagnóstico de menor riesgo. Valor por defecto a definir por el equipo clínico.",
+    "consultado": "2026-10-15"
+   },
+   "estado": "a_validar_por_medico",
+   "evento": "visita_urgencia|hospitalizacion"
+  },
+  {
+   "id": "M54.evento_grave.ventana_dias",
+   "diagnostico": "M54",
+   "concepto": "Ventana de 'descompensado' tras evento grave",
+   "valor": null,
+   "unidad": "días",
+   "fuente": {
+    "tipo": "no_encontrado",
+    "ref": null,
+    "detalle": "No encontrado: no se buscó trayectoria de riesgo post-evento para este diagnóstico de menor riesgo. Valor por defecto a definir por el equipo clínico.",
+    "consultado": "2026-10-15"
+   },
+   "estado": "a_validar_por_medico",
+   "evento": "visita_urgencia|hospitalizacion"
+  },
+  {
+   "id": "M75.evento_grave.ventana_dias",
+   "diagnostico": "M75",
+   "concepto": "Ventana de 'descompensado' tras evento grave",
+   "valor": null,
+   "unidad": "días",
+   "fuente": {
+    "tipo": "no_encontrado",
+    "ref": null,
+    "detalle": "No encontrado: no se buscó trayectoria de riesgo post-evento para este diagnóstico de menor riesgo. Valor por defecto a definir por el equipo clínico.",
+    "consultado": "2026-10-15"
+   },
+   "estado": "a_validar_por_medico",
+   "evento": "visita_urgencia|hospitalizacion"
+  }
+ ]
+}

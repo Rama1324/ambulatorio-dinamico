@@ -15,15 +15,18 @@ KB = os.path.join(RAIZ, "lambda", "conocimiento")
 # Medición clave de cada diagnóstico (decisión de diseño del equipo, a validar por médico).
 # sube_a_fila: solo si la tabla define el estado por control metabólico (DM2 "descontrolada"); el resto solo genera revisión.
 MEDICION_CLAVE = {
-    "E11": {"tipo": "HbA1c", "umbral_id": "medicion.HbA1c.descompensado_umbral", "sentido": "mayor_igual", "sube_a_fila": True},
-    "J44": {"tipo": "saturacion_o2", "umbral_id": "medicion.saturacion_o2.descompensado_umbral", "sentido": "menor_igual", "sube_a_fila": False},
-    "J45": {"tipo": "peak_flow", "umbral_id": "medicion.peak_flow.descompensado_umbral", "sentido": "menor_igual", "sube_a_fila": False},
-    "F32": {"tipo": "PHQ9", "umbral_id": "medicion.PHQ9.descompensado_umbral", "sentido": "mayor_igual", "sube_a_fila": False},
-    "I10": {"tipo": "presion_sistolica", "umbral_id": "medicion.presion_sistolica.descompensado_umbral", "sentido": "mayor_igual", "sube_a_fila": False},
-    "M17": {"tipo": "escala_dolor_eva", "umbral_id": "medicion.escala_dolor_eva.descompensado_umbral", "sentido": "mayor_igual", "sube_a_fila": False},
-    "M54": {"tipo": "escala_dolor_eva", "umbral_id": "medicion.escala_dolor_eva.descompensado_umbral", "sentido": "mayor_igual", "sube_a_fila": False},
-    "M75": {"tipo": "escala_dolor_eva", "umbral_id": "medicion.escala_dolor_eva.descompensado_umbral", "sentido": "mayor_igual", "sube_a_fila": False},
+    "E11": {"tipo": "HbA1c", "umbral_id": "medicion.HbA1c.descompensado_umbral", "unidad_registro": "%", "sube_a_fila": True},
+    "J44": {"tipo": "saturacion_o2", "umbral_id": "medicion.SatO2.EPOC_moderado_umbral", "unidad_registro": "%", "sube_a_fila": False},
+    "J45": {"tipo": "peak_flow", "umbral_id": "medicion.PEF.asma_descompensado_umbral", "unidad_registro": "L/min", "sube_a_fila": False},
+    "F32": {"tipo": "PHQ9", "umbral_id": "medicion.PHQ9.descompensado_umbral", "unidad_registro": "puntos", "sube_a_fila": False},
+    "I10": {"tipo": "presion_sistolica", "umbral_id": "medicion.PAS.descompensado_umbral", "unidad_registro": "mmHg", "sube_a_fila": False},
+    "M17": {"tipo": "escala_dolor_eva", "umbral_id": "medicion.EVA.severo_umbral", "unidad_registro": "puntos", "sube_a_fila": False},
+    "M54": {"tipo": "escala_dolor_eva", "umbral_id": "medicion.EVA.severo_umbral", "unidad_registro": "puntos", "sube_a_fila": False},
+    "M75": {"tipo": "escala_dolor_eva", "umbral_id": "medicion.EVA.severo_umbral", "unidad_registro": "puntos", "sube_a_fila": False},
 }
+# Eventos a los que aplica cada ventana del borrador
+EVENTOS_DE = {"hospitalizacion": ["hospitalizacion"], "visita_urgencia": ["visita_urgencia"],
+              "visita_urgencia_o_hospitalizacion": ["visita_urgencia", "hospitalizacion"], "evento_grave": ["visita_urgencia", "hospitalizacion"]}
 
 
 def cargar(nombre, defecto=None):
@@ -46,20 +49,31 @@ def main():
     pendientes, dxs = [], {}
     for cie, d in ssmso["diagnosticos"].items():
         x = {k: d.get(k) for k in ("texto", "fila_descompensado", "estado", "equivalencia", "detalle", "candidata")}
-        # ventana: la MÁS LARGA con fuente entre los eventos graves del diagnóstico (conservador: no baja antes)
-        vs = [e for i, e in evid.items() if i.startswith(f"{cie}.") and i.endswith(".ventana_dias") and e.get("estado") == "con_fuente" and e.get("valor")]
-        if vs:
-            v = max(vs, key=lambda e: e["valor"])
-            x["ventana"] = {"valor": v["valor"], "unidad": "días", "fuente": fuente_txt(v), "id": v["id"], "estado": "con_fuente"}
-        else:
-            x["ventana"] = {"valor": None, "estado": "a_validar_por_medico", "fuente": "sin fuente: el evento grave sigue vigente hasta una estabilización (conservador)"}
-            if x["fila_descompensado"]:
-                pendientes.append(f"{cie}: ¿cuántos días después de una urgencia u hospitalización grave sigue vigente la fila 'descompensado'?")
+        # ventanas por tipo de evento (la del evento citado). Sin fuente para ese tipo: no vence (conservador, no baja a nadie)
+        x["ventanas"] = {}
+        for i, e in evid.items():
+            if not (i.startswith(f"{cie}.") and i.endswith(".ventana_dias")):
+                continue
+            evento = i.split(".")[1]
+            for tipo in EVENTOS_DE.get(evento, [evento]):
+                if e.get("estado") == "con_fuente" and e.get("valor"):
+                    if tipo not in x["ventanas"] or e["valor"] > x["ventanas"][tipo]["valor"]:
+                        x["ventanas"][tipo] = {"valor": e["valor"], "unidad": "días", "fuente": fuente_txt(e), "id": e["id"], "estado": "con_fuente"}
+        if x["fila_descompensado"]:
+            for tipo in ("visita_urgencia", "hospitalizacion"):
+                if tipo not in x["ventanas"]:
+                    pendientes.append(f"{cie}: ¿cuántos días tras una {tipo.replace('_', ' ')} grave sigue vigente la fila descompensado? (sin fuente: no vence)")
         m = MEDICION_CLAVE.get(cie)
         if m:
             u = umb.get(m["umbral_id"])
-            umbral = ({"valor": u["valor"], "unidad": u.get("unidad"), "sentido": m["sentido"], "fuente": fuente_txt(u), "estado": u.get("estado", "con_fuente")}
-                      if u and u.get("valor") is not None else {"valor": None, "sentido": m["sentido"], "estado": "a_validar_por_medico", "fuente": "sin fuente"})
+            sentido = {">=": "mayor_igual", ">": "mayor_igual", "<": "menor", "<=": "menor_igual"}.get((u or {}).get("operador"), "mayor_igual")
+            if u and u.get("valor") is not None and str(u.get("unidad", "")).split(" ")[0] != m["unidad_registro"].split(" ")[0]:
+                umbral = {"valor": None, "sentido": sentido, "estado": "a_validar_por_medico",
+                          "fuente": f"{fuente_txt(u)} · NO APLICABLE: la guía usa {u.get('unidad')} y el registro trae {m['unidad_registro']}"}
+            elif u and u.get("valor") is not None:
+                umbral = {"valor": u["valor"], "unidad": u.get("unidad"), "sentido": sentido, "fuente": fuente_txt(u), "estado": u.get("estado", "con_fuente"), "id": u["id"]}
+            else:
+                umbral = {"valor": None, "sentido": sentido, "estado": "a_validar_por_medico", "fuente": "sin fuente"}
             x["medicion"] = {"tipo": m["tipo"], "umbral": umbral, "sube_a_fila": m["sube_a_fila"], "definida_por": "equipo (a validar por médico)"}
             if m["sube_a_fila"] and d.get("fila_descompensado"):
                 x["fila_por_medicion"] = d["fila_descompensado"]

@@ -57,10 +57,14 @@
    "equivalencia": null,
    "detalle": null,
    "candidata": null,
-   "ventana": {
-    "valor": null,
-    "estado": "a_validar_por_medico",
-    "fuente": "sin fuente: el evento grave sigue vigente hasta una estabilización (conservador)"
+   "ventanas": {
+    "hospitalizacion": {
+     "valor": 90,
+     "unidad": "días",
+     "fuente": "PMID:25666406 — Greene SJ et al., 2015, Nat Rev Cardiol, revisión narrativa: 'mortality and readmission rates within 60-90 days of discharge for patients hospitalized with heart failure (HF) approach 15% and 30%, respectively. This early postdischarge period has been termed the vulnerable phase'.",
+     "id": "I50.hospitalizacion.ventana_dias",
+     "estado": "con_fuente"
+    }
    },
    "medicion_clave": null
   },
@@ -79,10 +83,21 @@
    },
    "detalle": null,
    "candidata": null,
-   "ventana": {
-    "valor": null,
-    "estado": "a_validar_por_medico",
-    "fuente": "sin fuente: el evento grave sigue vigente hasta una estabilización (conservador)"
+   "ventanas": {
+    "visita_urgencia": {
+     "valor": 45,
+     "unidad": "días",
+     "fuente": "PMID:25656852 — Dharmarajan K et al., 2015, BMJ, cohorte Medicare: tras hospitalización por IAM el riesgo de readmisión cae 50% al día 13 y el de muerte al día 6; el cambio diario de riesgo de readmisión se estabiliza (95%) al día 38 y el de muerte al día 19.",
+     "id": "I20.visita_urgencia_o_hospitalizacion.ventana_dias",
+     "estado": "con_fuente"
+    },
+    "hospitalizacion": {
+     "valor": 45,
+     "unidad": "días",
+     "fuente": "PMID:25656852 — Dharmarajan K et al., 2015, BMJ, cohorte Medicare: tras hospitalización por IAM el riesgo de readmisión cae 50% al día 13 y el de muerte al día 6; el cambio diario de riesgo de readmisión se estabiliza (95%) al día 38 y el de muerte al día 19.",
+     "id": "I20.visita_urgencia_o_hospitalizacion.ventana_dias",
+     "estado": "con_fuente"
+    }
    },
    "medicion_clave": null
   },
@@ -98,18 +113,16 @@
     "pagina": 85,
     "especialidad_pdf": "CARDIOLOGÍA ADULTO"
    },
-   "ventana": {
-    "valor": null,
-    "estado": "a_validar_por_medico",
-    "fuente": "sin fuente: el evento grave sigue vigente hasta una estabilización (conservador)"
-   },
+   "ventanas": {},
    "medicion": {
     "tipo": "presion_sistolica",
     "umbral": {
-     "valor": null,
+     "valor": 160,
+     "unidad": "mmHg",
      "sentido": "mayor_igual",
-     "estado": "a_validar_por_medico",
-     "fuente": "sin fuente"
+     "fuente": "https://diprece.minsal.cl/wrdprss_minsal/wp-content/uploads/2014/12/Hipertensi%C3%B3n-Arterial-en-personas-de-15-a%C3%B1os-y-m%C3%A1s.pdf — MINSAL, Guía HTA 2010, clasificación: 'HTA Etapa 2: 160-179 y/o 100-109'; 'Utilizar terapia combinada en pacientes hipertensos con PA ≥ 160/100'.",
+     "estado": "con_fuente",
+     "id": "medicion.PAS.descompensado_umbral"
     },
     "sube_a_fila": false,
     "definida_por": "equipo (a validar por médico)"
@@ -128,18 +141,24 @@
    "equivalencia": null,
    "detalle": null,
    "candidata": null,
-   "ventana": {
-    "valor": null,
-    "estado": "a_validar_por_medico",
-    "fuente": "sin fuente: el evento grave sigue vigente hasta una estabilización (conservador)"
+   "ventanas": {
+    "hospitalizacion": {
+     "valor": 90,
+     "unidad": "días",
+     "fuente": "PMID:22684094 — Suissa S et al., 2012, Thorax, cohorte poblacional Quebec n=73.106 desde la primera hospitalización por EPOC: 'Mortality after a severe exacerbation peaked to 40 deaths per 10 000 per day in the first week after admission, dropping gradually to 5 after 3 months'.",
+     "id": "J44.hospitalizacion.ventana_dias",
+     "estado": "con_fuente"
+    }
    },
    "medicion": {
     "tipo": "saturacion_o2",
     "umbral": {
-     "valor": null,
-     "sentido": "menor_igual",
-     "estado": "a_validar_por_medico",
-     "fuente": "sin fuente"
+     "valor": 92,
+     "unidad": "%",
+     "sentido": "menor",
+     "fuente": "https://goldcopd.org/wp-content/uploads/2026/01/GOLD-REPORT-2026-v1.3-8Dec2025_WMV2.pdf — GOLD 2026 Report (propuesta de Roma, Celli BR 2021, PMID:34570991), Fig. 4.2: leve 'Resting SaO2 ≥ 92% breathing ambient air ... AND change ≤ 3%'; moderada 'Resting SaO2 < 92% ... AND/OR change > 3%'. También: 'If peripheral oxygen saturation is ≤ 92%, arterial blood gases should be measured'.",
+     "estado": "con_fuente",
+     "id": "medicion.SatO2.EPOC_moderado_umbral"
     },
     "sube_a_fila": false,
     "definida_por": "equipo (a validar por médico)"
@@ -158,18 +177,29 @@
    "equivalencia": null,
    "detalle": null,
    "candidata": null,
-   "ventana": {
-    "valor": null,
-    "estado": "a_validar_por_medico",
-    "fuente": "sin fuente: el evento grave sigue vigente hasta una estabilización (conservador)"
+   "ventanas": {
+    "visita_urgencia": {
+     "valor": 28,
+     "unidad": "días",
+     "fuente": "PMID:28176972 — Hill J et al., 2017, BMJ Open Respir Res, revisión sistemática de 10 estudios (n=32.923): recaída 8±3%, 12±4% y 14±6% a 1, 2 y 4 semanas; 'A median of 17% of patients who are discharged from the ED will relapse within the first 4 weeks'.",
+     "id": "J45.visita_urgencia.ventana_dias",
+     "estado": "con_fuente"
+    },
+    "hospitalizacion": {
+     "valor": 30,
+     "unidad": "días",
+     "fuente": "PMID:34593626 — Patel N et al., 2022, Postgrad Med J, Nationwide Readmissions Database 2013 (130.490 ingresos; N ponderado 311.173): readmisión no planificada a 30 días 11,9%; 'One-fourth of the revisits occurred in the first week, while half of the revisits took place in the first 2 weeks'.",
+     "id": "J45.hospitalizacion.ventana_dias",
+     "estado": "con_fuente"
+    }
    },
    "medicion": {
     "tipo": "peak_flow",
     "umbral": {
      "valor": null,
-     "sentido": "menor_igual",
+     "sentido": "menor",
      "estado": "a_validar_por_medico",
-     "fuente": "sin fuente"
+     "fuente": "https://ginasthma.org/wp-content/uploads/2024/12/GINA-Summary-Guide-2024-WEB-WMS.pdf — GINA 2024, plan de acción: aumentar tratamiento si 'Lung function is low (FEV1 <60% of predicted value, PEF <60% of personal best)'; criterio de alta 'PEF improving, and >60-80% of personal best or predicted'. · NO APLICABLE: la guía usa % del teórico o del mejor personal y el registro trae L/min"
     },
     "sube_a_fila": false,
     "definida_por": "equipo (a validar por médico)"
@@ -191,10 +221,14 @@
    },
    "detalle": null,
    "candidata": null,
-   "ventana": {
-    "valor": null,
-    "estado": "a_validar_por_medico",
-    "fuente": "sin fuente: el evento grave sigue vigente hasta una estabilización (conservador)"
+   "ventanas": {
+    "hospitalizacion": {
+     "valor": 90,
+     "unidad": "días",
+     "fuente": "PMID:30673983 — Tansel A et al., 2019, Dig Dis Sci, cohorte VA n=38.955: 'Daily risk of readmission was the highest on day 1 (1.23%) and declined 50% by day 71 and 75% by day 260 ... Daily risk of death was the highest on day 1 (0.78%) and declined 50% by day 31 and 75% by day 64'.",
+     "id": "K70.hospitalizacion.ventana_dias",
+     "estado": "con_fuente"
+    }
    },
    "medicion_clave": null
   },
@@ -210,11 +244,7 @@
     "pagina": 95,
     "especialidad_pdf": "GASTROENTEROLOGÍA ADULTO"
    },
-   "ventana": {
-    "valor": null,
-    "estado": "a_validar_por_medico",
-    "fuente": "sin fuente: el evento grave sigue vigente hasta una estabilización (conservador)"
-   },
+   "ventanas": {},
    "medicion_clave": null
   },
   "E11": {
@@ -229,18 +259,31 @@
    "equivalencia": null,
    "detalle": null,
    "candidata": null,
-   "ventana": {
-    "valor": null,
-    "estado": "a_validar_por_medico",
-    "fuente": "sin fuente: el evento grave sigue vigente hasta una estabilización (conservador)"
+   "ventanas": {
+    "hospitalizacion": {
+     "valor": 30,
+     "unidad": "días",
+     "fuente": "PMID:30913009 — Hurtado CR et al., 2019, Endocr Pract, Nationwide Readmission Database 2010-2014 (479.590 ingresos por CAD en adultos, DM1 y DM2): 12,3% readmitidos a 30 días; 40,8% por CAD recurrente; 'About 50% of patients were re-admitted within 2 weeks after discharge'.",
+     "id": "E11.hospitalizacion.ventana_dias",
+     "estado": "con_fuente"
+    },
+    "visita_urgencia": {
+     "valor": 30,
+     "unidad": "días",
+     "fuente": "PMID:40279059 — Yan JW et al., 2025, CJEM, cohorte prospectiva multicéntrica en 4 servicios de urgencia de Ontario (657 visitas, DM1 o DM2): en 30 días 14,7% reconsultó por hiperglicemia, 7,5% fue hospitalizado y 0,6% falleció.",
+     "id": "E11.visita_urgencia.ventana_dias",
+     "estado": "con_fuente"
+    }
    },
    "medicion": {
     "tipo": "HbA1c",
     "umbral": {
-     "valor": null,
+     "valor": 7,
+     "unidad": "%",
      "sentido": "mayor_igual",
-     "estado": "a_validar_por_medico",
-     "fuente": "sin fuente"
+     "fuente": "https://superdesalud.gob.cl/difusion/572/articles-623_recurso_1.pdf — MINSAL, Guía Clínica DM2 2010: 'Criterio de compensación: HbA1c < 7%' (Tabla 1). Por lo tanto, ≥7% = no compensado.",
+     "estado": "con_fuente",
+     "id": "medicion.HbA1c.descompensado_umbral"
     },
     "sube_a_fila": true,
     "definida_por": "equipo (a validar por médico)"
@@ -265,11 +308,7 @@
    "equivalencia": null,
    "detalle": null,
    "candidata": null,
-   "ventana": {
-    "valor": null,
-    "estado": "a_validar_por_medico",
-    "fuente": "sin fuente: el evento grave sigue vigente hasta una estabilización (conservador)"
-   },
+   "ventanas": {},
    "medicion_clave": null
   },
   "E66": {
@@ -279,11 +318,7 @@
    "equivalencia": null,
    "detalle": "La tabla no tiene fila de obesidad descompensada: mantiene su prioridad.",
    "candidata": null,
-   "ventana": {
-    "valor": null,
-    "estado": "a_validar_por_medico",
-    "fuente": "sin fuente: el evento grave sigue vigente hasta una estabilización (conservador)"
-   },
+   "ventanas": {},
    "medicion_clave": null
   },
   "G40": {
@@ -301,10 +336,21 @@
    },
    "detalle": null,
    "candidata": null,
-   "ventana": {
-    "valor": null,
-    "estado": "a_validar_por_medico",
-    "fuente": "sin fuente: el evento grave sigue vigente hasta una estabilización (conservador)"
+   "ventanas": {
+    "visita_urgencia": {
+     "valor": 30,
+     "unidad": "días",
+     "fuente": "PMID:33661526 — Roussel M et al., 2021, Acad Emerg Med, estudio retrospectivo en 8 servicios de urgencia franceses (n=1.820 dados de alta): 8% reconsultó por recurrencia de crisis a 30 días; el tratamiento antiepiléptico crónico (ORa 2,58) y la crisis focal (ORa 2,16) se asociaron a recurrencia.",
+     "id": "G40.visita_urgencia.ventana_dias",
+     "estado": "con_fuente"
+    },
+    "hospitalizacion": {
+     "valor": 30,
+     "unidad": "días",
+     "fuente": "PMID:32309030 — Terman SW et al., 2020, Neurol Clin Pract, State Inpatient Databases (n=98.712): 14% readmitidos a 30 días; 30% de las readmisiones por epilepsia/convulsiones.",
+     "id": "G40.hospitalizacion.ventana_dias",
+     "estado": "con_fuente"
+    }
    },
    "medicion_clave": null
   },
@@ -320,11 +366,7 @@
     "pagina": 103,
     "especialidad_pdf": "NEUROLOGÍA ADULTO"
    },
-   "ventana": {
-    "valor": null,
-    "estado": "a_validar_por_medico",
-    "fuente": "sin fuente: el evento grave sigue vigente hasta una estabilización (conservador)"
-   },
+   "ventanas": {},
    "medicion_clave": null
   },
   "F32": {
@@ -339,18 +381,31 @@
     "pagina": 110,
     "especialidad_pdf": "PSIQUIATRÍA ADULTO"
    },
-   "ventana": {
-    "valor": null,
-    "estado": "a_validar_por_medico",
-    "fuente": "sin fuente: el evento grave sigue vigente hasta una estabilización (conservador)"
+   "ventanas": {
+    "hospitalizacion": {
+     "valor": 90,
+     "unidad": "días",
+     "fuente": "PMID:28564699 — Chung DT et al., 2017, JAMA Psychiatry, revisión sistemática y metaanálisis de 100 estudios (17.857 suicidios; 4.725.445 personas-año): tasa global 484/100.000 personas-año; 'The suicide rate was highest within 3 months after discharge (1132; 95% CI, 874-1467)' y 2.078 en ingresados por ideación o conducta suicida.",
+     "id": "F32.hospitalizacion.ventana_dias",
+     "estado": "con_fuente"
+    },
+    "visita_urgencia": {
+     "valor": 30,
+     "unidad": "días",
+     "fuente": "PMID:28320225 — Olfson M et al., 2017, Am J Psychiatry, cohorte Medicaid de adultos con autolesión (n=61.297): suicidio 439,1/100.000 personas-año en 12 meses (37,2 veces la población general); con método violento HR 17,5 en los primeros 30 días, pero no en los 335 días siguientes.",
+     "id": "F32.visita_urgencia.ventana_dias",
+     "estado": "con_fuente"
+    }
    },
    "medicion": {
     "tipo": "PHQ9",
     "umbral": {
-     "valor": null,
+     "valor": 10,
+     "unidad": "puntos",
      "sentido": "mayor_igual",
-     "estado": "a_validar_por_medico",
-     "fuente": "sin fuente"
+     "fuente": "PMID:11556941 — Kroenke K et al., 2001, J Gen Intern Med, validación con n=6.000 (580 con entrevista estructurada): 'PHQ-9 scores of 5, 10, 15, and 20 represented mild, moderate, moderately severe, and severe depression'; puntaje ≥10 con sensibilidad 88% y especificidad 88% para depresión mayor.",
+     "estado": "con_fuente",
+     "id": "medicion.PHQ9.descompensado_umbral"
     },
     "sube_a_fila": false,
     "definida_por": "equipo (a validar por médico)"
@@ -364,11 +419,7 @@
    "equivalencia": null,
    "detalle": "No se encontró fila de ansiedad en §11.1.",
    "candidata": null,
-   "ventana": {
-    "valor": null,
-    "estado": "a_validar_por_medico",
-    "fuente": "sin fuente: el evento grave sigue vigente hasta una estabilización (conservador)"
-   },
+   "ventanas": {},
    "medicion_clave": null
   },
   "M17": {
@@ -378,18 +429,16 @@
    "equivalencia": null,
    "detalle": "Sin fila de descompensación: mantiene su prioridad.",
    "candidata": null,
-   "ventana": {
-    "valor": null,
-    "estado": "a_validar_por_medico",
-    "fuente": "sin fuente: el evento grave sigue vigente hasta una estabilización (conservador)"
-   },
+   "ventanas": {},
    "medicion": {
     "tipo": "escala_dolor_eva",
     "umbral": {
-     "valor": null,
+     "valor": 7,
+     "unidad": "puntos (0-10)",
      "sentido": "mayor_igual",
-     "estado": "a_validar_por_medico",
-     "fuente": "sin fuente"
+     "fuente": "PMID:7659438 — Serlin RC et al., 1995, Pain (dolor oncológico, escala numérica 0-10, muestras multinacionales): '1-4 correspond to mild pain, 5-6 to moderate pain, and 7-10 to severe pain'.",
+     "estado": "con_fuente",
+     "id": "medicion.EVA.severo_umbral"
     },
     "sube_a_fila": false,
     "definida_por": "equipo (a validar por médico)"
@@ -403,18 +452,16 @@
    "equivalencia": null,
    "detalle": "Sin fila de descompensación: mantiene su prioridad.",
    "candidata": null,
-   "ventana": {
-    "valor": null,
-    "estado": "a_validar_por_medico",
-    "fuente": "sin fuente: el evento grave sigue vigente hasta una estabilización (conservador)"
-   },
+   "ventanas": {},
    "medicion": {
     "tipo": "escala_dolor_eva",
     "umbral": {
-     "valor": null,
+     "valor": 7,
+     "unidad": "puntos (0-10)",
      "sentido": "mayor_igual",
-     "estado": "a_validar_por_medico",
-     "fuente": "sin fuente"
+     "fuente": "PMID:7659438 — Serlin RC et al., 1995, Pain (dolor oncológico, escala numérica 0-10, muestras multinacionales): '1-4 correspond to mild pain, 5-6 to moderate pain, and 7-10 to severe pain'.",
+     "estado": "con_fuente",
+     "id": "medicion.EVA.severo_umbral"
     },
     "sube_a_fila": false,
     "definida_por": "equipo (a validar por médico)"
@@ -428,18 +475,16 @@
    "equivalencia": null,
    "detalle": "Sin fila de descompensación: mantiene su prioridad.",
    "candidata": null,
-   "ventana": {
-    "valor": null,
-    "estado": "a_validar_por_medico",
-    "fuente": "sin fuente: el evento grave sigue vigente hasta una estabilización (conservador)"
-   },
+   "ventanas": {},
    "medicion": {
     "tipo": "escala_dolor_eva",
     "umbral": {
-     "valor": null,
+     "valor": 7,
+     "unidad": "puntos (0-10)",
      "sentido": "mayor_igual",
-     "estado": "a_validar_por_medico",
-     "fuente": "sin fuente"
+     "fuente": "PMID:7659438 — Serlin RC et al., 1995, Pain (dolor oncológico, escala numérica 0-10, muestras multinacionales): '1-4 correspond to mild pain, 5-6 to moderate pain, and 7-10 to severe pain'.",
+     "estado": "con_fuente",
+     "id": "medicion.EVA.severo_umbral"
     },
     "sube_a_fila": false,
     "definida_por": "equipo (a validar por médico)"
@@ -448,28 +493,18 @@
   }
  },
  "pendientes_medicos": [
-  "I50: ¿cuántos días después de una urgencia u hospitalización grave sigue vigente la fila 'descompensado'?",
-  "I20: ¿cuántos días después de una urgencia u hospitalización grave sigue vigente la fila 'descompensado'?",
+  "I50: ¿cuántos días tras una visita urgencia grave sigue vigente la fila descompensado? (sin fuente: no vence)",
   "I20: I20 incluye toda angina de pecho; la fila oficial es solo angina inestable. Se usa como fila 'descompensado' (mismo criterio que las reglas actuales).",
-  "I10: umbral de presion_sistolica que define descompensación",
   "I10: HTA resistente (no controlada con 3 fármacos) no equivale a 'descompensada'. Solo genera revisión.",
-  "J44: ¿cuántos días después de una urgencia u hospitalización grave sigue vigente la fila 'descompensado'?",
-  "J44: umbral de saturacion_o2 que define descompensación",
-  "J45: ¿cuántos días después de una urgencia u hospitalización grave sigue vigente la fila 'descompensado'?",
+  "J44: ¿cuántos días tras una visita urgencia grave sigue vigente la fila descompensado? (sin fuente: no vence)",
   "J45: umbral de peak_flow que define descompensación",
-  "K70: ¿cuántos días después de una urgencia u hospitalización grave sigue vigente la fila 'descompensado'?",
+  "K70: ¿cuántos días tras una visita urgencia grave sigue vigente la fila descompensado? (sin fuente: no vence)",
   "K70: K70 es enfermedad hepática alcohólica; se asimila a la fila de cirrosis descompensada.",
   "K21: 'Refractaria' no está definida en el registro (¿cuántos cambios de tratamiento?). Solo genera revisión.",
-  "E11: ¿cuántos días después de una urgencia u hospitalización grave sigue vigente la fila 'descompensado'?",
-  "E11: umbral de HbA1c que define descompensación",
-  "E03: ¿cuántos días después de una urgencia u hospitalización grave sigue vigente la fila 'descompensado'?",
-  "G40: ¿cuántos días después de una urgencia u hospitalización grave sigue vigente la fila 'descompensado'?",
+  "E03: ¿cuántos días tras una visita urgencia grave sigue vigente la fila descompensado? (sin fuente: no vence)",
+  "E03: ¿cuántos días tras una hospitalizacion grave sigue vigente la fila descompensado? (sin fuente: no vence)",
   "G40: La tabla no tiene fila 'epilepsia descompensada'; se usa 'crisis mensuales' (media). Crisis diarias (alta) no se pueden distinguir en el registro.",
   "G43: 'Crónica refractaria' requiere criterios clínicos que el registro no trae. Solo genera revisión.",
-  "F32: umbral de PHQ9 que define descompensación",
-  "F32: En el texto del PDF la prioridad de 'EPISODIO DEPRESIVO' (pág. 110) no se puede leer con certeza. Pendiente de verificar en el PDF original. Solo genera revisión.",
-  "M17: umbral de escala_dolor_eva que define descompensación",
-  "M54: umbral de escala_dolor_eva que define descompensación",
-  "M75: umbral de escala_dolor_eva que define descompensación"
+  "F32: En el texto del PDF la prioridad de 'EPISODIO DEPRESIVO' (pág. 110) no se puede leer con certeza. Pendiente de verificar en el PDF original. Solo genera revisión."
  ]
 }

@@ -1,0 +1,597 @@
+{
+ "version": "evidencia_v1",
+ "generado": "2026-10-15",
+ "script": "scripts/buscar_pubmed.py",
+ "entradas": [
+  {
+   "id": "medicion.HbA1c.meta_control",
+   "diagnosticos": [
+    "E11"
+   ],
+   "concepto": "Meta de control glicémico (compensado si HbA1c < valor)",
+   "valor": 7,
+   "unidad": "%",
+   "operador": "<",
+   "fuente": {
+    "tipo": "guia_minsal",
+    "ref": "https://superdesalud.gob.cl/difusion/572/articles-623_recurso_1.pdf",
+    "detalle": "MINSAL, Guía Clínica 2010 Diabetes Mellitus tipo 2 (GES): 'La meta de tratamiento en la gran mayoría de los pacientes diabéticos es lograr un nivel de HbA1c inferior a 7%' (recomendación B); 'Criterio de compensación: HbA1c < 7%'.",
+    "consultado": "2026-10-15"
+   },
+   "fuentes_adicionales": [
+    {
+     "tipo": "guia_internacional",
+     "ref": "https://pmc.ncbi.nlm.nih.gov/articles/PMC11635034/",
+     "detalle": "ADA Standards of Care 2025, sección 6 (PMID:39651981), Tabla 6.3: 'A1C <7.0% (<53 mmol/mol)'.",
+     "consultado": "2026-10-15"
+    }
+   ],
+   "nota": "La guía MINSAL acepta metas menos estrictas en adultos mayores o con comorbilidad (recomendación C).",
+   "confianza": "alta",
+   "estado": "con_fuente"
+  },
+  {
+   "id": "medicion.HbA1c.descompensado_umbral",
+   "diagnosticos": [
+    "E11"
+   ],
+   "concepto": "No compensado (fuera de meta)",
+   "valor": 7,
+   "unidad": "%",
+   "operador": ">=",
+   "fuente": {
+    "tipo": "guia_minsal",
+    "ref": "https://superdesalud.gob.cl/difusion/572/articles-623_recurso_1.pdf",
+    "detalle": "MINSAL, Guía Clínica DM2 2010: 'Criterio de compensación: HbA1c < 7%' (Tabla 1). Por lo tanto, ≥7% = no compensado.",
+    "consultado": "2026-10-15"
+   },
+   "fuentes_adicionales": [],
+   "nota": "",
+   "confianza": "alta",
+   "estado": "con_fuente"
+  },
+  {
+   "id": "medicion.HbA1c.severo_umbral",
+   "diagnosticos": [
+    "E11"
+   ],
+   "concepto": "Hiperglicemia muy elevada",
+   "valor": 9,
+   "unidad": "%",
+   "operador": ">",
+   "fuente": {
+    "tipo": "guia_minsal",
+    "ref": "https://superdesalud.gob.cl/difusion/572/articles-623_recurso_1.pdf",
+    "detalle": "MINSAL, Guía Clínica DM2 2010: 'Ante una hiperglicemia muy elevada, HbA1c>9% y un paciente sintomático y con baja de peso importante, habitualmente se requiere insulinoterapia'; en el algoritmo de tratamiento, 'HbA1c >9%' vs 'HbA1c entre 7-9%'.",
+    "consultado": "2026-10-15"
+   },
+   "fuentes_adicionales": [],
+   "nota": "",
+   "confianza": "alta",
+   "estado": "con_fuente"
+  },
+  {
+   "id": "medicion.PHQ9.descompensado_umbral",
+   "diagnosticos": [
+    "F32"
+   ],
+   "concepto": "Depresión moderada o más (punto de corte de depresión mayor)",
+   "valor": 10,
+   "unidad": "puntos",
+   "operador": ">=",
+   "fuente": {
+    "tipo": "pubmed",
+    "ref": "PMID:11556941",
+    "detalle": "Kroenke K et al., 2001, J Gen Intern Med, validación con n=6.000 (580 con entrevista estructurada): 'PHQ-9 scores of 5, 10, 15, and 20 represented mild, moderate, moderately severe, and severe depression'; puntaje ≥10 con sensibilidad 88% y especificidad 88% para depresión mayor.",
+    "consultado": "2026-10-15",
+    "verificado_ncbi": {
+     "titulo": "The PHQ-9: validity of a brief depression severity measure.",
+     "revista": "J Gen Intern Med",
+     "anio": "2001",
+     "consultado": "2026-10-15"
+    }
+   },
+   "fuentes_adicionales": [],
+   "nota": "",
+   "confianza": "alta",
+   "estado": "con_fuente"
+  },
+  {
+   "id": "medicion.PHQ9.moderadamente_severo_umbral",
+   "diagnosticos": [
+    "F32"
+   ],
+   "concepto": "Depresión moderadamente severa",
+   "valor": 15,
+   "unidad": "puntos",
+   "operador": ">=",
+   "fuente": {
+    "tipo": "pubmed",
+    "ref": "PMID:11556941",
+    "detalle": "Kroenke 2001: bandas 5/10/15/20 = leve/moderada/moderadamente severa/severa.",
+    "consultado": "2026-10-15",
+    "verificado_ncbi": {
+     "titulo": "The PHQ-9: validity of a brief depression severity measure.",
+     "revista": "J Gen Intern Med",
+     "anio": "2001",
+     "consultado": "2026-10-15"
+    }
+   },
+   "fuentes_adicionales": [],
+   "nota": "",
+   "confianza": "alta",
+   "estado": "con_fuente"
+  },
+  {
+   "id": "medicion.PHQ9.severo_umbral",
+   "diagnosticos": [
+    "F32"
+   ],
+   "concepto": "Depresión severa",
+   "valor": 20,
+   "unidad": "puntos",
+   "operador": ">=",
+   "fuente": {
+    "tipo": "pubmed",
+    "ref": "PMID:11556941",
+    "detalle": "Kroenke 2001: bandas 5/10/15/20 = leve/moderada/moderadamente severa/severa.",
+    "consultado": "2026-10-15",
+    "verificado_ncbi": {
+     "titulo": "The PHQ-9: validity of a brief depression severity measure.",
+     "revista": "J Gen Intern Med",
+     "anio": "2001",
+     "consultado": "2026-10-15"
+    }
+   },
+   "fuentes_adicionales": [],
+   "nota": "",
+   "confianza": "alta",
+   "estado": "con_fuente"
+  },
+  {
+   "id": "medicion.PAS.meta_control",
+   "diagnosticos": [
+    "I10",
+    "I20",
+    "I50"
+   ],
+   "concepto": "Meta de presión arterial sistólica en hipertensos",
+   "valor": 140,
+   "unidad": "mmHg",
+   "operador": "<",
+   "fuente": {
+    "tipo": "guia_minsal",
+    "ref": "https://diprece.minsal.cl/wrdprss_minsal/wp-content/uploads/2014/12/Hipertensi%C3%B3n-Arterial-en-personas-de-15-a%C3%B1os-y-m%C3%A1s.pdf",
+    "detalle": "MINSAL, Guía Clínica 2010 Hipertensión Arterial Primaria o Esencial en personas de 15 años y más (GES): 'Meta terapéutica PA < 140/90 mmHg'; 'lograr niveles de PA bajo 140/90 mmHg'.",
+    "consultado": "2026-10-15"
+   },
+   "fuentes_adicionales": [],
+   "nota": "",
+   "confianza": "alta",
+   "estado": "con_fuente"
+  },
+  {
+   "id": "medicion.PAS.meta_control_diabetico",
+   "diagnosticos": [
+    "E11"
+   ],
+   "concepto": "Meta de presión arterial sistólica en diabéticos",
+   "valor": 130,
+   "unidad": "mmHg",
+   "operador": "<",
+   "fuente": {
+    "tipo": "guia_minsal",
+    "ref": "https://superdesalud.gob.cl/difusion/572/articles-623_recurso_1.pdf",
+    "detalle": "MINSAL, Guía Clínica DM2 2010: 'Procurar mantener la presión arterial bajo 130/80 mm Hg en toda persona diabética' (A).",
+    "consultado": "2026-10-15"
+   },
+   "fuentes_adicionales": [],
+   "nota": "",
+   "confianza": "alta",
+   "estado": "con_fuente"
+  },
+  {
+   "id": "medicion.PAS.descompensado_umbral",
+   "diagnosticos": [
+    "I10",
+    "I20",
+    "I50",
+    "E11"
+   ],
+   "concepto": "HTA etapa 2 (no controlada, indica terapia combinada)",
+   "valor": 160,
+   "unidad": "mmHg",
+   "operador": ">=",
+   "fuente": {
+    "tipo": "guia_minsal",
+    "ref": "https://diprece.minsal.cl/wrdprss_minsal/wp-content/uploads/2014/12/Hipertensi%C3%B3n-Arterial-en-personas-de-15-a%C3%B1os-y-m%C3%A1s.pdf",
+    "detalle": "MINSAL, Guía HTA 2010, clasificación: 'HTA Etapa 2: 160-179 y/o 100-109'; 'Utilizar terapia combinada en pacientes hipertensos con PA ≥ 160/100'.",
+    "consultado": "2026-10-15"
+   },
+   "fuentes_adicionales": [],
+   "nota": "Usamos la etapa 2 como 'descompensado' para priorizar; ≥140 ya está fuera de meta (ver meta_control).",
+   "confianza": "alta",
+   "estado": "con_fuente"
+  },
+  {
+   "id": "medicion.PAS.severo_umbral",
+   "diagnosticos": [
+    "I10",
+    "I20",
+    "I50",
+    "E11"
+   ],
+   "concepto": "HTA etapa 3",
+   "valor": 180,
+   "unidad": "mmHg",
+   "operador": ">=",
+   "fuente": {
+    "tipo": "guia_minsal",
+    "ref": "https://diprece.minsal.cl/wrdprss_minsal/wp-content/uploads/2014/12/Hipertensi%C3%B3n-Arterial-en-personas-de-15-a%C3%B1os-y-m%C3%A1s.pdf",
+    "detalle": "MINSAL, Guía HTA 2010: 'HTA Etapa 3 ≥180 y/o ≥110'; 'PA ≥180/110 mmHg'.",
+    "consultado": "2026-10-15"
+   },
+   "fuentes_adicionales": [
+    {
+     "tipo": "pubmed",
+     "ref": "PMID:30165516",
+     "detalle": "Williams B et al., 2018 ESC/ESH Guidelines (Eur Heart J): la clasificación grado 3 (≥180/≥110) se cita de memoria y no se verificó en el texto completo; solo se verificó el título.",
+     "consultado": "2026-10-15"
+    }
+   ],
+   "nota": "",
+   "confianza": "alta",
+   "estado": "con_fuente"
+  },
+  {
+   "id": "medicion.glicemia.hipoglicemia_umbral",
+   "diagnosticos": [
+    "E11"
+   ],
+   "concepto": "Hipoglicemia nivel 1",
+   "valor": 70,
+   "unidad": "mg/dL",
+   "operador": "<",
+   "fuente": {
+    "tipo": "guia_internacional",
+    "ref": "https://pmc.ncbi.nlm.nih.gov/articles/PMC11635034/",
+    "detalle": "ADA Standards of Care 2025, sección 6 (PMID:39651981), Tabla 6.4: 'Level 1 Glucose <70 mg/dL (<3.9 mmol/L) and ≥54 mg/dL'; 'Level 2 Glucose <54 mg/dL (<3.0 mmol/L)'.",
+    "consultado": "2026-10-15"
+   },
+   "fuentes_adicionales": [],
+   "nota": "",
+   "confianza": "alta",
+   "estado": "con_fuente"
+  },
+  {
+   "id": "medicion.glicemia.hipoglicemia_grave_umbral",
+   "diagnosticos": [
+    "E11"
+   ],
+   "concepto": "Hipoglicemia nivel 2 (acción inmediata)",
+   "valor": 54,
+   "unidad": "mg/dL",
+   "operador": "<",
+   "fuente": {
+    "tipo": "guia_internacional",
+    "ref": "https://pmc.ncbi.nlm.nih.gov/articles/PMC11635034/",
+    "detalle": "ADA SOC 2025, Tabla 6.4: 'Level 2 Glucose <54 mg/dL (<3.0 mmol/L)'.",
+    "consultado": "2026-10-15"
+   },
+   "fuentes_adicionales": [],
+   "nota": "",
+   "confianza": "alta",
+   "estado": "con_fuente"
+  },
+  {
+   "id": "medicion.glicemia.meta_preprandial_max",
+   "diagnosticos": [
+    "E11"
+   ],
+   "concepto": "Límite superior de la meta de glicemia preprandial",
+   "valor": 130,
+   "unidad": "mg/dL",
+   "operador": "<=",
+   "fuente": {
+    "tipo": "guia_internacional",
+    "ref": "https://pmc.ncbi.nlm.nih.gov/articles/PMC11635034/",
+    "detalle": "ADA SOC 2025, Tabla 6.3: 'Preprandial capillary plasma glucose 80–130 mg/dL'; 'Peak postprandial capillary plasma glucose <180 mg/dL'.",
+    "consultado": "2026-10-15"
+   },
+   "fuentes_adicionales": [],
+   "nota": "",
+   "confianza": "alta",
+   "estado": "con_fuente"
+  },
+  {
+   "id": "medicion.glicemia.descompensado_umbral",
+   "diagnosticos": [
+    "E11"
+   ],
+   "concepto": "Glicemia fuera de meta (sobre el pico posprandial objetivo)",
+   "valor": 180,
+   "unidad": "mg/dL",
+   "operador": ">=",
+   "fuente": {
+    "tipo": "guia_internacional",
+    "ref": "https://pmc.ncbi.nlm.nih.gov/articles/PMC11635034/",
+    "detalle": "ADA SOC 2025, Tabla 6.3: 'Peak postprandial capillary plasma glucose <180 mg/dL'.",
+    "consultado": "2026-10-15"
+   },
+   "fuentes_adicionales": [],
+   "nota": "Es una adaptación nuestra: la ADA da 180 como meta posprandial, no como umbral de descompensación. Si se mide en ayunas, conviene usar >130.",
+   "confianza": "media",
+   "estado": "con_fuente"
+  },
+  {
+   "id": "medicion.glicemia.crisis_umbral",
+   "diagnosticos": [
+    "E11"
+   ],
+   "concepto": "Criterio glicémico de cetoacidosis diabética",
+   "valor": 200,
+   "unidad": "mg/dL",
+   "operador": ">=",
+   "fuente": {
+    "tipo": "pubmed",
+    "ref": "PMID:38907161",
+    "detalle": "Umpierrez GE et al., 2024, consenso sobre crisis hiperglicémicas (Diabetologia; texto completo PMC11343900): 'we have defined hyperglycaemia as a diagnostic criterion for DKA ... a glucose value of ≥11.1 mmol/l (200 mg/dl) or a prior history of diabetes'; requiere además cetonas elevadas y acidosis metabólica.",
+    "consultado": "2026-10-15",
+    "verificado_ncbi": {
+     "titulo": "Hyperglycaemic crises in adults with diabetes: a consensus report.",
+     "revista": "Diabetologia",
+     "anio": "2024",
+     "consultado": "2026-10-15"
+    }
+   },
+   "fuentes_adicionales": [],
+   "nota": "Por sí sola no diagnostica CAD; úsese como bandera de alerta.",
+   "confianza": "alta",
+   "estado": "con_fuente"
+  },
+  {
+   "id": "medicion.glicemia.EHH_umbral",
+   "diagnostico": "E11",
+   "concepto": "Criterio glicémico de estado hiperosmolar hiperglicémico",
+   "valor": null,
+   "unidad": "mg/dL",
+   "fuente": {
+    "tipo": "no_encontrado",
+    "ref": null,
+    "detalle": "No encontrado en el texto verificable: en el consenso 2024 el umbral está en una figura (Fig. 2b) que no se pudo leer. Hay que confirmarlo en el documento original (PMID:39052901).",
+    "consultado": "2026-10-15"
+   },
+   "estado": "a_validar_por_medico",
+   "diagnosticos": [
+    "E11"
+   ]
+  },
+  {
+   "id": "medicion.SatO2.EPOC_moderado_umbral",
+   "diagnosticos": [
+    "J44"
+   ],
+   "concepto": "Exacerbación EPOC moderada/grave por SaO2 en reposo",
+   "valor": 92,
+   "unidad": "%",
+   "operador": "<",
+   "fuente": {
+    "tipo": "guia_internacional",
+    "ref": "https://goldcopd.org/wp-content/uploads/2026/01/GOLD-REPORT-2026-v1.3-8Dec2025_WMV2.pdf",
+    "detalle": "GOLD 2026 Report (propuesta de Roma, Celli BR 2021, PMID:34570991), Fig. 4.2: leve 'Resting SaO2 ≥ 92% breathing ambient air ... AND change ≤ 3%'; moderada 'Resting SaO2 < 92% ... AND/OR change > 3%'. También: 'If peripheral oxygen saturation is ≤ 92%, arterial blood gases should be measured'.",
+    "consultado": "2026-10-15"
+   },
+   "fuentes_adicionales": [],
+   "nota": "La clasificación moderada exige ≥3 de 5 criterios; la SaO2 es solo uno de ellos.",
+   "confianza": "alta",
+   "estado": "con_fuente"
+  },
+  {
+   "id": "medicion.SatO2.EPOC_hipoxemia_cronica_umbral",
+   "diagnosticos": [
+    "J44"
+   ],
+   "concepto": "Hipoxemia crónica que indica oxigenoterapia de largo plazo",
+   "valor": 88,
+   "unidad": "%",
+   "operador": "<=",
+   "fuente": {
+    "tipo": "guia_internacional",
+    "ref": "https://goldcopd.org/wp-content/uploads/2026/01/GOLD-REPORT-2026-v1.3-8Dec2025_WMV2.pdf",
+    "detalle": "GOLD 2026: LTOT indicada en EPOC estable con 'PaO2 at or below 55 mmHg (7.3 kPa) or SaO2 at or below 88%, with or without hypercapnia confirmed twice over a three-week period'.",
+    "consultado": "2026-10-15"
+   },
+   "fuentes_adicionales": [
+    {
+     "tipo": "guia_minsal",
+     "ref": "https://superdesalud.gob.cl/difusion/572/articles-655_recurso_1.pdf",
+     "detalle": "MINSAL, GPC EPOC de tratamiento ambulatorio 2013: criterio de oxigenoterapia 'PaO2 de 55 mm Hg como mínimo, o de hasta 60 mm Hg si existe evidencia de cor pulmonale o eritrocitosis'; titular la oximetría 'idealmente 90%'. No da un umbral de SatO2 para la exacerbación.",
+     "consultado": "2026-10-15"
+    }
+   ],
+   "nota": "",
+   "confianza": "alta",
+   "estado": "con_fuente"
+  },
+  {
+   "id": "medicion.SatO2.asma_severo_umbral",
+   "diagnosticos": [
+    "J45"
+   ],
+   "concepto": "Crisis asmática severa",
+   "valor": 90,
+   "unidad": "%",
+   "operador": "<",
+   "fuente": {
+    "tipo": "guia_internacional",
+    "ref": "https://ginasthma.org/wp-content/uploads/2024/12/GINA-Summary-Guide-2024-WEB-WMS.pdf",
+    "detalle": "GINA 2024 Summary Guide, manejo de exacerbación en atención primaria: LEVE o MODERADA 'O2 saturation (on air) 90–95%'; SEVERA 'O2 saturation (on air) <90%'; criterio de alta 'Oxygen saturation >94% room air'.",
+    "consultado": "2026-10-15"
+   },
+   "fuentes_adicionales": [
+    {
+     "tipo": "guia_minsal",
+     "ref": "https://www.superdesalud.gob.cl/difusion/572/articles-646_guia_clinica.pdf",
+     "detalle": "MINSAL, Guía Clínica Asma bronquial moderada y grave en menores de 15 años, 2011, tabla 'Evaluación de la severidad de la EA': SpO2 >94% leve, 90-94% moderada, <90% severa. Es pediátrica: la guía GES de asma en adultos no se pudo descargar.",
+     "consultado": "2026-10-15"
+    }
+   ],
+   "nota": "",
+   "confianza": "alta",
+   "estado": "con_fuente"
+  },
+  {
+   "id": "medicion.SatO2.asma_descompensado_umbral",
+   "diagnosticos": [
+    "J45"
+   ],
+   "concepto": "Crisis asmática moderada (SatO2 bajo el criterio de alta)",
+   "valor": 94,
+   "unidad": "%",
+   "operador": "<=",
+   "fuente": {
+    "tipo": "guia_internacional",
+    "ref": "https://ginasthma.org/wp-content/uploads/2024/12/GINA-Summary-Guide-2024-WEB-WMS.pdf",
+    "detalle": "GINA 2024: criterio de alta 'Oxygen saturation >94% room air'; leve/moderada 90–95%.",
+    "consultado": "2026-10-15"
+   },
+   "fuentes_adicionales": [
+    {
+     "tipo": "guia_minsal",
+     "ref": "https://www.superdesalud.gob.cl/difusion/572/articles-646_guia_clinica.pdf",
+     "detalle": "MINSAL asma <15 años 2011: moderada 90-94%.",
+     "consultado": "2026-10-15"
+    }
+   ],
+   "nota": "En adultos se infiere del criterio de alta de GINA.",
+   "confianza": "media",
+   "estado": "con_fuente"
+  },
+  {
+   "id": "medicion.PEF.asma_severo_umbral",
+   "diagnosticos": [
+    "J45"
+   ],
+   "concepto": "Exacerbación severa: PEF ≤50% del teórico o del mejor personal",
+   "valor": 50,
+   "unidad": "% del teórico o del mejor personal",
+   "operador": "<=",
+   "fuente": {
+    "tipo": "guia_internacional",
+    "ref": "https://ginasthma.org/wp-content/uploads/2024/12/GINA-Summary-Guide-2024-WEB-WMS.pdf",
+    "detalle": "GINA 2024: SEVERA 'PEF ≤50% predicted or best'; leve/moderada 'PEF >50% predicted or best'.",
+    "consultado": "2026-10-15"
+   },
+   "fuentes_adicionales": [
+    {
+     "tipo": "guia_minsal",
+     "ref": "https://www.superdesalud.gob.cl/difusion/572/articles-646_guia_clinica.pdf",
+     "detalle": "MINSAL asma <15 años 2011, plan de acción: zona roja 'Medida de flujo máximo inferior a ... (50% del mejor)'.",
+     "consultado": "2026-10-15"
+    }
+   ],
+   "nota": "Si el dato viene en L/min, se necesita el teórico o el mejor valor personal para convertirlo a %.",
+   "confianza": "alta",
+   "estado": "con_fuente"
+  },
+  {
+   "id": "medicion.PEF.asma_descompensado_umbral",
+   "diagnosticos": [
+    "J45"
+   ],
+   "concepto": "Pérdida de control / zona amarilla",
+   "valor": 60,
+   "unidad": "% del teórico o del mejor personal",
+   "operador": "<",
+   "fuente": {
+    "tipo": "guia_internacional",
+    "ref": "https://ginasthma.org/wp-content/uploads/2024/12/GINA-Summary-Guide-2024-WEB-WMS.pdf",
+    "detalle": "GINA 2024, plan de acción: aumentar tratamiento si 'Lung function is low (FEV1 <60% of predicted value, PEF <60% of personal best)'; criterio de alta 'PEF improving, and >60-80% of personal best or predicted'.",
+    "consultado": "2026-10-15"
+   },
+   "fuentes_adicionales": [
+    {
+     "tipo": "guia_minsal",
+     "ref": "https://www.superdesalud.gob.cl/difusion/572/articles-646_guia_clinica.pdf",
+     "detalle": "MINSAL asma <15 años 2011: severidad de la EA por PEF teórico >80% leve, 60-80% moderada, <60% severa; zona amarilla del plan de acción '50% al 80% del mejor FEM'.",
+     "consultado": "2026-10-15"
+    }
+   ],
+   "nota": "Las fuentes difieren: GINA usa <60% para escalar tratamiento y MINSAL pediátrica usa 80% como límite de la zona amarilla.",
+   "confianza": "media",
+   "estado": "con_fuente"
+  },
+  {
+   "id": "medicion.EVA.severo_umbral",
+   "diagnosticos": [
+    "M17",
+    "M54",
+    "M75",
+    "G43"
+   ],
+   "concepto": "Dolor severo",
+   "valor": 7,
+   "unidad": "puntos (0-10)",
+   "operador": ">=",
+   "fuente": {
+    "tipo": "pubmed",
+    "ref": "PMID:7659438",
+    "detalle": "Serlin RC et al., 1995, Pain (dolor oncológico, escala numérica 0-10, muestras multinacionales): '1-4 correspond to mild pain, 5-6 to moderate pain, and 7-10 to severe pain'.",
+    "consultado": "2026-10-15",
+    "verificado_ncbi": {
+     "titulo": "When is cancer pain mild, moderate or severe? Grading pain severity by its interference with function.",
+     "revista": "Pain",
+     "anio": "1995",
+     "consultado": "2026-10-15"
+    }
+   },
+   "fuentes_adicionales": [
+    {
+     "tipo": "pubmed",
+     "ref": "PMID:25239073",
+     "detalle": "Boonstra AM et al., 2014, Pain, n=456 con dolor musculoesquelético crónico: EVA '≤ 3.4 ... mild pain, 3.5 to 7.4 as moderate pain, and ≥ 7.5 as severe pain'; los autores advierten que no hay puntos de corte universalmente aceptados.",
+     "consultado": "2026-10-15"
+    }
+   ],
+   "nota": "No existe guía MINSAL con bandas de EVA. Serlin estudió dolor oncológico y Boonstra musculoesquelético (≥7,5 si la EVA es continua).",
+   "confianza": "media",
+   "estado": "con_fuente"
+  },
+  {
+   "id": "medicion.EVA.moderado_umbral",
+   "diagnosticos": [
+    "M17",
+    "M54",
+    "M75",
+    "G43"
+   ],
+   "concepto": "Dolor moderado",
+   "valor": 5,
+   "unidad": "puntos (0-10)",
+   "operador": ">=",
+   "fuente": {
+    "tipo": "pubmed",
+    "ref": "PMID:7659438",
+    "detalle": "Serlin 1995: 5-6 = moderado.",
+    "consultado": "2026-10-15",
+    "verificado_ncbi": {
+     "titulo": "When is cancer pain mild, moderate or severe? Grading pain severity by its interference with function.",
+     "revista": "Pain",
+     "anio": "1995",
+     "consultado": "2026-10-15"
+    }
+   },
+   "fuentes_adicionales": [
+    {
+     "tipo": "pubmed",
+     "ref": "PMID:25239073",
+     "detalle": "Boonstra 2014: 3,5-7,4 = moderado (musculoesquelético crónico).",
+     "consultado": "2026-10-15"
+    }
+   ],
+   "nota": "Las fuentes discrepan: Serlin pone el corte en 5 y Boonstra en 3,5.",
+   "confianza": "media",
+   "estado": "con_fuente"
+  }
+ ]
+}
