@@ -320,6 +320,7 @@ def test_box_horas_distintas_por_paciente():
             assert len(horas) == len(set(horas)), f'{a["id_box"]} repite horas: {horas}'
             ini, fin = a["bloque"].split("-")
             assert all(ini <= h < fin for h in horas)
+            assert all(p["hora"] < p["hora_fin"] <= fin for p in a["pacientes"])   # cada hora tiene inicio < término
     assert all(v["hora"] for v in b["cupo_por_paciente"].values())
 
 def test_medico_con_horas_libres():
