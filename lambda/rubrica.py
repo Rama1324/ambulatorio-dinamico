@@ -57,7 +57,8 @@ def historial(perfil, corte):
     return {"diagnostico": le["diagnostico_cie10"], "diagnostico_texto": le["diagnostico_texto"],
             "prioridad_inicial": le["prioridad_inicial"], "fecha_ingreso_lista": le["fecha_ingreso_lista"],
             "edad": pac.get("edad"), "sexo": pac.get("sexo"),
-            "comorbilidades": [c.get("nombre") or c.get("condicion") for c in pac.get("comorbilidades", [])],
+            "comorbilidades": [c.get("nombre") or c.get("condicion") for c in pac.get("comorbilidades", [])
+                               if (c.get("fecha") or "") <= corte_iso],  # las registradas después del corte no existían
             "eventos": eventos, "mediciones": mediciones, "fecha_corte": corte_iso}
 
 

@@ -44,7 +44,7 @@ EventBridge Scheduler: 14 millones de invocaciones gratis al mes.
   teórico y el registro trae L/min → no aplicable, a validar.
 - **Ventanas tras un evento** (12 con PMID verificado): IC y EPOC 90 d, cirrosis 90 d, angina 45 d, asma 28–30 d, DM2 30 d,
   epilepsia 30 d, depresión 30–90 d. Sin fuente: urgencia sin hospitalización en IC, EPOC y cirrosis.
-- **13 pendientes para médicos** en `lambda/conocimiento/rubrica_v1.json → pendientes_medicos`.
+- **17 pendientes para médicos** en `lambda/conocimiento/rubrica_v1.json → pendientes_medicos`.
 
 ## Clínica y legal
 - **Subtriage:** el algoritmo nunca baja a nadie solo (control `bajaria` + test de propiedad sobre 150 pacientes con

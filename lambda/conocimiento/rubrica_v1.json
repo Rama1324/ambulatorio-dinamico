@@ -1,5 +1,5 @@
 {
- "version": "rubrica_v1",
+ "version": "rubrica_v1.2",
  "generado": "2026-10-15",
  "fuentes": {
   "ssmso": "Tabla SSMSO 2025, HLF",
@@ -89,14 +89,16 @@
      "unidad": "días",
      "fuente": "PMID:25656852 — Dharmarajan K et al., 2015, BMJ, cohorte Medicare: tras hospitalización por IAM el riesgo de readmisión cae 50% al día 13 y el de muerte al día 6; el cambio diario de riesgo de readmisión se estabiliza (95%) al día 38 y el de muerte al día 19.",
      "id": "I20.visita_urgencia_o_hospitalizacion.ventana_dias",
-     "estado": "con_fuente"
+     "estado": "a_validar_por_medico",
+     "nota": "el estudio es de hospitalización por IAM (días 13/38/19); 45 días y su uso en angina y en visitas a urgencia son del equipo"
     },
     "hospitalizacion": {
      "valor": 45,
      "unidad": "días",
      "fuente": "PMID:25656852 — Dharmarajan K et al., 2015, BMJ, cohorte Medicare: tras hospitalización por IAM el riesgo de readmisión cae 50% al día 13 y el de muerte al día 6; el cambio diario de riesgo de readmisión se estabiliza (95%) al día 38 y el de muerte al día 19.",
      "id": "I20.visita_urgencia_o_hospitalizacion.ventana_dias",
-     "estado": "con_fuente"
+     "estado": "a_validar_por_medico",
+     "nota": "el estudio es de hospitalización por IAM (días 13/38/19); 45 días y su uso en angina y en visitas a urgencia son del equipo"
     }
    },
    "medicion_clave": null
@@ -227,7 +229,8 @@
      "unidad": "días",
      "fuente": "PMID:30673983 — Tansel A et al., 2019, Dig Dis Sci, cohorte VA n=38.955: 'Daily risk of readmission was the highest on day 1 (1.23%) and declined 50% by day 71 and 75% by day 260 ... Daily risk of death was the highest on day 1 (0.78%) and declined 50% by day 31 and 75% by day 64'.",
      "id": "K70.hospitalizacion.ventana_dias",
-     "estado": "con_fuente"
+     "estado": "a_validar_por_medico",
+     "nota": "la fuente da días 71/260 (readmisión) y 31/64 (muerte); 90 días es del equipo"
     }
    },
    "medicion_clave": null
@@ -494,13 +497,17 @@
  },
  "pendientes_medicos": [
   "I50: ¿cuántos días tras una visita urgencia grave sigue vigente la fila descompensado? (sin fuente: no vence)",
+  "I20: ventana de 45 días tras una visita urgencia (el estudio es de hospitalización por IAM (días 13/38/19); 45 días y su uso en angina y en visitas a urgencia son del equipo). Mientras no se valide: no vence",
+  "I20: ventana de 45 días tras una hospitalizacion (el estudio es de hospitalización por IAM (días 13/38/19); 45 días y su uso en angina y en visitas a urgencia son del equipo). Mientras no se valide: no vence",
   "I20: I20 incluye toda angina de pecho; la fila oficial es solo angina inestable. Se usa como fila 'descompensado' (mismo criterio que las reglas actuales).",
   "I10: HTA resistente (no controlada con 3 fármacos) no equivale a 'descompensada'. Solo genera revisión.",
   "J44: ¿cuántos días tras una visita urgencia grave sigue vigente la fila descompensado? (sin fuente: no vence)",
   "J45: umbral de peak_flow que define descompensación",
   "K70: ¿cuántos días tras una visita urgencia grave sigue vigente la fila descompensado? (sin fuente: no vence)",
+  "K70: ventana de 90 días tras una hospitalizacion (la fuente da días 71/260 (readmisión) y 31/64 (muerte); 90 días es del equipo). Mientras no se valide: no vence",
   "K70: K70 es enfermedad hepática alcohólica; se asimila a la fila de cirrosis descompensada.",
   "K21: 'Refractaria' no está definida en el registro (¿cuántos cambios de tratamiento?). Solo genera revisión.",
+  "E11: equivalencia del equipo 'HbA1c sobre el umbral = DM2 DESCONTROLADA' (sube la prioridad y se marca para revisión)",
   "E03: ¿cuántos días tras una visita urgencia grave sigue vigente la fila descompensado? (sin fuente: no vence)",
   "E03: ¿cuántos días tras una hospitalizacion grave sigue vigente la fila descompensado? (sin fuente: no vence)",
   "G40: La tabla no tiene fila 'epilepsia descompensada'; se usa 'crisis mensuales' (media). Crisis diarias (alta) no se pueden distinguir en el registro.",

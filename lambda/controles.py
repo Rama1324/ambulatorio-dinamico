@@ -2,7 +2,8 @@
 de las reglas actuales (puntaje.py) y queda 'requiere_revision' con el motivo."""
 from decisor import ORDEN_CAT
 
-BLOQUEANTES = ("fallo_llm", "cita_invalida", "inestable", "bajaria", "discrepancia", "dato_desconocido")
+BLOQUEANTES = ("fallo_llm", "cita_invalida", "inestable", "bajaria", "discrepancia", "dato_desconocido",
+               "cita_no_respalda", "contradice_registro", "error_formula")
 
 
 def evaluar(lecturas, resultados, reglas):
@@ -17,13 +18,13 @@ def evaluar(lecturas, resultados, reglas):
         motivos.append({"motivo": "cita_invalida", "detalle": f"{len(malas)} cita(s) no existen en el historial: {malas[0]}"})
     validos = [x for x in resultados if x]
     cats = {x["categoria"] for x in validos}
-    if len(cats) > 1:
+    if len(cats) > 1 or len({x["descompensacion_grave"] for x in validos}) > 1:
         motivos.append({"motivo": "inestable", "detalle": f"las {len(validos)} corridas no coinciden: {sorted(cats)}"})
     if validos:
         cat = validos[0]["categoria"]
         if ORDEN_CAT[cat] < ORDEN_CAT[reglas["categoria"]]:
             motivos.append({"motivo": "bajaria", "detalle": f"la rúbrica daría {cat} y la categoría vigente es {reglas['categoria']}: bajar requiere un humano"})
-        elif reglas.get("riesgo_vital") and not validos[0].get("descompensacion_grave"):
+        elif reglas.get("riesgo_vital") and not all(x["descompensacion_grave"] for x in validos):
             # misma categoría pero sin la marca de descompensación grave: perdería la alerta de 72 h y bajaría en el orden
             motivos.append({"motivo": "bajaria", "detalle": "la rúbrica quitaría la marca de descompensación grave (alerta de 72 h y primer lugar dentro de "
                                                             "su prioridad): quitarla requiere un humano"})

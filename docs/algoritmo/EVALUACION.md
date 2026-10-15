@@ -17,12 +17,12 @@ Generado por `scripts/evaluar_algoritmo.py` · fecha de corte 2026-10-13 · mode
 | A (reglas) | 92 / 186 / 131 | — | — | — | — |
 | R (rúbrica por código) | 92 / 187 / 130 | 408 | 1 | 0 | 0.998 |
 | **E+F (rúbrica por LLM + fórmula + controles)** | 92 / 187 / 130 | 408 | 1 | 0 | 0.998 |
-| E+F sin controles | 76 / 197 / 136 | 391 | 1 | 17 | 0.922 |
+| E+F sin controles | 77 / 196 / 136 | 392 | 1 | 16 | 0.925 |
 | E0 (LLM decide solo) | 102 / 156 / 151 | 153 | 124 | 132 | 0.091 |
 
 - κ entre E+F y R: **1.0**.
 - Pacientes que la rúbrica movió sola (todo cuadró): **1**.
-- Estabilidad: **100.0 %** de los pacientes con las 3 lecturas iguales (0.0 % inestables).
+- Estabilidad: **99.5 %** de los pacientes con las 3 lecturas iguales (0.5 % inestables).
 - Lecturas: 1227 · fallidas: **0** · respuesta envuelta corregida: 0.
 
 ## Controles (pacientes que NO se mueven solos y quedan para revisión humana)
@@ -34,10 +34,12 @@ Pacientes con un control bloqueante: **43**.
 | dato_desconocido | 42 |
 | bajaria | 18 |
 | discrepancia | 5 |
+| inestable | 2 |
+| cita_no_respalda | 1 |
 
 Ejemplos de `bajaria` (la fórmula los habría bajado; el control lo impidió):
 
-- PAC-HLF-00002: reglas alta → rúbrica baja · la rúbrica daría baja y la categoría vigente es alta: bajar requiere un humano
+- PAC-HLF-00002: reglas alta → rúbrica baja · las 3 corridas no coinciden: ['alta', 'baja']
 - PAC-HLF-00046: reglas alta → rúbrica media · la rúbrica daría media y la categoría vigente es alta: bajar requiere un humano
 - PAC-HLF-00069: reglas alta → rúbrica media · la rúbrica daría media y la categoría vigente es alta: bajar requiere un humano
 - PAC-HLF-00086: reglas alta → rúbrica media · la rúbrica daría media y la categoría vigente es alta: bajar requiere un humano
@@ -56,7 +58,7 @@ Ejemplos de `bajaria` (la fórmula los habría bajado; el control lo impidió):
 
 - Tokens por evaluación (3 lecturas): 8309 de entrada y 1120 de salida.
 - Costo por evaluación: USD 0.0306 · esta corrida: USD 12.52 · barrido de 26.356 pacientes: USD 806.57 on-demand (el lote no existe para Sonnet 5; ver VIABILIDAD.md).
-- Latencia por lectura (de la corrida con llamadas reales): ver VIABILIDAD.md (mediana 3,5 s, p95 5,5 s; las 3 lecturas van en paralelo).
+- Latencia por lectura (de la corrida con llamadas reales): ver VIABILIDAD.md (mediana 3,7 s, p95 6,0 s; las 3 lecturas van en paralelo).
 
 ## Concordancia con médicos (30 casos etiquetados)
 
@@ -67,7 +69,7 @@ Ejemplos de `bajaria` (la fórmula los habría bajado; el control lo impidió):
 Volver a `reglas` si E+F: (1) no supera a A por ≥ 0,10 de κ contra médicos; (2) es inestable en más del 10 % de los casos; o (3) produce algún subtriage grave.
 
 - (1) **No evaluable sin etiquetas médicas.**
-- (2) Inestabilidad: 0.0 % → cumple.
+- (2) Inestabilidad: 0.5 % → cumple.
 - (3) Subtriage frente a A: 0 pacientes bajan → cumple (los controles impiden bajar sin un humano).
 
 **Recomendación:** mantener `ALGORITMO=reglas` en la demo publicada hasta tener las etiquetas de los 30 casos. E+F queda implementado, probado y medido, listo para activarse cuando el equipo lo decida.

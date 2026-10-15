@@ -268,12 +268,15 @@ def _enriquecer(r, perfil, revision, pos_ant, corte=None, contacto=None, decisio
     # Una revisión vale solo para lo que el equipo vio: desde la fecha de corte en que revisó y hasta que llegue
     # un evento nuevo. Un evento posterior invalida la confirmación o el ajuste y vuelve a pedir revisión.
     if revision and revision.get("fecha_corte", "0000") <= corte_iso:
-        nuevas = [s for s in senales if _posterior(s, revision.get("fecha_corte", ""), revision.get("fecha", ""))]
+        nuevas = [s for s in senales if not s.get("informativa") and _posterior(s, revision.get("fecha_corte", ""), revision.get("fecha", ""))]
         out["revision"] = revision
         if nuevas:
             out["estado_revision"] = "requiere_revision"
             out["revision_sugerida"] = nuevas
             out["revision_vencida_por"] = nuevas[-1]["motivo"]
+            ajustada = revision.get("categoria_ajustada")
+            if ajustada and all(s.get("algoritmo") for s in nuevas) and puntaje.ORDEN_CAT[ajustada] > puntaje.ORDEN_CAT[out["categoria"]]:
+                out["categoria"] = ajustada  # el algoritmo subió al paciente, pero el equipo lo tenía más arriba: no baja sin humano
         else:
             out["estado_revision"] = "ajustado" if revision["accion"] == "ajustar" else "confirmado"
             if revision.get("categoria_ajustada"):
@@ -305,7 +308,7 @@ def _enriquecer(r, perfil, revision, pos_ant, corte=None, contacto=None, decisio
         # en la app o, para el registro cargado, la fecha de los datos. En simulación histórica, desde el evento.
         llegada = (r.get("registro_descompensacion") or "")[:10] or (
             REGISTRO_AL if corte_iso >= REGISTRO_AL else r.get("fecha_descompensacion"))
-        llegada = max(llegada, r.get("fecha_descompensacion") or llegada)
+        llegada = max(llegada or corte_iso, r.get("fecha_descompensacion") or llegada or corte_iso)
         en_revision = max(0, (date.fromisoformat(corte_iso) - date.fromisoformat(llegada)).days)
         out["evaluacion"] = {"estado": "evaluada" if cierre else ("atrasada" if en_revision > puntaje.DIAS_EVALUACION else "pendiente"),
                              "dias_desde_evento": dias, "fecha_evento": r.get("fecha_descompensacion"), "llego_al_sistema": llegada,
@@ -418,10 +421,12 @@ def _aplicar_ajustes(pacientes, senales, corte):
         i = next((k for k, q in enumerate(pacientes) if q["id_paciente"] == pid), None)
         if i is None:
             continue
-        nuevas = [s for s in senales.get(pid, []) if _posterior(s, a["fecha_corte"], a["fecha"])]
-        if nuevas:
+        nuevas = [s for s in senales.get(pid, []) if not s.get("informativa") and _posterior(s, a["fecha_corte"], a["fecha"])]
+        if [s for s in nuevas if not s.get("algoritmo")]:
             pacientes[i]["ajuste_manual_vencido"] = {**a, "vencido_por": nuevas[-1]["motivo"]}
             continue
+        if nuevas:
+            pacientes[i]["ajuste_manual_revisar"] = nuevas[-1]["motivo"]
         p = pacientes.pop(i)
         misma = [k for k, q in enumerate(pacientes) if q["especialidad"] == p["especialidad"]]
         destino = misma[a["posicion"] - 1] if a["posicion"] - 1 < len(misma) else (misma[-1] + 1 if misma else len(pacientes))
@@ -440,42 +445,70 @@ def algoritmo_activo():
     return os.environ.get("ALGORITMO", "reglas")
 
 
-def cliente_llm():
-    if _llm["cliente"] is None:
-        import rubrica
-        _llm["cliente"] = rubrica.ClienteBedrock()
-    return _llm["cliente"]
+def cliente_llm(barrido=False):
+    if _llm["cliente"] is not None:  # los tests inyectan un ClienteFalso
+        return _llm["cliente"]
+    import rubrica
+    clave = "barrido" if barrido else "api"
+    if clave not in _llm:
+        _llm[clave] = rubrica.ClienteBedrock(timeout_s=20, reintentos=3) if barrido else rubrica.ClienteBedrock(timeout_s=12, reintentos=1)
+    return _llm[clave]
 
 
 def evaluaciones():
     return _ultimo_por_paciente("evaluacion#", "evaluacion")
 
 
-def evaluar_y_guardar(pid, corte, perfs=None):
+def evaluaciones_por_paciente():
+    """Todas las evaluaciones de cada paciente, la más reciente primero (cada fecha de corte usa la vigente)."""
+    out = {}
+    for r in sorted((r for r in registros() if r["sk"].startswith("evaluacion#")), key=lambda r: r["sk"], reverse=True):
+        out.setdefault(r["id_paciente"], []).append(json.loads(r["evaluacion"]))
+    return out
+
+
+def evaluacion_vigente(evs, perfil, corte, kb):
+    import algoritmo
+    import rubrica
+    f = rubrica.firma(perfil, corte)
+    return next((e for e in evs if algoritmo.vigente(e, perfil, corte, kb, f)), None)
+
+
+def evaluar_y_guardar(pid, corte, perfs=None, barrido=False):
     import algoritmo
     perfs = perfs or perfiles_combinados()[0]
-    reg = algoritmo.evaluar_paciente(perfs[pid], corte, cliente_llm())
+    reg = algoritmo.evaluar_paciente(perfs[pid], corte, cliente_llm(barrido))
     if reg:
         guardar({"id_paciente": pid, "sk": f"evaluacion#{reg['fecha']}", "evaluacion": json.dumps(reg, ensure_ascii=False, default=str)})
     return reg
 
 
-def _aplicar_rubrica(activos, perfs, corte):
-    import rubrica
-    evs = evaluaciones()
+def _aplicar_rubrica(activos, perfs, corte, evs=None):
+    import algoritmo
+    import decisor
+    kb, evs = decisor.cargar_kb(), evaluaciones_por_paciente() if evs is None else evs
     out = []
     for r in activos:
-        e = evs.get(r["id_paciente"])
-        if e and e["fecha_corte"] <= corte.isoformat() and e["firma"] == rubrica.firma(perfs[r["id_paciente"]], corte):
-            r = {**r, "categoria": e["categoria_final"], "riesgo_vital": e["descompensacion_grave_final"], "razones": e["razones"],
+        perfil = perfs[r["id_paciente"]]
+        e = evaluacion_vigente(evs.get(r["id_paciente"], []), perfil, corte, kb)
+        if e:
+            e = algoritmo.reaplicar(e, perfil, corte, kb, r)  # mismas lecturas, fórmula a esta fecha de corte (sin LLM)
+            grave = e["descompensacion_grave_final"]
+            r = {**r, "categoria": e["categoria_final"], "riesgo_vital": grave, "razones": e["razones"],
+                 "fecha_descompensacion": e["fecha_descompensacion"] if grave else r.get("fecha_descompensacion"),
+                 "registro_descompensacion": r.get("registro_descompensacion") if r.get("riesgo_vital") else (e["fecha"] if grave else None),
                  "algoritmo": "rubrica", "controles": e["controles"],
-                 "rubrica": {k: e.get(k) for k in ("fecha", "fecha_corte", "categoria_reglas", "categoria_rubrica", "categorias_corridas",
-                                                   "requiere_revision", "movido_por_rubrica", "revision_sugerida", "version_rubrica",
-                                                   "version_kb", "modelo", "hash_prompt")}}
-            extra = [{"motivo": f"algoritmo: {m['motivo']} — {m['detalle']}", "fecha": e["fecha_corte"], "registrado": e["fecha"]}
-                     for m in e["controles"]]
-            extra += [{"motivo": f"rúbrica: {x['motivo']} — {x['detalle']}", "fecha": e["fecha_corte"], "registrado": e["fecha"]}
-                      for x in e.get("revision_sugerida", [])]
+                 "rubrica": {k: e.get(k) for k in ("fecha", "fecha_corte", "fecha_corte_aplicada", "categoria_reglas", "categoria_rubrica",
+                                                   "categorias_corridas", "requiere_revision", "movido_por_rubrica", "revision_sugerida",
+                                                   "version_rubrica", "version_kb", "modelo", "hash_prompt")}}
+            # Solo un cambio del algoritmo (sube al paciente) pide revisar de nuevo lo que el equipo ya decidió. Los controles
+            # y notas se muestran, pero no anulan una decisión humana (si no, una falla de Bedrock bajaría a alguien).
+            extra = [{"motivo": f"algoritmo: sube a {e['categoria_final']} por la rúbrica", "fecha": e["fecha_corte"], "registrado": e["fecha"],
+                      "algoritmo": True}] if e["movido_por_rubrica"] else []
+            extra += [{"motivo": f"algoritmo: {m['motivo']} — {m['detalle']}", "fecha": e["fecha_corte"], "registrado": e["fecha"],
+                       "algoritmo": True, "informativa": True} for m in e["controles"]]
+            extra += [{"motivo": f"rúbrica: {x['motivo']} — {x['detalle']}", "fecha": e["fecha_corte"], "registrado": e["fecha"],
+                       "algoritmo": True, "informativa": True} for x in e.get("revision_sugerida", [])]
             r["senales"] = list(r.get("senales", [])) + extra
         else:
             r = {**r, "algoritmo": "reglas (sin evaluación vigente)", "controles": [], "rubrica": None}
@@ -483,25 +516,38 @@ def _aplicar_rubrica(activos, perfs, corte):
     return out
 
 
-def barrido(corte=None, limite=60, en_paralelo=4):
-    """Evalúa a quienes no tienen una evaluación vigente (lo llama EventBridge Scheduler cada noche)."""
-    import rubrica
+def barrido(corte=None, limite=60, en_paralelo=3):
+    """Evalúa a quienes no tienen una evaluación vigente o cuya última evaluación falló (lo llama EventBridge Scheduler
+    cada noche). 3 pacientes en paralelo x 3 lecturas = 9 llamadas simultáneas a Bedrock (evita el throttling)."""
+    import algoritmo
+    import decisor
     from concurrent.futures import ThreadPoolExecutor
     corte = corte or hoy()
+    kb = decisor.cargar_kb()
     perfs, _ = perfiles_combinados()
     activos, _ = puntaje.priorizar(list(perfs.values()), corte)
-    evs = evaluaciones()
-    faltan = [r["id_paciente"] for r in activos
-              if not (evs.get(r["id_paciente"]) and evs[r["id_paciente"]]["firma"] == rubrica.firma(perfs[r["id_paciente"]], corte))][:limite]
+    evs = evaluaciones_por_paciente()
+
+    def falta(pid):
+        e = evaluacion_vigente(evs.get(pid, []), perfs[pid], corte, kb)
+        return not e or any(m["motivo"] in ("fallo_llm", "error_formula") for m in e["controles"])
+    faltan = [r["id_paciente"] for r in activos if falta(r["id_paciente"])][:limite]
+
+    def uno(pid):
+        try:
+            return evaluar_y_guardar(pid, corte, perfs, barrido=True)
+        except Exception as e:  # un paciente con error no corta el barrido
+            print(f"barrido: {pid}: {type(e).__name__}: {e}")
+            return None
     with ThreadPoolExecutor(max_workers=en_paralelo) as ex:
-        regs = list(ex.map(lambda pid: evaluar_y_guardar(pid, corte, perfs), faltan))
+        regs = list(ex.map(uno, faltan))
     return {"evaluados": len([x for x in regs if x]), "pendientes_antes": len(faltan), "fecha_corte": corte.isoformat()}
 
 
 def barrido_handler(event, context=None):
     """Punto de entrada de la función de barrido (EventBridge Scheduler)."""
     _req["registros"] = None
-    return barrido(limite=int((event or {}).get("limite", 400)), en_paralelo=int((event or {}).get("en_paralelo", 6)))
+    return barrido(limite=int((event or {}).get("limite", 400)), en_paralelo=int((event or {}).get("en_paralelo", 3)))
 
 
 def lista(corte, especialidad=None, perfs=None, revs=None):
@@ -514,6 +560,10 @@ def lista(corte, especialidad=None, perfs=None, revs=None):
         activos = _aplicar_rubrica(activos, perfs, corte)
     ant, _ = puntaje.priorizar(vals, corte - timedelta(days=14), especialidad)
     pos_ant = {r["id_paciente"]: r["posicion"] for r in ant}
+    if rubrica_activa:  # misma vara antes y ahora: rúbrica y orden del Ord. 536
+        import decisor
+        ant = sorted(_aplicar_rubrica(ant, perfs, corte - timedelta(days=14)), key=decisor.clave_orden_536)
+        pos_ant = {r["id_paciente"]: i for i, r in enumerate(ant, 1)}
     cont, dec, aj = contactos(), decisiones(), ajustes_orden()
     pacientes = [_enriquecer(r, perfs[r["id_paciente"]], revs.get(r["id_paciente"]), pos_ant.get(r["id_paciente"]), corte,
                              cont.get(r["id_paciente"]), dec.get(r["id_paciente"]), aj.get(r["id_paciente"])) for r in activos]
@@ -1370,6 +1420,9 @@ def handler(event, context=None):
             return _resp(*post_cita(partes[1], body))
         if method == "GET" and partes == ["disponible"]:
             return _resp(*disponible(_fecha(qs), qs.get("especialidad"), qs.get("cupos"), qs.get("desde"), qs.get("hasta")))
+        if method == "POST" and partes in (["algoritmo", "barrido"],) + ((["pacientes", partes[1], "evaluar"],) if len(partes) == 3 else ()) \
+                and algoritmo_activo() != "rubrica":
+            return _resp(409, {"error": "el algoritmo con rúbrica no está activo (ALGORITMO=reglas)", "algoritmo_activo": algoritmo_activo()})
         if method == "POST" and len(partes) == 3 and partes[0] == "pacientes" and partes[2] == "evaluar":
             if partes[1] not in perfiles_combinados()[0]:
                 return _resp(404, {"error": "paciente no existe"})

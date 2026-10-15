@@ -24,6 +24,13 @@ MEDICION_CLAVE = {
     "M54": {"tipo": "escala_dolor_eva", "umbral_id": "medicion.EVA.severo_umbral", "unidad_registro": "puntos", "sube_a_fila": False},
     "M75": {"tipo": "escala_dolor_eva", "umbral_id": "medicion.EVA.severo_umbral", "unidad_registro": "puntos", "sube_a_fila": False},
 }
+# Ventanas cuyo número NO sale tal cual de la fuente (extrapolación del equipo): quedan a validar y la fórmula no las usa
+# (el evento no vence, opción conservadora). Revisión adversaria A10.
+EXTRAPOLADAS = {
+    "I20.visita_urgencia_o_hospitalizacion.ventana_dias": "el estudio es de hospitalización por IAM (días 13/38/19); 45 días y su uso "
+                                                         "en angina y en visitas a urgencia son del equipo",
+    "K70.hospitalizacion.ventana_dias": "la fuente da días 71/260 (readmisión) y 31/64 (muerte); 90 días es del equipo",
+}
 # Eventos a los que aplica cada ventana del borrador
 EVENTOS_DE = {"hospitalizacion": ["hospitalizacion"], "visita_urgencia": ["visita_urgencia"],
               "visita_urgencia_o_hospitalizacion": ["visita_urgencia", "hospitalizacion"], "evento_grave": ["visita_urgencia", "hospitalizacion"]}
@@ -59,9 +66,14 @@ def main():
                 if e.get("estado") == "con_fuente" and e.get("valor"):
                     if tipo not in x["ventanas"] or e["valor"] > x["ventanas"][tipo]["valor"]:
                         x["ventanas"][tipo] = {"valor": e["valor"], "unidad": "días", "fuente": fuente_txt(e), "id": e["id"], "estado": "con_fuente"}
+                        if e["id"] in EXTRAPOLADAS:
+                            x["ventanas"][tipo].update(estado="a_validar_por_medico", nota=EXTRAPOLADAS[e["id"]])
         if x["fila_descompensado"]:
             for tipo in ("visita_urgencia", "hospitalizacion"):
-                if tipo not in x["ventanas"]:
+                v = x["ventanas"].get(tipo)
+                if v and v["estado"] != "con_fuente":
+                    pendientes.append(f"{cie}: ventana de {v['valor']} días tras una {tipo.replace('_', ' ')} ({v['nota']}). Mientras no se valide: no vence")
+                elif tipo not in x["ventanas"]:
                     pendientes.append(f"{cie}: ¿cuántos días tras una {tipo.replace('_', ' ')} grave sigue vigente la fila descompensado? (sin fuente: no vence)")
         m = MEDICION_CLAVE.get(cie)
         if m:
@@ -75,6 +87,9 @@ def main():
             else:
                 umbral = {"valor": None, "sentido": sentido, "estado": "a_validar_por_medico", "fuente": "sin fuente"}
             x["medicion"] = {"tipo": m["tipo"], "umbral": umbral, "sube_a_fila": m["sube_a_fila"], "definida_por": "equipo (a validar por médico)"}
+            if m["sube_a_fila"]:
+                pendientes.append(f"{cie}: equivalencia del equipo '{m['tipo']} sobre el umbral = {(d.get('fila_descompensado') or {}).get('texto_pdf')}' "
+                                  "(sube la prioridad y se marca para revisión)")
             if m["sube_a_fila"] and d.get("fila_descompensado"):
                 x["fila_por_medicion"] = d["fila_descompensado"]
             if umbral["estado"] != "con_fuente":
@@ -83,7 +98,7 @@ def main():
         if d.get("estado") == "a_validar_por_medico" or d.get("equivalencia"):
             pendientes.append(f"{cie}: {(d.get('equivalencia') or {}).get('detalle') or d.get('detalle')}")
         dxs[cie] = x
-    rub = {"version": "rubrica_v1", "generado": "2026-10-15",
+    rub = {"version": "rubrica_v1.2", "generado": "2026-10-15",
            "fuentes": {"ssmso": "Tabla SSMSO 2025, HLF", "ssmso_ref": ssmso["fuente"], "ord536": ord536["fuente"]},
            "cascada_orden": ord536["cascada"], "diagnosticos": dxs, "pendientes_medicos": pendientes}
     with open(os.path.join(KB, "rubrica_v1.json"), "w", encoding="utf-8", newline="\n") as f:

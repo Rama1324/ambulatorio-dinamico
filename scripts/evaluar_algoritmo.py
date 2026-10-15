@@ -295,7 +295,7 @@ def escribir_md(r, ejemplos):
         f"- Tokens por evaluación (3 lecturas): {r['tokens']['por_evaluacion_EF']['entrada']} de entrada y {r['tokens']['por_evaluacion_EF']['salida']} de salida.",
         *( [f"- Costo por evaluación: USD {costo['por_evaluacion_3_corridas']} · esta corrida: USD {costo['esta_corrida_EF']} · "
             f"barrido de 26.356 pacientes: USD {costo['barrido_26356_on_demand']} on-demand (el lote no existe para Sonnet 5; ver VIABILIDAD.md)."] if costo else []),
-        "- Latencia por lectura (de la corrida con llamadas reales): ver VIABILIDAD.md (mediana 3,5 s, p95 5,5 s; las 3 lecturas van en paralelo).", "",
+        "- Latencia por lectura (de la corrida con llamadas reales): ver VIABILIDAD.md (mediana 3,7 s, p95 6,0 s; las 3 lecturas van en paralelo).", "",
         "## Concordancia con médicos (30 casos etiquetados)", "",
         *( [f"| {k} | n = {x['n']} | κ = {x['kappa']} | IC95 {x.get('ic95')} | subtriage {x.get('subtriage', '—')} | sobretriage {x.get('sobretriage', '—')} | errores graves {x.get('errores_graves', '—')} |"
             for k, x in et.items()] if et else
