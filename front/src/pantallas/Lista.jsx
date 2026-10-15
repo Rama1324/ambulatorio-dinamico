@@ -9,9 +9,9 @@ const BORDE = { alta: "border-l-error", media: "border-l-ambar", baja: "border-l
 export function Observaciones({ p }) {
   return (
     <div className="flex flex-wrap gap-1">
-      {p.contactar_hoy && <Marca tono="rojo">{p.alerta_chat && !p.riesgo_vital ? "Alerta del chat · contactar hoy" : "Contactar hoy"}</Marca>}
+      {p.contactar_hoy && <Marca tono="rojo">Contactar hoy</Marca>}
       {p.riesgo_vital && !p.contactar_hoy && <Marca tono="azul" title={p.contacto?.texto}>Contactado</Marca>}
-      {p.autoreporte && <Marca tono="azul" title={(p.autoreporte.resumen || []).join(" · ")}><Icono n="chat" className="text-[14px]" /> Dato nuevo del chat</Marca>}
+      {p.cita && <Marca tono="azul" title={p.cita.pendiente_resultado ? "La cita aún no tiene resultado: registrarlo en Box del día" : "Cupo asignado desde el Box del día"}><Icono n="event_available" className="text-[14px]" /> {p.cita.pendiente_resultado ? "Cita sin resultado" : "Citado"} {p.cita.id_box} · {fmt(p.cita.fecha).slice(0, 5)}</Marca>}
       {!p.riesgo_vital && p.estado_clinico === "descompensado" && <Marca tono="rojo">Descompensado</Marca>}
       {p.senal_temprana && <Marca tono="ambar" title="La medición principal viene empeorando: revisar antes de que llegue el evento">Mediciones empeorando</Marca>}
       {p.revision_sugerida?.length > 0 && !p.senal_temprana && <Marca tono="ambar" title={[...new Set(p.revision_sugerida.map((s) => s.motivo))].join(" · ")}>Revisar</Marca>}
@@ -30,7 +30,7 @@ const Revision = ({ p }) => p.estado_revision === "pendiente" ? <span className=
 const Cambio = ({ p, demo }) => {
   const delta = p.posicion_anterior ? p.posicion_anterior - p.posicion : 0;
   if (!demo || !delta) return null;
-  return <span className={`text-[13px] font-semibold ${delta > 0 ? "text-error" : "text-on-surface-variant"}`} title="Cambio respecto de la lista de hace 14 días">{delta > 0 ? `▲ ${delta}` : `▼ ${-delta}`}</span>;
+  return <span className={`text-[13px] font-semibold ${delta > 0 ? "text-error" : "text-on-surface-variant"}`} title="Cambio respecto del día hábil anterior">{delta > 0 ? `▲ ${delta}` : `▼ ${-delta}`}</span>;
 };
 
 export function Lista({ data, filtrados, fecha, esp, setEsp, busca, setBusca, filtroCat, setFiltroCat, soloPend, setSoloPend,
@@ -45,7 +45,7 @@ export function Lista({ data, filtrados, fecha, esp, setEsp, busca, setBusca, fi
         </Filtro>
         <Filtro label="Prioridad">
           <select value={filtroCat} onChange={(e) => setFiltroCat(e.target.value)} className="h-11 px-2 border border-outline-variant w-full">
-            <option value="todas">Todas</option><option value="vital">Contactar hoy</option><option value="chat">Dato nuevo del chat</option><option value="revisar">Requieren revisión</option><option value="alta">Alta</option><option value="media">Media</option><option value="baja">Baja</option>
+            <option value="todas">Todas</option><option value="vital">Contactar hoy</option><option value="citados">Con cupo de box</option><option value="revisar">Requieren revisión</option><option value="alta">Alta</option><option value="media">Media</option><option value="baja">Baja</option>
           </select>
         </Filtro>
         <div className="col-span-2 md:col-span-1"><Filtro label="Buscar paciente">

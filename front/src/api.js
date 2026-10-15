@@ -2,14 +2,11 @@
 export const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 export const MODO = API_URL ? "api" : "mock";
 
-const FECHAS_SLIDER = (() => {
-  const out = [];
-  const d = new Date("2026-04-01T12:00:00");
-  while (d < new Date("2026-10-13T00:00:00")) { out.push(d.toISOString().slice(0, 10)); d.setDate(d.getDate() + 14); }
-  out.push("2026-10-13");
-  return out;
-})();
-export const fechas = () => FECHAS_SLIDER;
+// Fecha de operación = días hábiles con agenda de box (GET /dias). Sin API: los cortes precalculados de mock.json.
+export async function getDias() {
+  if (MODO === "api") return (await req("GET", "/dias")).dias;
+  return (await mock()).fechas;
+}
 
 let mockCache = null;
 async function mock() {
@@ -41,7 +38,6 @@ export async function getPacientes(fechaCorte, especialidad) {
     ...m.pacientes[r.id_paciente], ...r, posicion_anterior: ant[r.id_paciente] ?? null, estado_revision: "pendiente",
   }));
   if (especialidad) pacientes = pacientes.filter((p) => p.especialidad === especialidad);
-  pacientes = pacientes.map(conAutoreporteMock);
   return { fecha_corte: fechaCorte, total: pacientes.length, pacientes, excluidos: corte.excluidos };
 }
 
@@ -72,10 +68,7 @@ export async function getHistoria(id, fechaCorte) {
   return { id_paciente: id, puntos, eventos };
 }
 export const postContacto = (id, body) => req("POST", `/pacientes/${id}/contacto`, body);
-export const getKpis = (fechaCorte) => req("GET", `/kpis?fecha_corte=${fechaCorte}`);
 export const postNovedad = (id, body) => req("POST", `/pacientes/${id}/novedad`, body);
-export const postImportar = (archivos, confirmar) => req("POST", "/importar", { archivos, confirmar });
-export const urlPlantilla = (tabla) => `${API_URL}/plantillas/${tabla}`;
 export const getCatalogo = () => req("GET", "/catalogo");
 export const postPaciente = (body) => req("POST", "/pacientes", body);
 export const postInforme = (id, body) => req("POST", `/pacientes/${id}/informe`, body);
@@ -83,26 +76,6 @@ export const postExplicar = (id, fechaCorte) => req("POST", `/pacientes/${id}/ex
 export const getBoxes = (fechaCorte, especialidad) =>
   req("GET", `/boxes?${new URLSearchParams({ fecha_corte: fechaCorte, ...(especialidad ? { especialidad } : {}) })}`);
 
-// Chat del paciente. Con API: se guarda como "por validar" y el equipo lo valida en la ficha.
-// Sin API (modo mock): queda en memoria y se marca en la lista; validar requiere el servidor.
-const BANDERAS = { ideacion_suicida: "ideas de hacerse daño (PHQ-9 ítem 9)", dolor_pecho: "dolor de pecho en reposo o con poco esfuerzo",
-  disnea_reposo: "falta de aire en reposo" };
-const autoMock = {};
-function conAutoreporteMock(p) {
-  const a = autoMock[p.id_paciente];
-  if (!a) return p;
-  const razones = a.bandera_roja ? [{ factor: "autoreporte", valor: `Bandera roja en el chat: ${a.bandera_roja} (por validar)`, fuente: "Autoreporte del paciente (chat de seguimiento)" }, ...p.razones] : p.razones;
-  return { ...p, autoreporte: a, alerta_chat: !!a.bandera_roja, contactar_hoy: p.contactar_hoy || !!a.bandera_roja, razones };
-}
-export async function postAutoreporte(id, body) {
-  if (MODO === "api") return req("POST", `/pacientes/${id}/autoreporte`, body);
-  const a = { ...body, id_autoreporte: "AR-DEMO-" + Date.now().toString(36).toUpperCase(), fecha: new Date().toISOString(),
-    bandera_roja: body.bandera_roja ? BANDERAS[body.bandera_roja] : null };
-  autoMock[id] = a;
-  return { id_paciente: id, autoreporte: a };
-}
-export async function validarAutoreporte(id, body) {
-  if (MODO === "api") return req("POST", `/pacientes/${id}/autoreporte/validar`, body);
-  if (body.accion === "descartar") { delete autoMock[id]; return { revision: { accion: "descartar" } }; }
-  throw new Error("validar el dato del chat requiere conexión al servidor (en modo demo solo se puede descartar)");
-}
+// Box del día: asignar un cupo libre (al siguiente de la lista o a un paciente) y registrar el resultado de la cita.
+export const postAsignar = (body) => req("POST", "/boxes/asignar", body);
+export const postEstadoCita = (idCita, estado) => req("POST", `/citas/${idCita}/estado`, { estado });
