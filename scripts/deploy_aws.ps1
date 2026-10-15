@@ -1,4 +1,4 @@
-# Publica todo en AWS: API (Lambda + API Gateway + DynamoDB + S3) con CloudFormation y la página en Amplify.
+﻿# Publica todo en AWS: API (Lambda + API Gateway + DynamoDB + S3) con CloudFormation y la página en Amplify.
 # Uso, desde la raíz del repo (perfil AWS "hack" con credenciales vigentes):
 #   powershell -ExecutionPolicy Bypass -File scripts\deploy_aws.ps1            # backend + datos + página
 #   powershell -ExecutionPolicy Bypass -File scripts\deploy_aws.ps1 -SoloFront
@@ -13,7 +13,8 @@ $art = "ambulatorio-hlf-artefactos-$cuenta"
 
 if (-not $SoloFront) {
     # 1) Paquete limpio de la Lambda: código + Pydantic para Linux ARM (Lambda arm64, Python 3.12)
-    $b = Join-Path $env:TEMP "hlf_build"; if (Test-Path $b) { Remove-Item $b -Recurse -Force }
+    # carpeta nueva en cada publicación (Windows a veces bloquea borrar la anterior)
+    $b = Join-Path $env:TEMP ("hlf_build_" + (Get-Date -Format "yyyyMMdd_HHmmss"))
     New-Item -ItemType Directory -Force "$b\lambda_pkg" | Out-Null
     Get-ChildItem "$raiz\lambda\*.py" | Where-Object Name -ne "local_server.py" | Copy-Item -Destination "$b\lambda_pkg\"
     python -m pip install -q -r "$raiz\lambda\requirements.txt" --platform manylinux2014_aarch64 --python-version 3.12 `
