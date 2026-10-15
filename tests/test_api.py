@@ -465,6 +465,40 @@ def test_usuario_queda_en_el_registro():
     s, r = call("POST", "/pacientes/PAC-HLF-00005/revision", body={"accion": "confirmar", "fecha_corte": "2026-10-13", "usuario": "Dra. Soto, cardiología"})
     assert s == 200 and r["revision"]["usuario"] == "Dra. Soto, cardiología"
 
+def test_ajuste_manual_de_posicion():
+    q = {"fecha_corte": "2026-10-13", "especialidad": "Neurología"}
+    _, l = call("GET", "/pacientes", q)
+    p = next(x for x in reversed(l["pacientes"]) if x["id_paciente"].startswith("PAC-HLF") and x["estado_clinico"] == "sin_cambios")
+    pid, base = p["id_paciente"], {"posicion": 2, "motivo": "criterio_clinico", "fecha_corte": "2026-10-13", "usuario": "Dr. Muñoz, neurología"}
+    # sin explicación suficiente, sin usuario o con motivo inválido: se rechaza
+    assert call("POST", f"/pacientes/{pid}/orden", body={**base, "explicacion": "corto"})[0] == 400
+    assert call("POST", f"/pacientes/{pid}/orden", body={**base, "usuario": "", "explicacion": "crisis frecuentes informadas por la familia"})[0] == 400
+    assert call("POST", f"/pacientes/{pid}/orden", body={**base, "motivo": "porque si", "explicacion": "crisis frecuentes informadas por la familia"})[0] == 400
+    assert call("POST", f"/pacientes/{pid}/orden", body={**base, "posicion": 9999, "explicacion": "crisis frecuentes informadas por la familia"})[0] == 400
+    s, r = call("POST", f"/pacientes/{pid}/orden", body={**base, "explicacion": "crisis frecuentes informadas por la familia"})
+    assert s == 200 and r["paciente"]["posicion_especialidad"] == 2 and r["paciente"]["ajuste_manual"]["usuario"] == "Dr. Muñoz, neurología"
+    assert r["paciente"]["posicion_sistema"] > 2
+    # la lista general respeta el mismo orden dentro de la especialidad
+    _, todos = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
+    neuro = [x["id_paciente"] for x in todos["pacientes"] if x["especialidad"] == "Neurología"]
+    assert neuro.index(pid) == 1
+    # deshacer vuelve al orden del sistema
+    s, r = call("POST", f"/pacientes/{pid}/orden", body={"quitar": True, "explicacion": "se revisó en comité y se vuelve al orden",
+                                                        "usuario": "Dr. Muñoz", "fecha_corte": "2026-10-13"})
+    assert s == 200 and not r["paciente"].get("ajuste_manual") and r["paciente"]["posicion_especialidad"] == p["posicion"]
+
+def test_ajuste_manual_sin_efecto_tras_un_evento():
+    q = {"fecha_corte": "2026-10-13", "especialidad": "Cardiología"}
+    _, l = call("GET", "/pacientes", q)
+    p = next(x for x in l["pacientes"] if x["diagnostico_cie10"] == "I50" and not x["riesgo_vital"] and x["id_paciente"].startswith("PAC-HLF"))
+    pid = p["id_paciente"]
+    call("POST", f"/pacientes/{pid}/orden", body={"posicion": len(l["pacientes"]), "motivo": "comite", "fecha_corte": "2026-10-13",
+                                                  "usuario": "Jefatura", "explicacion": "paciente en control en otro centro"})
+    call("POST", "/eventos", body={"id_paciente": pid, "tipo_evento": "hospitalizacion", "subtipo": "ingreso hospitalario", "fecha_corte": "2026-10-13"})
+    _, l = call("GET", "/pacientes", q)
+    f = fila(l, pid)
+    assert not f.get("ajuste_manual") and f["ajuste_manual_vencido"]["vencido_por"]   # el deterioro no queda escondido
+
 def test_health_informa_fecha_y_modo():
     s, h = call("GET", "/health")
     assert s == 200 and h["datos"] == "sinteticos" and h["modo"] in ("simulacion", "tiempo_real") and h["fecha_hoy"]

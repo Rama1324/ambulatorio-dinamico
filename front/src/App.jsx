@@ -250,6 +250,7 @@ export default function App() {
                             className={`cursor-pointer border-b border-outline-variant/60 ${activo ? "bg-primary/10" : destacado === p.id_paciente ? "bg-ambar-container/60" : "hover:bg-surface-container-low"}`}>
                             <td className={`py-2.5 px-3 align-top ${p.riesgo_vital ? "border-l-4 border-l-error" : "border-l-4 border-l-transparent"}`}>
                               <div className="font-semibold">{p.posicion}</div>
+                              {p.ajuste_manual && p.posicion_sistema !== p.posicion && <div className="text-[11px] text-on-surface-variant whitespace-nowrap" title="Posición que le daban las reglas">sistema: {p.posicion_sistema}</div>}
                               {demo && delta !== 0 && <div className={`text-[12px] ${delta > 0 ? "text-error" : "text-on-surface-variant"}`}>{delta > 0 ? `▲ ${delta}` : `▼ ${-delta}`}</div>}
                             </td>
                             <td className="py-2.5 px-2 align-top"><Prioridad cat={p.categoria} /></td>
@@ -266,6 +267,8 @@ export default function App() {
                                   : p.riesgo_vital && !p.contactar_hoy && <Marca tono="azul" title={p.evaluacion?.cierre?.texto}>Evaluada</Marca>}
                                 {!p.riesgo_vital && p.estado_clinico === "descompensado" && <Marca tono="rojo">Descompensado</Marca>}
                                 {p.revision_sugerida?.length > 0 && <Marca tono="ambar" title={[...new Set(p.revision_sugerida.map((s) => s.motivo))].join(" · ")}>Revisar</Marca>}
+                                {p.ajuste_manual && <Marca tono="azul" title={`${p.ajuste_manual.motivo_texto}: ${p.ajuste_manual.explicacion} (${p.ajuste_manual.usuario})`}>Ajuste manual</Marca>}
+                                {p.ajuste_manual_vencido && <Marca tono="ambar" title={`Evento nuevo: ${p.ajuste_manual_vencido.vencido_por}`}>Ajuste sin efecto: revisar</Marca>}
                                 {p.grupo_proteccion && <Marca tono="azul">{p.grupo_proteccion}</Marca>}
                                 {p.estado_clinico === "estabilizado" && <Marca>Estabilizado</Marca>}
                                 {p.ges?.vencida && <Marca tono="azul" title={`GES N°${p.ges.problema}: plazo ${p.ges.plazo_dias} días desde la derivación. Se calcula desde el ingreso a la lista: verificar el hito real.`}>GES: verificar</Marca>}
@@ -736,6 +739,12 @@ function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso, onDes
             )}
           </Caja>
 
+          <AjusteManual p={p} fecha={fecha} onListo={async (r, quitar) => {
+            await onCambio(); onDestacar(p.id_paciente);
+            onAviso(quitar ? { titulo: `${p.nombre_fantasia}: ajuste manual deshecho, vuelve al orden del sistema` }
+              : { titulo: `${p.nombre_fantasia} movido a mano`, antes: r.ajuste.posicion_anterior, despues: r.paciente?.posicion_especialidad });
+          }} onAviso={onAviso} />
+
           <Caja titulo="Resumen para el equipo" accion={<button onClick={pedirResumen} disabled={cargando} className="text-[13px] text-primary font-semibold disabled:opacity-50">{cargando === "ia" ? "Redactando…" : resumen ? "Actualizar" : "Generar"}</button>}>
             {resumen ? <>
               <p className="text-[14px] leading-relaxed">{resumen.explicacion_ia}</p>
@@ -854,6 +863,10 @@ function Indicadores({ fecha, esApi, data }) {
           <div className="text-[14px] space-y-1">
             <div className="flex justify-between"><span>Pacientes que requieren revisión</span><b className="text-ambar">{k.alertas.revision_sugerida}</b></div>
             <p className="text-[12px] text-on-surface-variant">Descompensaciones, exámenes alterados o aumentos de dosis posteriores a la interconsulta o a la última revisión.</p>
+            {k.ajustes_manuales && <div className="pt-2 mt-1 border-t border-outline-variant/60 space-y-1">
+              <div className="flex justify-between"><span>Ajustes manuales vigentes</span><b>{k.ajustes_manuales.vigentes}</b></div>
+              <div className="flex justify-between"><span>Sin efecto por un evento nuevo</span><b className={k.ajustes_manuales.sin_efecto_por_evento ? "text-ambar" : ""}>{k.ajustes_manuales.sin_efecto_por_evento}</b></div>
+            </div>}
           </div>
         </Caja>
         <Caja titulo="Egresos de la lista">
@@ -898,6 +911,63 @@ function Contacto({ p, fecha, onListo, onAviso }) {
 }
 
 // Decisión clínica ante una descompensación grave: la registra un profesional identificado, con seguimiento.
+// Ajuste manual de la posición en la lista: siempre con un motivo previo, explicado y a nombre de quien lo hace.
+const MOTIVOS_AJUSTE = [["criterio_clinico", "Criterio clínico del especialista"], ["informacion_no_registrada", "Información clínica que no está en el registro"],
+  ["comite", "Decisión de comité o jefatura"], ["error_registro", "Corrección de un error de registro"], ["otro", "Otro motivo (explicado)"]];
+const MIN_EXPLICACION = 20;
+function AjusteManual({ p, fecha, onListo, onAviso }) {
+  const [abierto, setAbierto] = useState(false);
+  const [f, setF] = useState({ posicion: "", motivo: "", explicacion: "" });
+  const [enviando, setEnviando] = useState(false);
+  const usuario = api.getUsuario();
+  const a = p.ajuste_manual;
+  const faltan = MIN_EXPLICACION - f.explicacion.trim().length;
+  const enviar = async (quitar) => {
+    setEnviando(true);
+    try {
+      const body = quitar ? { quitar: true, explicacion: f.explicacion, fecha_corte: fecha }
+        : { posicion: Number(f.posicion), motivo: f.motivo, explicacion: f.explicacion, fecha_corte: fecha };
+      const r = await api.postOrden(p.id_paciente, body);
+      setAbierto(false); setF({ posicion: "", motivo: "", explicacion: "" }); onListo(r, quitar);
+    } catch (e) { onAviso({ titulo: "No se pudo guardar: " + e.message }); } finally { setEnviando(false); }
+  };
+  const campo = "h-9 px-2 border border-outline-variant rounded bg-surface-container-lowest text-[14px]";
+  return (
+    <Caja titulo="Mover en la lista (ajuste manual)" accion={!abierto && <button onClick={() => setAbierto(true)} className="text-[13px] text-primary font-semibold">{a ? "Cambiar o deshacer" : "Mover"}</button>}>
+      {a ? <div className="text-[14px] rounded bg-primary/5 border border-primary/30 p-2">
+          <b>Movido a mano al N° {a.posicion} de {a.especialidad}</b> (el sistema lo ponía en el N° {a.posicion_anterior}).
+          <div className="text-[13px] mt-0.5">Motivo: {a.motivo_texto}. «{a.explicacion}»</div>
+          <div className="text-[12px] text-on-surface-variant">{a.usuario} · {fmt(a.fecha)}</div>
+        </div>
+        : <p className="text-[13px] text-on-surface-variant">N° {p.posicion_especialidad} en la lista de {p.especialidad}. Si el equipo necesita cambiar su lugar, debe dejar el motivo explicado: queda registrado a su nombre.</p>}
+      {p.ajuste_manual_vencido && <p className="mt-2 text-[13px] text-ambar font-semibold">El ajuste manual anterior dejó de aplicarse por un evento nuevo ({p.ajuste_manual_vencido.vencido_por}): revise su lugar en la lista.</p>}
+      {abierto && (
+        <div className="mt-3 flex flex-col gap-2 text-[14px]">
+          {!usuario && <p className="text-[13px] text-ambar font-semibold">Escriba su nombre y cargo arriba a la derecha: el ajuste queda registrado a su nombre.</p>}
+          {a && <p className="text-[13px] text-on-surface-variant">Para deshacer el ajuste, explique por qué y presione "Deshacer". Para cambiarlo, complete todo.</p>}
+          <label className="flex items-center gap-2">Mover al N°
+            <input type="number" min={1} value={f.posicion} onChange={(e) => setF({ ...f, posicion: e.target.value })} className={`${campo} w-24`} />
+            <span className="text-on-surface-variant text-[13px]">de la lista de {p.especialidad}</span></label>
+          <select value={f.motivo} onChange={(e) => setF({ ...f, motivo: e.target.value })} className={campo}>
+            <option value="">Motivo del ajuste…</option>{MOTIVOS_AJUSTE.map(([k, t]) => <option key={k} value={k}>{t}</option>)}
+          </select>
+          <textarea rows={3} value={f.explicacion} onChange={(e) => setF({ ...f, explicacion: e.target.value })}
+            placeholder="Explique el motivo (obligatorio). Ej.: la familia informa crisis semanales que no están registradas; evaluado por el Dr. X."
+            className="p-2 border border-outline-variant rounded bg-surface-container-lowest resize-y" />
+          <span className={`text-[12px] ${faltan > 0 ? "text-ambar" : "text-on-surface-variant"}`}>{faltan > 0 ? `Faltan ${faltan} caracteres para explicar el motivo.` : "Explicación suficiente."}</span>
+          <div className="flex gap-2">
+            <button disabled={enviando || !usuario || faltan > 0 || !f.motivo || !(Number(f.posicion) >= 1)} onClick={() => enviar(false)}
+              className="flex-1 py-2 rounded bg-primary text-on-primary font-semibold disabled:opacity-40">{enviando ? "Guardando…" : "Mover"}</button>
+            {a && <button disabled={enviando || !usuario || faltan > 0} onClick={() => enviar(true)} className="flex-1 py-2 rounded border border-primary text-primary font-semibold disabled:opacity-40">Deshacer</button>}
+            <button onClick={() => setAbierto(false)} className="px-3 py-2 rounded border border-outline-variant font-semibold">Cancelar</button>
+          </div>
+          <p className="text-[12px] text-on-surface-variant">Si después llega un evento clínico nuevo (urgencia, hospitalización, examen alterado), el ajuste deja de aplicarse y el paciente vuelve al orden del sistema para que se revise.</p>
+        </div>
+      )}
+    </Caja>
+  );
+}
+
 function DecisionClinica({ p, fecha, onListo, onAviso }) {
   const [f, setF] = useState({ decision: "citar_prioritario", responsable: api.getUsuario(), nota: "", seguimiento: "" });
   const [enviando, setEnviando] = useState(false);
@@ -974,6 +1044,7 @@ function Camino({ p, total }) {
   if (p.categoria !== p.categoria_sistema) pasos.push({ t: "Decisión clínica", v: `Prioridad ${p.categoria}`, f: p.revision?.motivo, cat: p.categoria });
   if (p.riesgo_vital) pasos.push(p.contactar_hoy ? { t: "Descompensación grave", v: p.evaluacion?.estado === "atrasada" ? "Evaluación atrasada" : "Evaluar ≤ 72 h", f: "Criterio médico MINSAL", icon: "call", rojo: true }
     : { t: "Descompensación grave", v: "Evaluada", f: p.evaluacion?.cierre?.texto, icon: "task_alt", cat: "alta" });
+  if (p.ajuste_manual) pasos.push({ t: "Ajuste manual", v: `N° ${p.ajuste_manual.posicion} en ${p.ajuste_manual.especialidad}`, f: `${p.ajuste_manual.motivo_texto} · ${p.ajuste_manual.usuario}`, icon: "swap_vert" });
   if (p.grupo_proteccion) pasos.push({ t: "Grupo de especial protección", v: p.grupo_proteccion, f: "MINSAL criterio 2", icon: "shield_person" });
   pasos.push({ t: "Lugar en la lista", v: `N° ${p.posicion} de ${total}`, f: p.antiguedad_mayor_1_anio ? "Más de 1 año en espera" : `${p.dias_espera} días en espera`, final: true });
   return (

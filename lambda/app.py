@@ -59,6 +59,14 @@ DECISIONES = {
     "mantener": "Se mantiene en lista con su prioridad actual",
 }
 # Estados de una cita reservada (la propuesta del sistema no es cita: no bloquea horas)
+AJUSTE_MANUAL = {  # mover a un paciente en la lista exige un motivo previo y explicado
+    "criterio_clinico": "Criterio clínico del especialista",
+    "informacion_no_registrada": "Información clínica que no está en el registro",
+    "comite": "Decisión de comité o jefatura",
+    "error_registro": "Corrección de un error de registro",
+    "otro": "Otro motivo (explicado)",
+}
+MIN_EXPLICACION = 20
 ESTADOS_CITA = {"confirmada": "Confirmada por el paciente", "atendida": "Atendida", "no_asistio": "No asistió",
                 "cancelada": "Cancelada: la hora queda libre"}
 
@@ -296,6 +304,36 @@ def _enriquecer(r, perfil, revision, pos_ant, corte=None, contacto=None, decisio
     return out
 
 
+def ajustes_orden():
+    """Último ajuste manual de posición por paciente (un registro con 'quitar' lo deshace)."""
+    out = {}
+    for pid, a in _ultimo_por_paciente("orden#", "orden").items():
+        if not a.get("quitar"):
+            out[pid] = a
+    return out
+
+
+def _aplicar_ajustes(pacientes, senales, corte):
+    """Mueve a mano a los pacientes con ajuste vigente, en el orden en que se registraron los ajustes.
+    La posición pedida es dentro de la lista de su especialidad, así la lista general y la filtrada coinciden.
+    Un evento clínico posterior al ajuste lo deja sin efecto (vuelve al orden del sistema y pide revisar)."""
+    corte_iso = corte.isoformat()
+    ajustes = sorted(((pid, a) for pid, a in ajustes_orden().items() if a["fecha_corte"] <= corte_iso), key=lambda x: x[1]["fecha"])
+    for pid, a in ajustes:
+        i = next((k for k, q in enumerate(pacientes) if q["id_paciente"] == pid), None)
+        if i is None:
+            continue
+        nuevas = [s for s in senales.get(pid, []) if _posterior(s, a["fecha_corte"], a["fecha"])]
+        if nuevas:
+            pacientes[i]["ajuste_manual_vencido"] = {**a, "vencido_por": nuevas[-1]["motivo"]}
+            continue
+        p = pacientes.pop(i)
+        misma = [k for k, q in enumerate(pacientes) if q["especialidad"] == p["especialidad"]]
+        destino = misma[a["posicion"] - 1] if a["posicion"] - 1 < len(misma) else (misma[-1] + 1 if misma else len(pacientes))
+        pacientes.insert(destino, p)
+        p["ajuste_manual"] = a
+
+
 def lista(corte, especialidad=None, perfs=None, revs=None):
     if perfs is None:
         perfs, revs = perfiles_combinados()
@@ -309,7 +347,13 @@ def lista(corte, especialidad=None, perfs=None, revs=None):
     # el equipo clínico decide: si ajustó la categoría, esa manda en el orden (mismos criterios MINSAL)
     pacientes.sort(key=puntaje.clave_orden)
     for i, p in enumerate(pacientes, 1):
+        p["posicion_sistema"] = i
+    _aplicar_ajustes(pacientes, {r["id_paciente"]: r.get("senales", []) for r in activos}, corte)
+    por_esp = {}
+    for i, p in enumerate(pacientes, 1):
         p["posicion"] = i
+        por_esp[p["especialidad"]] = por_esp.get(p["especialidad"], 0) + 1
+        p["posicion_especialidad"] = por_esp[p["especialidad"]]
     exc = [{"id_paciente": r["id_paciente"], "motivo": r["motivo"], "fecha": r.get("fecha"),
             "nombre_fantasia": perfs[r["id_paciente"]]["paciente"].get("nombre_fantasia"),
             "especialidad": perfs[r["id_paciente"]]["lista_espera"].get("especialidad"),
@@ -411,6 +455,7 @@ def catalogo():
             "acg": [{"nivel": k, "texto": v} for k, v in puntaje.ACG_NIVELES.items()],
             "resultados_contacto": [{"valor": k, "texto": v} for k, v in RESULTADOS_CONTACTO.items()],
             "decisiones": [{"valor": k, "texto": v} for k, v in DECISIONES.items()],
+            "motivos_ajuste": [{"valor": k, "texto": v} for k, v in AJUSTE_MANUAL.items()], "min_explicacion": MIN_EXPLICACION,
             "estados_cita": [{"valor": k, "texto": v} for k, v in ESTADOS_CITA.items()]}
 
 
@@ -602,6 +647,43 @@ def post_decision(pid, body):
     return 200, {"id_paciente": pid, "decision": dc, "paciente": fila}
 
 
+def post_orden(pid, body):
+    """Ajuste manual de la posición: {posicion (en su especialidad), motivo, explicacion, usuario} o {quitar, explicacion, usuario}."""
+    perfs, _ = perfiles_combinados()
+    if pid not in perfs:
+        return 404, {"error": "paciente no existe"}
+    usuario = (body.get("usuario") or "").strip()
+    explicacion = (body.get("explicacion") or "").strip()
+    if not usuario:
+        return 400, {"error": "indique su nombre y cargo: el ajuste manual queda registrado a su nombre"}
+    if len(explicacion) < MIN_EXPLICACION:
+        return 400, {"error": f"explique el motivo del ajuste (mínimo {MIN_EXPLICACION} caracteres)"}
+    corte = date.fromisoformat(body.get("fecha_corte") or hoy().isoformat())
+    esp = perfs[pid]["lista_espera"]["especialidad"]
+    actual = next((p for p in lista(corte, esp)["pacientes"] if p["id_paciente"] == pid), None)
+    if not actual:
+        return 400, {"error": "el paciente no está en la lista a esa fecha"}
+    ahora = datetime.now(timezone.utc).isoformat(timespec="microseconds")
+    if body.get("quitar"):
+        a = {"quitar": True, "explicacion": explicacion, "usuario": usuario, "fecha_corte": corte.isoformat(), "fecha": ahora}
+    else:
+        if body.get("motivo") not in AJUSTE_MANUAL:
+            return 400, {"error": f"motivo debe ser uno de {sorted(AJUSTE_MANUAL)}"}
+        total = sum(1 for p in lista(corte, esp)["pacientes"])
+        try:
+            posicion = int(body.get("posicion"))
+        except (TypeError, ValueError):
+            posicion = 0
+        if not 1 <= posicion <= total:
+            return 400, {"error": f"la posición debe estar entre 1 y {total} (lista de {esp})"}
+        a = {"posicion": posicion, "posicion_anterior": actual["posicion_especialidad"], "motivo": body["motivo"],
+             "motivo_texto": AJUSTE_MANUAL[body["motivo"]], "explicacion": explicacion, "usuario": usuario,
+             "especialidad": esp, "fecha_corte": corte.isoformat(), "fecha": ahora}
+    guardar({"id_paciente": pid, "sk": f"orden#{ahora}", "orden": json.dumps(a, ensure_ascii=False)})
+    fila = next((p for p in lista(corte, esp)["pacientes"] if p["id_paciente"] == pid), None)
+    return 200, {"id_paciente": pid, "ajuste": a, "paciente": fila}
+
+
 def post_cita(pid, body):
     """Cambia el estado de una cita reservada hoy: confirmada, atendida, no_asistio o cancelada."""
     if body.get("estado") not in ESTADOS_CITA:
@@ -689,6 +771,9 @@ def kpis(corte):
         "concordancia": {"revisiones": len(pares), "acuerdos": acuerdos,
                          "acuerdo_pct": round(100 * acuerdos / len(pares)) if pares else None, "kappa": _kappa(pares),
                          "meta": 0.70, "n_recomendado": N_KAPPA_RECOMENDADO, "suficiente": len(pares) >= N_KAPPA_RECOMENDADO},
+        "ajustes_manuales": {"vigentes": sum(bool(p.get("ajuste_manual")) for p in data["pacientes"]),
+                             "sin_efecto_por_evento": sum(bool(p.get("ajuste_manual_vencido")) for p in data["pacientes"]),
+                             "registrados": sum(r["sk"].startswith("orden#") for r in regs)},
         "alertas": {"riesgo_vital": len(vitales), "contactados": sum(not p["contactar_hoy"] for p in vitales),
                     "pendientes": sum(p["contactar_hoy"] for p in vitales),
                     "revision_sugerida": sum(bool(p["revision_sugerida"]) for p in data["pacientes"])},
@@ -989,6 +1074,8 @@ def handler(event, context=None):
             return _resp(*post_contacto(partes[1], body))
         if method == "POST" and len(partes) == 3 and partes[0] == "pacientes" and partes[2] == "decision":
             return _resp(*post_decision(partes[1], body))
+        if method == "POST" and len(partes) == 3 and partes[0] == "pacientes" and partes[2] == "orden":
+            return _resp(*post_orden(partes[1], body))
         if method == "POST" and len(partes) == 3 and partes[0] == "pacientes" and partes[2] == "cita":
             return _resp(*post_cita(partes[1], body))
         if method == "GET" and partes == ["disponible"]:

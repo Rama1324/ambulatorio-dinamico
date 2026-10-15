@@ -91,6 +91,7 @@ export const getDisponible = (fechaCorte, params) =>
 export const postContacto = (id, body) => req("POST", `/pacientes/${id}/contacto`, body);
 export const postDecision = (id, body) => req("POST", `/pacientes/${id}/decision`, body);
 export const postCita = (id, body) => req("POST", `/pacientes/${id}/cita`, body);
+export const postOrden = (id, body) => req("POST", `/pacientes/${id}/orden`, body);
 export const getKpis = (fechaCorte) => req("GET", `/kpis?fecha_corte=${fechaCorte}`);
 export const postNovedad = (id, body) => req("POST", `/pacientes/${id}/novedad`, body);
 export const postImportar = (archivos, confirmar) => req("POST", "/importar", { archivos, confirmar });
