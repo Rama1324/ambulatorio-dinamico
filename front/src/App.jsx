@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import * as api from "./api";
+import { descargarExcel } from "./excel";
 
 const ESPECIALIDADES = ["Todas", "Cardiología", "Traumatología", "Endocrinología", "Salud Mental", "Broncopulmonar", "Neurología", "Gastroenterología"];
 const ETIQUETA = { alta: "Alta", media: "Media", baja: "Baja" };
@@ -221,7 +222,9 @@ export default function App() {
                   </select>
                 </Filtro>
                 <label className="flex items-center gap-2 h-9 cursor-pointer select-none"><input type="checkbox" checked={soloPend} onChange={(e) => setSoloPend(e.target.checked)} className="w-4 h-4 accent-primary" />Solo pendientes de revisión</label>
-                <button onClick={() => exportarCsv(filtrados, fecha)} className="ml-auto h-9 px-3 rounded border border-outline-variant bg-surface-container-lowest font-semibold flex items-center gap-1"><Icono n="download" className="text-[18px]" />Descargar Excel</button>
+                <button onClick={() => exportarExcel(filtrados, fecha, { excluidos: data.excluidos, filtros: [["Especialidad", esp], ["Búsqueda", busca || "(ninguna)"],
+                  ["Prioridad", { todas: "Todas", vital: "Evaluación pendiente", revisar: "Requieren revisión", alta: "Alta", media: "Media", baja: "Baja" }[filtroCat]],
+                  ["Solo pendientes de revisión", soloPend ? "Sí" : "No"]] })} className="ml-auto h-9 px-3 rounded border border-outline-variant bg-surface-container-lowest font-semibold flex items-center gap-1"><Icono n="download" className="text-[18px]" />Descargar Excel</button>
                 {esApi && <button onClick={() => setNuevo(true)} className="h-9 px-3 rounded bg-primary text-on-primary font-semibold flex items-center gap-1"><Icono n="person_add" className="text-[18px]" />Ingresar paciente</button>}
               </div>
               {nuevo && <NuevoPaciente fecha={fecha} onCerrar={() => setNuevo(false)} onListo={async (r) => {
@@ -448,20 +451,35 @@ function Novedad({ p, fecha, onListo, onAviso }) {
   );
 }
 
-// Exporta la lista priorizada (con los filtros actuales) a CSV separado por ";" con BOM: Excel en español lo abre en columnas.
-function exportarCsv(pacientes, fecha) {
-  const col = ["N°", "Prioridad", "Descompensación grave (evaluación)", "Paciente", "ID", "Edad", "Especialidad", "CIE-10", "Diagnóstico",
-    "Fecha ingreso", "Días de espera", "Más de 1 año", "LACE (experimental)", "GES: verificar plazo", "2 inasistencias", "Estado clínico", "Revisión"];
-  const filas = pacientes.map((p) => [p.posicion, ETIQUETA[p.categoria], p.riesgo_vital ? (p.evaluacion?.estado || "pendiente") : "", p.nombre_fantasia, p.id_paciente, p.edad,
-    p.especialidad, p.diagnostico_cie10, p.diagnostico_texto, fmt(p.fecha_ingreso_lista), p.dias_espera, p.antiguedad_mayor_1_anio ? "Sí" : "",
-    p.lace?.total ?? "", p.ges?.vencida ? `Sí (GES N°${p.ges.problema})` : "", p.riesgo_inasistencia ? "Sí" : "", p.estado_clinico.replace("_", " "), p.estado_revision]);
-  const esc = (v) => { const s = String(v ?? ""); return /[;"\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s; };
-  const csv = "﻿" + [col, ...filas].map((f) => f.map(esc).join(";")).join("\r\n");
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-  a.download = `lista_priorizada_HLF_${fecha}.csv`;
-  a.click();
-  URL.revokeObjectURL(a.href);
+// Excel (.xlsx) de la lista tal como se está viendo (mismos filtros), con el fundamento de cada paciente,
+// los ajustes manuales, los egresados y los filtros usados. Ver src/excel.js.
+const EVAL_TXT = { pendiente: "Pendiente (≤ 72 h)", atrasada: "Atrasada (> 72 h)", evaluada: "Evaluada" };
+const REV_TXT = { pendiente: "Pendiente", confirmado: "Confirmada", ajustado: "Ajustada", requiere_revision: "Requiere nueva revisión" };
+function exportarExcel(pacientes, fecha, { excluidos = [], filtros = [] } = {}) {
+  const lista = [["N°", "N° en su especialidad", "Prioridad", "Prioridad inicial (SIC)", "Paciente", "ID", "Edad", "Sexo", "Comuna", "Especialidad",
+    "CIE-10", "Diagnóstico", "Fecha ingreso", "Días de espera", "Más de 1 año", "Estado clínico", "Descompensación grave: evaluación",
+    "Días desde el evento", "Revisión de la prioridad", "Revisión sugerida por", "Ajuste manual", "Posición según el sistema", "GES: verificar plazo",
+    "2 inasistencias seguidas", "LACE (experimental)"],
+    ...pacientes.map((p) => [p.posicion, p.posicion_especialidad ?? "", ETIQUETA[p.categoria], p.prioridad_inicial, p.nombre_fantasia, p.id_paciente,
+      p.edad, p.sexo, p.comuna, p.especialidad, p.diagnostico_cie10, p.diagnostico_texto, fmt(p.fecha_ingreso_lista), p.dias_espera,
+      p.antiguedad_mayor_1_anio ? "Sí" : "", (p.estado_clinico || "").replace("_", " "), p.riesgo_vital ? EVAL_TXT[p.evaluacion?.estado] || "Pendiente" : "",
+      p.evaluacion?.dias_desde_evento ?? "", REV_TXT[p.estado_revision] || p.estado_revision,
+      [...new Set((p.revision_sugerida || []).map((s) => s.motivo))].join("; "),
+      p.ajuste_manual ? `N° ${p.ajuste_manual.posicion} · ${p.ajuste_manual.motivo_texto}` : p.ajuste_manual_vencido ? "Sin efecto por evento nuevo" : "",
+      p.posicion_sistema ?? "", p.ges?.vencida ? `GES N°${p.ges.problema} ${p.ges.nombre}` : "", p.riesgo_inasistencia ? "Sí" : "", p.lace?.total ?? ""])];
+  const fundamento = [["N°", "Paciente", "ID", "Factor", "Detalle", "Fuente"],
+    ...pacientes.flatMap((p) => p.razones.map((r) => [p.posicion, p.nombre_fantasia, p.id_paciente, FACTOR[r.factor] || r.factor, r.valor, r.fuente]))];
+  const ajustes = [["N°", "Paciente", "ID", "Especialidad", "Movido al N°", "El sistema lo ponía en", "Motivo", "Explicación", "Responsable", "Fecha"],
+    ...pacientes.filter((p) => p.ajuste_manual).map((p) => { const a = p.ajuste_manual;
+      return [p.posicion, p.nombre_fantasia, p.id_paciente, a.especialidad, a.posicion, a.posicion_anterior, a.motivo_texto, a.explicacion, a.usuario, fmt(a.fecha)]; })];
+  const egresados = [["Paciente", "ID", "Especialidad", "Motivo", "Fecha"],
+    ...excluidos.map((e) => [e.nombre_fantasia || e.id_paciente, e.id_paciente, e.especialidad, e.motivo === "fallecido" ? "Fallecimiento (causal 9)" : "Atendido en consulta nueva", fmt(e.fecha)])];
+  const info = [["Dato", "Valor"], ["Lista al", fmt(fecha)], ["Pacientes exportados", pacientes.length], ...filtros,
+    ["Generado por", api.getUsuario() || "(sin nombre)"], ["Generado el", new Date().toLocaleString("es-CL")],
+    ["Datos", "Sintéticos de demostración: no son pacientes reales"],
+    ["Criterio", "Tabla de priorización SSMSO 2025 (HLF) y orden MINSAL Ord. 536/2025. La herramienta propone; el equipo clínico decide."]];
+  descargarExcel(`lista_espera_HLF_${fecha}.xlsx`, [{ nombre: "Lista de espera", filas: lista }, { nombre: "Fundamento", filas: fundamento },
+    { nombre: "Ajustes manuales", filas: ajustes }, { nombre: "Egresados", filas: egresados }, { nombre: "Filtros e información", filas: info }]);
 }
 
 const leerBase64 = (f) => new Promise((ok, mal) => {
@@ -818,8 +836,23 @@ function Indicadores({ fecha, esApi, data }) {
   );
   const Fila = ({ t, v, c = "" }) => <div className="flex justify-between"><span>{t}</span><b className={c}>{v}</b></div>;
   const pendientesEval = re.evaluacion_pendiente + re.evaluacion_atrasada;
+  const exportar = () => descargarExcel(`indicadores_HLF_${k.fecha_corte}.xlsx`, [{ nombre: "Indicadores", filas: [["Grupo", "Indicador", "Valor", "Meta"],
+    ["Cobertura", "Pacientes ordenados con criterio común", `${k.cobertura.evaluados} de ${k.cobertura.en_espera} (${k.cobertura.pct}%)`, "100%"],
+    ["Reevaluación", "Mediana de horas evento → evaluación clínica", re.mediana_horas ?? "", "< 72 h"],
+    ["Reevaluación", "Eventos graves evaluados en menos de 72 h", `${re.evaluados_menos_72h} de ${re.evaluados}`, ""],
+    ["Reevaluación", "Eventos graves sin evaluar", re.sin_evaluar, ""],
+    ["Descompensaciones", "En la lista", re.descompensados_en_lista, ""], ["Descompensaciones", "Evaluadas", re.evaluacion_hecha, ""],
+    ["Descompensaciones", "Pendientes (≤ 72 h)", re.evaluacion_pendiente, ""], ["Descompensaciones", "Atrasadas (> 72 h)", re.evaluacion_atrasada, ""],
+    ["Concordancia", "Revisiones (n)", cc.revisiones, `≥ ${cc.n_recomendado}`], ["Concordancia", "Acuerdo", cc.acuerdo_pct == null ? "" : `${cc.acuerdo_pct}%`, ""],
+    ["Concordancia", "Kappa de Cohen", kap ?? "", "≥ 0,70"],
+    ...(k.ajustes_manuales ? [["Ajustes manuales", "Vigentes", k.ajustes_manuales.vigentes, ""], ["Ajustes manuales", "Sin efecto por evento nuevo", k.ajustes_manuales.sin_efecto_por_evento, ""]] : []),
+    ["Revisión", "Pacientes que requieren revisión del especialista", k.alertas.revision_sugerida, ""],
+    ["Contactabilidad", "Llamadas registradas", co.intentos, ""], ["Contactabilidad", "Con respuesta", co.efectivos, ""],
+    ["Egresos", "Por fallecimiento (causal 9)", k.egresos.fallecidos, ""], ["Egresos", "Atendidos en consulta nueva", k.egresos.atendidos, ""],
+    ["Información", "Indicadores al", fmt(k.fecha_corte), ""], ["Información", "Datos", "Sintéticos de demostración", ""]] }]);
   return (
     <div className="flex flex-col gap-5">
+      <div className="flex justify-end"><button onClick={exportar} className="h-9 px-3 rounded border border-outline-variant bg-surface-container-lowest font-semibold flex items-center gap-1 text-[14px]"><Icono n="download" className="text-[18px]" />Exportar a Excel</button></div>
       <div className="grid gap-4 md:grid-cols-3">
         <Kpi titulo="Tiempo del evento a la evaluación clínica" valor={re.evaluados ? `${num(re.mediana_horas)} h` : "—"} meta="< 72 horas"
           estado={!re.evaluados ? null : re.evaluados_menos_72h === re.evaluados && !re.evaluacion_atrasada ? "ok" : "mal"}
@@ -1401,6 +1434,19 @@ function Hoy({ parte, vitales, todosPacientes, fecha, esp, setEsp, onVer, esApi,
         <span className="text-on-surface-variant">Especialidad:</span>
         <select value={esp} onChange={(e) => setEsp(e.target.value)} className="h-9 px-2 border border-outline-variant rounded bg-surface-container-lowest">{ESPECIALIDADES.map((e) => <option key={e}>{e}</option>)}</select>
         <span className="text-[13px] text-on-surface-variant">{esp === "Todas" ? "Vista de coordinación: todo el hospital, agrupado por especialidad." : `Solo ${esp}.`}</span>
+        {parte === "hoy" && <button onClick={() => {
+          const fila = (p) => [p.posicion, p.nombre_fantasia, p.id_paciente, p.edad, p.especialidad, p.diagnostico_cie10, p.diagnostico_texto, ETIQUETA[p.categoria]];
+          const ev = (p) => p.razones.find((r) => r.factor === "evento")?.valor || "";
+          descargarExcel(`alertas_HLF_${fecha}.xlsx`, [
+            { nombre: "Descompensaciones graves", filas: [["N°", "Paciente", "ID", "Edad", "Especialidad", "CIE-10", "Diagnóstico", "Prioridad", "Evento", "Fecha del evento",
+              "Días desde el evento", "Evaluación", "Cerrada por", "Responsable", "Última llamada", "Intentos sin respuesta"],
+              ...todos.map((p) => [...fila(p), ev(p), fmt(p.evaluacion?.fecha_evento), p.evaluacion?.dias_desde_evento ?? "", EVAL_TXT[p.evaluacion?.estado] || "",
+                p.evaluacion?.cierre?.texto || "", p.evaluacion?.cierre?.responsable || "", p.contacto?.texto || "", p.contacto?.intentos_sin_respuesta || ""])] },
+            { nombre: "Avisar al especialista", filas: [["N°", "Paciente", "ID", "Edad", "Especialidad", "CIE-10", "Diagnóstico", "Prioridad", "Evento"],
+              ...aRevisar.map((p) => [...fila(p), ev(p)])] },
+            { nombre: "Información", filas: [["Dato", "Valor"], ["Fecha", fmt(fecha)], ["Especialidad", esp], ["Generado por", api.getUsuario() || "(sin nombre)"],
+              ["Datos", "Sintéticos de demostración: no son pacientes reales"]] }]);
+        }} className="ml-auto h-9 px-3 rounded border border-outline-variant bg-surface-container-lowest font-semibold flex items-center gap-1"><Icono n="download" className="text-[18px]" />Exportar a Excel</button>}
       </div>
       {b && (
         <section className="rounded border border-primary/30 bg-primary/5 p-4 text-[15px] leading-relaxed">
