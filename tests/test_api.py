@@ -323,6 +323,32 @@ def test_box_horas_distintas_por_paciente():
             assert all(p["hora"] < p["hora_fin"] <= fin for p in a["pacientes"])   # cada hora tiene inicio < término
     assert all(v["hora"] for v in b["cupo_por_paciente"].values())
 
+def test_citar_reserva_la_hora():
+    q = {"fecha_corte": "2026-10-13", "especialidad": "Gastroenterología"}
+    _, b = call("GET", "/boxes", q)
+    a = next(x for e in b["especialidades"] for x in e["asignaciones"] if len(x["pacientes"]) >= 2)
+    p1, p2 = a["pacientes"][0], a["pacientes"][1]
+    s, r = call("POST", f"/pacientes/{p1['id_paciente']}/contacto", body={"resultado": "citado", "fecha_corte": "2026-10-13",
+                "hora": p1["hora"], "hora_fin": p1["hora_fin"], "id_box": a["id_box"]})
+    assert s == 200 and r["contacto"]["hora"] == p1["hora"]
+    s, r = call("POST", f"/pacientes/{p2['id_paciente']}/contacto", body={"resultado": "citado", "fecha_corte": "2026-10-13",
+                "hora": p1["hora"], "id_box": a["id_box"]})
+    assert s == 409                                                     # la misma hora no se reserva dos veces
+    _, b2 = call("GET", "/boxes", q)
+    a2 = next(x for e in b2["especialidades"] for x in e["asignaciones"] if x["id_box"] == a["id_box"])
+    fila1 = next(p for p in a2["pacientes"] if p["id_paciente"] == p1["id_paciente"])
+    assert fila1["citado"] and fila1["hora"] == p1["hora"] and a2["libres_sin_citar"] == a["libres"] - 1
+    assert [p["hora"] for p in a2["pacientes"]].count(p1["hora"]) == 1   # nadie más recibe esa hora
+    _, d = call("GET", "/disponible", {**q, "cupos": "40"})
+    assert p1["id_paciente"] not in [p["id_paciente"] for p in d["pacientes"]]   # el médico no lo vuelve a proponer
+
+def test_no_contesta_cuenta_intentos():
+    _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
+    p = next(x for x in d["pacientes"] if x["contactar_hoy"] and not x["contacto"])
+    for _ in range(2):
+        s, r = call("POST", f"/pacientes/{p['id_paciente']}/contacto", body={"resultado": "no_contesta", "fecha_corte": "2026-10-13"})
+    assert r["paciente"]["contacto"]["intentos_sin_respuesta"] == 2 and r["paciente"]["contactar_hoy"]
+
 def test_medico_con_horas_libres():
     s, d = call("GET", "/disponible", {"fecha_corte": "2026-10-13", "especialidad": "Cardiología", "desde": "14:00", "hasta": "17:00"})
     assert s == 200 and d["duracion_min"] > 0 and d["cupos"] == 180 // d["duracion_min"]

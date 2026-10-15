@@ -100,11 +100,20 @@ def registros():
 
 
 def contactos():
-    """Último contacto registrado por paciente (para reconocer la alerta 'contactar hoy')."""
-    out = {}
+    """Último contacto por paciente, con el número de intentos sin respuesta desde el último contacto efectivo."""
+    out, intentos = {}, {}
     for r in sorted((r for r in registros() if r["sk"].startswith("contacto#")), key=lambda r: r["sk"]):
-        out[r["id_paciente"]] = json.loads(r["contacto"])
+        c = json.loads(r["contacto"])
+        pid = r["id_paciente"]
+        intentos[pid] = intentos.get(pid, 0) + 1 if c["resultado"] == "no_contesta" else 0
+        out[pid] = {**c, "intentos_sin_respuesta": intentos[pid]}
     return out
+
+
+def citados_hoy(corte):
+    """Pacientes citados con hora reservada en un box para la fecha de corte: {id_paciente: contacto}."""
+    return {pid: c for pid, c in contactos().items()
+            if c["resultado"] == "citado" and c.get("fecha_corte") == corte.isoformat() and c.get("hora")}
 
 
 def perfiles_combinados():
@@ -455,6 +464,15 @@ def post_contacto(pid, body):
     c = {"resultado": body["resultado"], "texto": RESULTADOS_CONTACTO[body["resultado"]], "nota": body.get("nota", ""),
          "fecha_corte": corte.isoformat(), "usuario": body.get("usuario", "equipo clínico"),
          "fecha": datetime.now(timezone.utc).isoformat(timespec="microseconds")}
+    if body["resultado"] == "citado" and body.get("hora"):
+        # reserva la hora: ningún otro paciente puede recibir la misma hora en el mismo box ese día
+        ocupada = next((pid2 for pid2, x in citados_hoy(corte).items() if pid2 != pid and x.get("id_box") == body.get("id_box")
+                        and x.get("hora") == body["hora"]), None)
+        if ocupada:
+            return 409, {"error": f"La hora {body['hora']} del {body.get('id_box')} ya fue reservada para otro paciente"}
+        c.update({"hora": body["hora"], "hora_fin": body.get("hora_fin"), "id_box": body.get("id_box"),
+                  "texto": f"Citado hoy {body['hora']}" + (f" – {body['hora_fin']} h" if body.get("hora_fin") else " h") +
+                           (f" · {body['id_box'].replace('BOX-', 'Box ')}" if body.get("id_box") else "")})
     guardar({"id_paciente": pid, "sk": f"contacto#{c['fecha']}", "contacto": json.dumps(c, ensure_ascii=False)})
     fila = next((p for p in lista(corte)["pacientes"] if p["id_paciente"] == pid), None)
     return 200, {"id_paciente": pid, "contacto": c, "paciente": fila}
@@ -621,19 +639,29 @@ def boxes(corte, especialidad=None):
         cola.setdefault(p["especialidad"], []).append(p)
     agenda = agenda_combinada()
     dia = max((f for f in agenda if f <= corte.isoformat()), default=None)  # último día hábil con agenda ≤ corte
+    citados = citados_hoy(corte)
     out = []
     for esp, info in sorted(b.get("especialidades", {}).items()):
         if especialidad and esp != especialidad:
             continue
-        pendientes = list(cola.get(esp, []))
+        por_id = {p["id_paciente"]: p for p in cola.get(esp, [])}
+        pendientes = [p for p in cola.get(esp, []) if p["id_paciente"] not in citados]  # los citados ya tienen su hora
         asignaciones = []
         for bx in sorted((x for x in agenda.get(dia, []) if x["especialidad"] == esp), key=lambda x: x["id_box"]):
             libres = bx["capacidad"] - bx["usados"]
-            pacientes = [pendientes.pop(0) for _ in range(min(libres, len(pendientes)))]
-            horas = _horas_libres(bx, len(pacientes))
-            asignaciones.append({**bx, "libres": libres, "minutos_por_hora": horas["minutos"],
-                                 "pacientes": [{**_fila_box(p), "hora": h, "hora_fin": f}
-                                               for p, h, f in zip(pacientes, horas["horas"], horas["hasta"])]})
+            todas = _horas_libres(bx, libres)
+            # 1) horas ya reservadas (citados) quedan fijas; 2) el resto se propone en el orden de la lista
+            fijas = [(pid, c) for pid, c in citados.items() if c.get("id_box") == bx["id_box"] and pid in por_id]
+            tomadas = {c["hora"] for _, c in fijas}
+            filas = [{**_fila_box(por_id[pid]), "hora": c["hora"], "hora_fin": c.get("hora_fin"), "citado": True} for pid, c in fijas]
+            libres_h = [(h, f) for h, f in zip(todas["horas"], todas["hasta"]) if h not in tomadas]
+            for h, f in libres_h:
+                if not pendientes:
+                    break
+                filas.append({**_fila_box(pendientes.pop(0)), "hora": h, "hora_fin": f, "citado": False})
+            filas.sort(key=lambda x: x["hora"] or "")
+            asignaciones.append({**bx, "libres": libres, "libres_sin_citar": libres - len(fijas),
+                                 "minutos_por_hora": todas["minutos"], "pacientes": filas})
         # alternativa: el siguiente de la lista, por si alguien no confirma; y por qué va después del último citado
         ultimo = next((a["pacientes"][-1] for a in reversed(asignaciones) if a["pacientes"]), None)
         alt = pendientes[0] if pendientes else None
@@ -646,7 +674,7 @@ def boxes(corte, especialidad=None):
         out.append({**info, "especialidad": esp, "dia_agenda": dia, "asignaciones": asignaciones, "alternativa": alternativa,
                     "cupos_libres_hoy": sum(a["libres"] for a in asignaciones), "vitales_sin_cupo": sin_cupo,
                     "sugeridos": [p for a in asignaciones for p in a["pacientes"]][:5]})
-    cupo = {p["id_paciente"]: {"id_box": a["id_box"], "hora": p["hora"], "hora_fin": p["hora_fin"]}
+    cupo = {p["id_paciente"]: {"id_box": a["id_box"], "hora": p["hora"], "hora_fin": p["hora_fin"], "citado": p["citado"]}
             for e in out for a in e["asignaciones"] for p in a["pacientes"]}
     # mapa de todos los box del hospital ese día (los que no aparecen en la agenda no tienen bloque asignado)
     del_dia = {x["id_box"]: x for x in agenda.get(dia, [])}
@@ -682,7 +710,7 @@ def disponible(corte, especialidad, cupos=None, desde=None, hasta=None):
             return 400, {"error": "la hora de término debe ser posterior a la de inicio"}
         cupos, inicio = max(1, minutos // dur), h1
     cupos = max(1, min(int(cupos or 5), 40))
-    ya_con_hora = boxes(corte, especialidad)["cupo_por_paciente"]
+    ya_con_hora = {**boxes(corte, especialidad)["cupo_por_paciente"], **citados_hoy(corte)}
     data = lista(corte, especialidad)
     candidatos = [p for p in data["pacientes"] if p["id_paciente"] not in ya_con_hora]
     elegidos, reservas = candidatos[:cupos], candidatos[cupos:cupos + 3]

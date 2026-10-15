@@ -224,7 +224,9 @@ export default function App() {
                             <td className="py-2.5 px-2 align-top">
                               <div className="flex flex-wrap gap-1">
                                 {p.contactar_hoy && <Marca tono="rojo">Contactar hoy</Marca>}
-                                {p.riesgo_vital && !p.contactar_hoy && <Marca tono="azul" title={p.contacto?.texto}>Contactado</Marca>}
+                                {p.contacto?.resultado === "citado" && p.contacto?.hora && p.contacto.fecha_corte === fecha
+                                  ? <Marca tono="azul" title={p.contacto.texto}>Citado {p.contacto.hora}</Marca>
+                                  : p.riesgo_vital && !p.contactar_hoy && <Marca tono="azul" title={p.contacto?.texto}>Contactado</Marca>}
                                 {!p.riesgo_vital && p.estado_clinico === "descompensado" && <Marca tono="rojo">Descompensado</Marca>}
                                 {p.revision_sugerida?.length > 0 && <Marca tono="ambar" title={[...new Set(p.revision_sugerida.map((s) => s.motivo))].join(" · ")}>Revisar</Marca>}
                                 {p.grupo_proteccion && <Marca tono="azul">{p.grupo_proteccion}</Marca>}
@@ -1184,8 +1186,10 @@ function Hoy({ vitales, fecha, esp, setEsp, onVer, esApi, onCambio, onAviso }) {
 
   const registrar = async (p, resultado) => {
     setEnviando(p.id_paciente + resultado);
+    const h = hora[p.id_paciente];
     try {
-      const r = await api.postContacto(p.id_paciente, { resultado, fecha_corte: fecha });
+      const r = await api.postContacto(p.id_paciente, { resultado, fecha_corte: fecha,
+        ...(resultado === "citado" && h ? { hora: h.hora, hora_fin: h.hora_fin, id_box: h.id_box } : {}) });
       await onCambio(); onAviso({ titulo: `${p.nombre_fantasia}: ${r.contacto.texto}` });
     } catch (e) { onAviso({ titulo: "No se pudo registrar: " + e.message }); } finally { setEnviando(null); }
   };
@@ -1218,6 +1222,7 @@ function Hoy({ vitales, fecha, esp, setEsp, onVer, esApi, onCambio, onAviso }) {
                   <b>{p.nombre_fantasia}</b> <span className="text-on-surface-variant text-[13px]">· {p.edad} años · {p.especialidad} · {p.diagnostico_texto}</span>
                 </button>
                 <div className="text-[13px] mt-0.5">{b ? <Ofrecer p={p} /> : null}</div>
+                {p.contacto?.intentos_sin_respuesta > 0 && <div className="text-[12px] text-ambar font-semibold">{p.contacto.intentos_sin_respuesta} intento{p.contacto.intentos_sin_respuesta > 1 ? "s" : ""} sin respuesta{p.contacto.intentos_sin_respuesta >= 3 ? ": evaluar visita domiciliaria o derivación" : ""}</div>}
                 <div className="flex flex-wrap gap-1 mt-1.5 text-[12px]">
                   {[["citado", "Citado"], ["derivado_urgencia", "Derivado a urgencia"], ["se_mantiene", "Se mantiene"], ["no_contesta", "No contesta"]].map(([k, t]) => (
                     <button key={k} disabled={enviando} onClick={() => registrar(p, k)}
@@ -1251,7 +1256,7 @@ function Hoy({ vitales, fecha, esp, setEsp, onVer, esApi, onCambio, onAviso }) {
               {e.asignaciones.map((a) => (
                 <div key={a.id_box} className="mb-3">
                   <div className="text-[14px] font-semibold mb-1">
-                    {nombreBox(a.id_box)} (atiende {a.bloque.replace("-", " a ")} h) · {a.libres === 0 ? "sin horas libres" : `${a.libres} hora${a.libres !== 1 ? "s" : ""} libre${a.libres !== 1 ? "s" : ""} → propuesta:`}
+                    {nombreBox(a.id_box)} (atiende {a.bloque.replace("-", " a ")} h) · {a.libres === 0 ? "sin horas libres" : `${a.libres} hora${a.libres !== 1 ? "s" : ""} libre${a.libres !== 1 ? "s" : ""}${a.libres !== a.libres_sin_citar ? ` (${a.libres - a.libres_sin_citar} ya citada${a.libres - a.libres_sin_citar > 1 ? "s" : ""})` : ""} → propuesta:`}
                   </div>
                   {a.minutos_por_hora && a.pacientes.length > 0 && <p className="text-[12px] text-on-surface-variant mb-1">Horas sugeridas: bloque dividido en {a.capacidad} atenciones de {a.minutos_por_hora} min; se proponen las últimas libres del bloque.</p>}
                   <ol className="text-[14px]">
@@ -1262,7 +1267,8 @@ function Hoy({ vitales, fecha, esp, setEsp, onVer, esApi, onCambio, onAviso }) {
                         <span>
                           <b>{p.nombre_fantasia}</b> <span className="text-[13px] text-on-surface-variant">· {p.diagnostico_texto} · {p.dias_espera} días esperando</span>
                           <span className="block text-[13px]">Por qué: {p.motivo}</span>
-                          {p.riesgo_vital && <span className="block text-[13px] text-error font-semibold">{p.contactar_hoy ? "Está en el Paso 1: llamarlo hoy" : `Ya llamado: ${p.contacto?.texto}`}</span>}
+                          {p.citado && <span className="inline-flex items-center gap-1 text-[13px] text-hlf font-semibold"><Icono n="event_available" className="text-[16px]" />Citado: hora reservada</span>}
+                          {!p.citado && p.riesgo_vital && <span className="block text-[13px] text-error font-semibold">{p.contactar_hoy ? "Está en el Paso 1: llamarlo hoy" : `Ya llamado: ${p.contacto?.texto}`}</span>}
                           {!p.riesgo_vital && p.riesgo_inasistencia && <span className="block text-[13px] text-ambar font-semibold">Faltó 2 veces seguidas: confirmar asistencia por teléfono</span>}
                         </span>
                       </li>
@@ -1309,7 +1315,8 @@ function MedicoDisponible({ fecha, esApi, espInicial, onVer, onCambio, onAviso }
   };
   const marcar = async (p, resultado) => {
     try {
-      await api.postContacto(p.id_paciente, { resultado, fecha_corte: fecha, nota: p.hora ? `Citado a las ${p.hora} (médico con horas libres)` : "Médico con horas libres" });
+      await api.postContacto(p.id_paciente, { resultado, fecha_corte: fecha, nota: "Médico con horas libres",
+        ...(resultado === "citado" && p.hora ? { hora: p.hora, hora_fin: p.hora_fin, id_box: `Consulta ${r.especialidad}` } : {}) });
       setCitados({ ...citados, [p.id_paciente]: resultado }); await onCambio();
     } catch (e) { onAviso({ titulo: "No se pudo registrar: " + e.message }); }
   };
