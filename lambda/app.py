@@ -883,7 +883,9 @@ def boxes(corte, especialidad=None):
                               "libres": max(0, del_dia[i]["capacidad"] - del_dia[i]["usados"] - reservadas.get(i, 0)),
                               "pacientes_asignados": asignados.get(i, 0)} if i in del_dia else {"especialidad": None})}
             for i in todos]
-    return {"fecha_corte": corte.isoformat(), "dia_agenda": dia, "resumen": b.get("resumen", {}), "especialidades": out,
+    # El registro sintético trae agenda hasta el 13-10: después de esa fecha se usa la última como agenda de referencia
+    return {"fecha_corte": corte.isoformat(), "dia_agenda": dia, "agenda_referencia": bool(dia and dia != corte.isoformat()),
+            "resumen": b.get("resumen", {}), "especialidades": out,
             "cupo_por_paciente": cupo, "mapa": mapa}
 
 

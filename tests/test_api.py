@@ -455,6 +455,16 @@ def test_ges_y_equivalencias_se_informan_para_verificar():
     k = next((p for p in d["pacientes"] if p["diagnostico_cie10"] == "K70" and p["estado_clinico"] == "descompensado"), None)
     assert k is None or any("a validar" in r["valor"] for r in k["razones"] if r["factor"] == "tabla_oficial")
 
+def test_agenda_de_referencia_despues_del_registro():
+    _, b = call("GET", "/boxes", {"fecha_corte": "2026-10-16"})
+    assert b["dia_agenda"] == "2026-10-13" and b["agenda_referencia"]
+    _, b = call("GET", "/boxes", {"fecha_corte": "2026-10-13"})
+    assert not b["agenda_referencia"]
+
+def test_usuario_queda_en_el_registro():
+    s, r = call("POST", "/pacientes/PAC-HLF-00005/revision", body={"accion": "confirmar", "fecha_corte": "2026-10-13", "usuario": "Dra. Soto, cardiología"})
+    assert s == 200 and r["revision"]["usuario"] == "Dra. Soto, cardiología"
+
 def test_health_informa_fecha_y_modo():
     s, h = call("GET", "/health")
     assert s == 200 and h["datos"] == "sinteticos" and h["modo"] in ("simulacion", "tiempo_real") and h["fecha_hoy"]

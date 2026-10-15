@@ -23,9 +23,19 @@ async function mock() {
   return mockCache;
 }
 
+// Trazabilidad: el nombre de quien usa la app (guardado en este navegador) viaja como `usuario` en cada registro.
+let usuario = "";
+try { usuario = localStorage.getItem("hlf_usuario") || ""; } catch { /* sin almacenamiento */ }
+export const getUsuario = () => usuario;
+export function setUsuario(nombre) {
+  usuario = nombre.trim();
+  try { localStorage.setItem("hlf_usuario", usuario); } catch { /* sin almacenamiento */ }
+}
+
 async function req(method, path, body) {
+  const b = body && method === "POST" && usuario && !body.usuario ? { ...body, usuario } : body;
   const r = await fetch(API_URL + path, {
-    method, headers: { "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined,
+    method, headers: { "content-type": "application/json" }, body: b ? JSON.stringify(b) : undefined,
   });
   const data = await r.json();
   if (!r.ok) throw new Error(data.error || `Error ${r.status}`);

@@ -27,25 +27,29 @@ Dataset sintético del hospital: 500 pacientes, fecha de referencia 2026-10-13, 
 Pacientes de demo: 00002 (salta del puesto 312 al 18 tras urgencia + hospitalización), 00001 (deterioro progresivo, PHQ-9 de 4 a 19), 00028 (mejora y baja), 00020 (2 inasistencias), 00009 (fallece y sale de la lista).
 
 ## Stack
-- `front/`: React + Vite + framer-motion + Tailwind (CDN). Hosting en AWS Amplify (deploy automático desde `main`).
-- `lambda/`: Python sin dependencias externas. `puntaje.py` = motor de priorización con reglas oficiales (ver docs/criterios_oficiales.md).
-- AWS: Amplify → API Gateway → Lambda → S3 (perfiles.json, box.json) + DynamoDB (eventos, revisiones, contactos, novedades, importaciones) + Bedrock (leer informes/fotos y redactar).
+- `front/`: React + Vite + framer-motion + Tailwind (CDN). Hosting en AWS Amplify (deploy manual con `scripts/deploy_aws.ps1`).
+- `lambda/`: Python 3.12 (única dependencia: pydantic). `puntaje.py` = motor de priorización con reglas oficiales (ver docs/criterios_oficiales.md).
+- AWS: Amplify → API Gateway → Lambda → S3 (perfiles.json, box.json) + DynamoDB (eventos, revisiones, contactos, decisiones, citas, novedades, importaciones) + Textract (fotos de informes) + Bedrock (redactar explicaciones; respaldo opcional al leer informes).
+- `FECHA_REFERENCIA=hoy` en la Lambda → fecha real de Chile; `AAAA-MM-DD` para simular.
 - Contrato de la API en `contrato.md`. **No cambiar campos sin avisar al equipo.**
+- Contexto completo para otro asistente: `docs/CONTEXTO_PARA_CLAUDE.md`.
 
 ## Cómo se prioriza (sin pesos inventados)
-1. Categoría: prioridad inicial de la SIC; sube a la fila "descompensada" de la Tabla SSMSO 2025 del HLF si hay descompensación posterior. Nunca baja sola.
-2. Orden MINSAL Ord. 536/2025: categoría → riesgo vital → puntaje LACE (van Walraven 2010) → grupo de especial protección → antigüedad > 1 año → llegada.
-3. Banderas: GES vencida, causal 8 (2 inasistencias seguidas), revisión sugerida (examen alterado, aumento de dosis), ACG.
-4. Una revisión clínica vale hasta el próximo evento. "Contactar hoy" se apaga registrando el contacto.
+1. Categoría: prioridad inicial de la SIC; sube a la fila "descompensada" de la Tabla SSMSO 2025 del HLF si hay descompensación posterior. Nunca baja sola. Equivalencias K70, I20 y G40 "a validar".
+2. Orden MINSAL Ord. 536/2025: categoría → descompensación grave → grupo de especial protección → antigüedad > 1 año → LACE (experimental, solo desempate) → llegada.
+3. Descompensación grave (`riesgo_vital`, nombre interno): requiere evaluación médica en 72 h (pendiente / atrasada / evaluada). El sistema no declara "riesgo vital": lo decide el médico. Se cierra con decisión clínica (`/decision`), revisión, cita reservada o derivación; llamar no basta.
+4. Banderas: GES "posible incumplimiento: verificar", causal 8 (2 inasistencias seguidas), revisión sugerida (examen alterado, aumento de dosis), ACG.
+5. Una revisión clínica vale hasta el próximo evento.
+6. Citas: propuesta (no bloquea) → reservada → confirmada → atendida / no asistió; cancelada libera la hora; doble reserva = 409.
 
-## Estado actual — todo funciona en local, falta deploy
-- 30 tests (`python -m pytest -q tests`). API: pacientes, eventos, informe (texto/foto), revisión, contacto, novedad, historia, box, KPIs, importar Excel/CSV, plantillas.
-- Front: Hoy (contactar hoy + mapa de box + asignación de cupos), Lista, ficha en pestañas, Indicadores (kappa), Cargar datos, Criterios.
+## Estado actual — publicado en AWS
+- 47 tests (`python -m pytest -q tests`). Página: https://main.d2jvqnf67i4lks.amplifyapp.com
+- Front: Hoy (descompensaciones por especialidad + avisar al especialista), Gestión de box, Tengo horas libres, Lista (ficha en pestañas), Indicadores, Cargar datos, Criterios. El nombre del usuario (arriba a la derecha) queda en cada registro.
+- Limpiar la demo publicada antes del pitch: `python scripts/limpiar_demo.py --borrar`.
 
 ## Pendiente
-1. Push a GitHub y deploy en AWS (DEPLOY.md) con Model ID de Bedrock.
+1. Guion de la demo de punta a punta, ensayo y video de respaldo.
 2. Validar con el HLF las filas de "descompensado" y recalibrar LACE con datos reales.
-3. Pitch y video de respaldo.
 
 ## Reglas para el asistente
 - No cambies la lógica de `lambda/puntaje.py` sin avisar: los tests dependen de ella. Toda regla nueva debe citar su fuente.

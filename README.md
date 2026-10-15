@@ -6,16 +6,17 @@
 
 Lista de espera de consultas de especialidad que **se reprioriza sola cuando el paciente empeora** (urgencias,
 hospitalizaciones, exámenes alterados) usando **solo reglas oficiales**: tabla de priorización SSMSO 2025 del HLF,
-criterios MINSAL Ord. 536/2025, garantías GES e índice LACE. La IA (Amazon Bedrock) solo lee informes y redacta;
-**el equipo clínico decide** y todo queda trazado.
+criterios MINSAL Ord. 536/2025 y garantías GES (LACE solo como desempate experimental). Las fotos de informes se leen
+con Amazon Textract + reglas + Pydantic; Bedrock solo redacta. **El equipo clínico decide** y todo queda trazado.
 
-En el dataset del hospital: los 17 pacientes con riesgo vital estaban en la **posición mediana N° 203** de la lista
-congelada; con este sistema quedan en la **mediana N° 9**.
+En el dataset del hospital (13-10-2026): los 17 pacientes con descompensación grave estaban en la **posición mediana
+N° 171** de la lista congelada (16 fuera de los primeros 50); con este sistema quedan en la **mediana N° 9** y con
+evaluación médica exigida en 72 h.
 
 ## Estructura
 ```
 ambulatorio-dinamico/
-├── lambda/                API (una Lambda Python, sin dependencias externas)
+├── lambda/                API (una Lambda Python; única dependencia: pydantic)
 │   ├── app.py             rutas HTTP, revisiones, contactos, box, KPIs, importación
 │   ├── puntaje.py         motor de priorización (reglas oficiales + LACE)
 │   ├── informe.py         lectura de informes / fotos (Bedrock) con negación

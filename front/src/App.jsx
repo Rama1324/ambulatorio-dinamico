@@ -60,6 +60,7 @@ export default function App() {
   const [soloPend, setSoloPend] = useState(false);
   const [pagina, setPagina] = useState(0);
   const [nuevo, setNuevo] = useState(false);
+  const [usuario, setUsuarioLocal] = useState(api.getUsuario());
   const fecha = demo ? fechas[iFecha] : fechas[fechas.length - 1];
 
   const cargar = useCallback(async () => {
@@ -117,7 +118,12 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center gap-3 text-[13px]">
-            <span className="text-on-surface-variant">Lista al <b className="text-on-surface">{fmt(fecha)}</b></span>
+            {esApi && <label className="flex items-center gap-1.5 text-on-surface-variant" title="Queda registrado en cada acción (trazabilidad)">
+              <Icono n="badge" className="text-[18px]" />
+              <input value={usuario} onChange={(e) => { setUsuarioLocal(e.target.value); api.setUsuario(e.target.value); }} placeholder="Su nombre y cargo"
+                className={`h-8 w-44 px-2 border rounded text-on-surface ${usuario.trim() ? "border-outline-variant" : "border-ambar bg-ambar-container/40"}`} />
+            </label>}
+            <span className="text-on-surface-variant border-l border-outline-variant pl-3">Lista al <b className="text-on-surface">{fmt(fecha)}</b></span>
             <label className="flex items-center gap-1.5 text-on-surface-variant cursor-pointer select-none border-l border-outline-variant pl-3">
               <input type="checkbox" checked={demo} onChange={(e) => setDemo(e.target.checked)} className="accent-[#0f69b4]" />Modo demostración
             </label>
@@ -698,7 +704,8 @@ function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso, onDes
 
       {tab === "resumen" && (esApi ? (
         <>
-          <Caja titulo="Decisión clínica">
+          <Caja titulo="Revisión de la prioridad (especialista)">
+            <p className="text-[13px] text-on-surface-variant mb-2">¿Está de acuerdo con la prioridad {ETIQUETA[p.categoria].toLowerCase()} que propone el sistema? Su respuesta se usa para medir la concordancia (kappa).</p>
             <div className="flex gap-2">
               <button onClick={confirmar} disabled={cargando} className="flex-1 py-2 rounded bg-primary text-on-primary font-semibold disabled:opacity-50">Confirmar prioridad</button>
               <button onClick={() => setAjuste(ajuste ? null : { categoria: p.categoria, motivo: "" })} className="flex-1 py-2 rounded border border-primary text-primary font-semibold">Cambiar prioridad</button>
@@ -778,7 +785,7 @@ function Indicadores({ fecha, esApi, data }) {
       <div className="flex items-start justify-between gap-2">
         <h3 className="font-semibold text-[15px]">{titulo}</h3>
         <span className={`text-[12px] font-semibold rounded px-2 py-0.5 ${estado === "ok" ? "bg-hlf-claro text-hlf" : estado === "mal" ? "bg-ambar-container text-ambar" : "bg-surface-container text-on-surface-variant"}`}>
-          {estado === "ok" ? "En meta" : estado === "mal" ? "Bajo la meta" : "Sin datos suficientes"}</span>
+          {estado === "ok" ? "En meta" : estado === "mal" ? "Bajo la meta" : estado === "info" ? "Sin meta oficial" : "Sin datos suficientes"}</span>
       </div>
       <div className="text-[32px] font-bold text-primary-container mt-1">{valor}</div>
       <div className="text-[13px] text-on-surface-variant">Meta del hospital: {meta}</div>
@@ -798,8 +805,7 @@ function Indicadores({ fecha, esApi, data }) {
           estado={!cc.suficiente ? null : kap >= cc.meta ? "ok" : "mal"}
           detalle={<>{cc.acuerdos} acuerdos en n = {cc.revisiones} revisiones (confirmar = acuerdo; cambiar prioridad = desacuerdo). Kappa de Cohen: <b>{kap == null ? "—" : num(kap, 2)}</b>.
             {!cc.suficiente && ` Con menos de ${cc.n_recomendado} revisiones el kappa es solo orientativo.`}</>} />
-        <Kpi titulo="Horas recuperadas hoy" valor={ci.horas_recuperadas} meta="llenar las horas libres con la lista"
-          estado={ci.horas_recuperadas + ci.propuestas_sin_reservar === 0 ? null : ci.propuestas_sin_reservar === 0 ? "ok" : "mal"}
+        <Kpi titulo="Horas recuperadas hoy" valor={ci.horas_recuperadas} meta="no definida (indicador de gestión)" estado="info"
           detalle={<>Horas libres que se llenaron con una cita reservada. Quedan {ci.propuestas_sin_reservar} propuesta{ci.propuestas_sin_reservar !== 1 ? "s" : ""} sin reservar (una propuesta no es una cita).</>} />
       </div>
       <div className="grid gap-4 md:grid-cols-4">
@@ -878,7 +884,7 @@ function Contacto({ p, fecha, onListo, onAviso }) {
 
 // Decisión clínica ante una descompensación grave: la registra un profesional identificado, con seguimiento.
 function DecisionClinica({ p, fecha, onListo, onAviso }) {
-  const [f, setF] = useState({ decision: "citar_prioritario", responsable: "", nota: "", seguimiento: "" });
+  const [f, setF] = useState({ decision: "citar_prioritario", responsable: api.getUsuario(), nota: "", seguimiento: "" });
   const [enviando, setEnviando] = useState(false);
   const enviar = async () => {
     setEnviando(true);
@@ -1302,29 +1308,29 @@ function Hoy({ parte, vitales, todosPacientes, fecha, esp, setEsp, onVer, esApi,
   }, {});
   const citasHechas = (conteo.reservada || 0) + (conteo.confirmada || 0) + (conteo.atendida || 0);
 
+  // Agrupa por especialidad (la que tiene más pacientes primero): cada especialista ve lo suyo
+  const agrupar = (xs) => Object.entries(xs.reduce((m, p) => ((m[p.especialidad] ||= []).push(p), m), {})).sort((x, y) => y[1].length - x[1].length);
+  const porEsp = Object.fromEntries((b?.especialidades || []).map((e) => [e.especialidad, e]));
+
   return (
     <div className="flex flex-col gap-5">
+      <div className="flex flex-wrap items-center gap-2 text-[14px]">
+        <span className="text-on-surface-variant">Especialidad:</span>
+        <select value={esp} onChange={(e) => setEsp(e.target.value)} className="h-9 px-2 border border-outline-variant rounded bg-white">{ESPECIALIDADES.map((e) => <option key={e}>{e}</option>)}</select>
+        <span className="text-[13px] text-on-surface-variant">{esp === "Todas" ? "Vista de coordinación: todo el hospital, agrupado por especialidad." : `Solo ${esp}.`}</span>
+      </div>
       {b && (
         <section className="rounded border border-primary/30 bg-primary/5 p-4 text-[15px] leading-relaxed">
-          <b>Resumen del día ({fmt(b.dia_agenda)}{esp !== "Todas" ? ` · ${esp}` : ""}):</b>{" "}
+          <b>Resumen del {fmt(fecha)}{esp !== "Todas" ? ` · ${esp}` : ""}:</b>{" "}
           {parte === "hoy"
             ? <>{todos.length ? <>Hay <b>{todos.length} pacientes con descompensación grave</b>: <b className="text-hlf">{todos.length - pendientes.length} ya evaluados</b>
                 {pendientes.length > 0 && <>, <b className="text-error">{pendientes.length} esperan evaluación médica</b>{todos.filter((p) => p.evaluacion?.estado === "atrasada").length > 0 && <> ({todos.filter((p) => p.evaluacion?.estado === "atrasada").length} con más de 72 h)</>}</>}.
                 {" "}{conHora} tienen una hora de box hoy.</> : "No hay pacientes con descompensación grave por evaluar."}</>
             : <>quedan <b>{horasLibres} horas libres</b> en los box. <b>{conteo.propuesta || 0} propuestas</b> (aún no son citas) · <b className="text-hlf">{citasHechas} citas reservadas</b>
                 {conteo.confirmada ? <> ({conteo.confirmada} confirmadas)</> : null}{conteo.no_asistio ? <> · {conteo.no_asistio} no asistieron</> : null}.</>}
-        </section>
-      )}
-      {parte === "hoy" && faltan.length > 0 && (
-        <section className="rounded border-2 border-error bg-error-container/50 p-4 text-[14px]">
-          <div className="font-semibold text-on-error-container text-[15px] flex items-center gap-1"><Icono n="crisis_alert" className="text-[20px]" />
-            Especialidades sin horas suficientes hoy para sus descompensaciones graves</div>
-          <ul className="mt-1 space-y-0.5">
-            {faltan.map((e) => (
-              <li key={e.especialidad}><b>{e.especialidad}:</b> {e.descompensados ?? e.vitales_sin_cupo.length} con descompensación grave · {e.cupos_libres_hoy} hora{e.cupos_libres_hoy !== 1 ? "s" : ""} libre{e.cupos_libres_hoy !== 1 ? "s" : ""} hoy · <b className="text-error">{e.vitales_sin_cupo.length} sin hora</b></li>
-            ))}
-          </ul>
-          <p className="mt-2">En esas especialidades: escalar a la jefatura para sobrecupos, pedir horas a médicos con tiempo libre (pestaña <i>Tengo horas libres</i>) o que el médico evalúe derivación a urgencia. Llamar en el orden de la lista (N°).</p>
+          {parte === "hoy" && faltan.length > 0 && <div className="mt-1 text-[14px] text-error font-semibold">
+            <Icono n="crisis_alert" className="text-[18px]" /> Sin horas suficientes hoy: {faltan.map((e) => `${e.especialidad} (${e.vitales_sin_cupo.length} sin hora)`).join(", ")}. Escalar a la jefatura: sobrecupos, médicos con horas libres o evaluación de derivación.</div>}
+          {b.agenda_referencia && <div className="mt-1 text-[13px] text-on-surface-variant">Agenda de box: el registro sintético trae agenda hasta el {fmt(b.dia_agenda)}; se usa esa como agenda de referencia para hoy.</div>}
         </section>
       )}
       {err && <Caja><p className="text-on-surface-variant">{err}</p></Caja>}
@@ -1335,8 +1341,18 @@ function Hoy({ parte, vitales, todosPacientes, fecha, esp, setEsp, onVer, esApi,
         <Caja titulo={`Descompensaciones graves: evaluación médica pendiente (${pendientes.length})`} className="lg:col-span-7 border-l-4 border-l-error">
           <p className="text-[13px] text-on-surface-variant mb-3">Se descompensaron de forma grave después de la interconsulta y no se han estabilizado. Requieren evaluación médica dentro de 72 h: el médico decide si es riesgo vital, si se cita o si se deriva. Llamar no basta para cerrar la alerta.</p>
           {todos.length === 0 && <p className="text-on-surface-variant">Nadie pendiente{esp !== "Todas" && ` en ${esp}`}.</p>}
+          {agrupar(pendientes).map(([nombreEsp, grupo]) => {
+            const e = porEsp[nombreEsp];
+            const sinHora = e?.vitales_sin_cupo.length || 0;
+            return (
+          <div key={nombreEsp} className="mb-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-2 bg-surface-container-low rounded px-2 py-1.5 text-[14px]">
+              <b>{nombreEsp} · {grupo.length} por evaluar</b>
+              {e && <span className={`text-[13px] ${sinHora ? "text-error font-semibold" : "text-on-surface-variant"}`}>
+                {e.cupos_libres_hoy} hora{e.cupos_libres_hoy !== 1 ? "s" : ""} libre{e.cupos_libres_hoy !== 1 ? "s" : ""} hoy{sinHora ? ` · ${sinHora} sin hora` : ""}</span>}
+            </div>
           <ul className="divide-y divide-outline-variant/60">
-            {pendientes.map((p) => (
+            {grupo.map((p) => (
               <li key={p.id_paciente} className="py-2.5 text-[14px]">
                 <button onClick={() => onVer(p.id_paciente)} className="text-left hover:underline">
                   <span className="text-on-surface-variant text-[13px] mr-1">N° {p.posicion}</span>
@@ -1358,6 +1374,9 @@ function Hoy({ parte, vitales, todosPacientes, fecha, esp, setEsp, onVer, esApi,
               </li>
             ))}
           </ul>
+          </div>
+            );
+          })}
           {listos.length > 0 && (
             <details className="mt-2 text-[13px]">
               <summary className="cursor-pointer text-on-surface-variant">Ya evaluados ({listos.length})</summary>
@@ -1372,19 +1391,24 @@ function Hoy({ parte, vitales, todosPacientes, fecha, esp, setEsp, onVer, esApi,
           <div>
             <p className="text-[13px] text-on-surface-variant mb-2">Se descompensaron después de la interconsulta, pero la tabla del HLF no define cuánto sube su prioridad. No se les cambia solo: el especialista debe revisarlos y confirmar o cambiar su prioridad.</p>
             {aRevisar.length === 0 && <p className="text-[13px] text-on-surface-variant">Nadie pendiente de revisión{esp !== "Todas" && ` en ${esp}`}.</p>}
-            <ul className="divide-y divide-outline-variant/60">
-              {aRevisar.map((p) => {
-                const ev = p.razones.find((r) => r.factor === "evento");
-                return (
-                  <li key={p.id_paciente} className="py-2 text-[14px]">
-                    <button onClick={() => onVer(p.id_paciente)} className="text-left hover:underline">
-                      <b>{p.nombre_fantasia}</b> <span className="text-on-surface-variant text-[13px]">· {p.especialidad} · {p.diagnostico_texto} · prioridad {p.categoria}</span>
-                    </button>
-                    {ev && <div className="text-[13px] text-ambar">{ev.valor}</div>}
-                  </li>
-                );
-              })}
-            </ul>
+            {agrupar(aRevisar).map(([nombreEsp, grupo]) => (
+              <details key={nombreEsp} open={esp !== "Todas"} className="border-t border-outline-variant/60">
+                <summary className="cursor-pointer py-1.5 text-[14px] font-semibold">{nombreEsp} · {grupo.length} para revisar</summary>
+                <ul className="divide-y divide-outline-variant/60 pl-3">
+                  {grupo.map((p) => {
+                    const ev = p.razones.find((r) => r.factor === "evento");
+                    return (
+                      <li key={p.id_paciente} className="py-2 text-[14px]">
+                        <button onClick={() => onVer(p.id_paciente)} className="text-left hover:underline">
+                          <b>{p.nombre_fantasia}</b> <span className="text-on-surface-variant text-[13px]">· {p.diagnostico_texto} · prioridad {p.categoria}</span>
+                        </button>
+                        {ev && <div className="text-[13px] text-ambar">{ev.valor}</div>}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </details>
+            ))}
           </div>
         </Caja>
         </>}
@@ -1398,7 +1422,6 @@ function Hoy({ parte, vitales, todosPacientes, fecha, esp, setEsp, onVer, esApi,
                 <p className="mt-1">"Alta / Media / Baja" es la prioridad clínica de la lista, no una urgencia de hoy; las descompensaciones graves están en la pestaña <i>Hoy</i>. Estados de una cita: propuesta → reservada → confirmada por el paciente → atendida o no asistió; si se cancela, la hora vuelve a quedar libre. Las horas se calculan dividiendo el bloque del box por su capacidad (por ejemplo, 08:30–13:30 con 10 cupos = una hora cada 30 min); en <i>Tengo horas libres</i> se usa en cambio la duración promedio de las consultas de la especialidad, porque ahí el médico informa su propio horario.</p>
               </details>
             </div>
-            <select value={esp} onChange={(e) => setEsp(e.target.value)} className="h-9 px-2 border border-outline-variant rounded bg-white text-[14px]">{ESPECIALIDADES.map((e) => <option key={e}>{e}</option>)}</select>
           </div>
           {b?.especialidades.filter((e) => e.asignaciones.length).map((e) => (
             <Caja key={e.especialidad} titulo={e.especialidad} accion={<span className="text-[13px] text-on-surface-variant">{e.cupos_libres_hoy} hora{e.cupos_libres_hoy !== 1 ? "s" : ""} libre{e.cupos_libres_hoy !== 1 ? "s" : ""} hoy · {e.conteo_citas?.propuesta || 0} propuestas · {(e.conteo_citas?.reservada || 0) + (e.conteo_citas?.confirmada || 0) + (e.conteo_citas?.atendida || 0)} citas</span>}>
@@ -1561,7 +1584,7 @@ function MapaBox({ mapa, dia, esp, setEsp }) {
   const libres = activos.reduce((s, x) => s + x.libres, 0);
   const capacidad = activos.reduce((s, x) => s + x.capacidad, 0);
   return (
-    <Caja titulo={`Box del día · ${fmt(dia)}`} accion={
+    <Caja titulo={`Ocupación de los box · agenda del ${fmt(dia)}`} accion={
       <span className="text-[13px] text-on-surface-variant">{activos.length} de {mapa.length} box con agenda · <b className="text-hlf">{libres}</b> horas libres de {capacidad}</span>}>
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-10 gap-2">
         {mapa.map((x) => {
