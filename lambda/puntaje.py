@@ -174,18 +174,20 @@ def regla_criterio(eventos):
 def aplicar_criterio(categoria, c, razones):
     """Solo sube (nunca baja: lo decide el especialista). La urgencia prevalece: prioridad alta. Devuelve la categoría."""
     e = c["evento"]
-    nivel = "alta" if c["urgencia"] else c["nivel"]
-    if nivel and ORDEN_CAT[nivel] > ORDEN_CAT[categoria]:
-        texto, nueva = f'{e["detalle"]} → prioridad {nivel}', nivel
-    elif nivel and ORDEN_CAT[nivel] < ORDEN_CAT[categoria]:
-        texto, nueva = f'{e["detalle"]} → sería {nivel}; se mantiene {categoria} (bajar lo decide el especialista)', categoria
-    else:
-        texto, nueva = f'{e["detalle"]} → prioridad {nivel or categoria} (coincide)', categoria
-    razon = {"factor": "urgencia" if c["urgencia"] else "criterio_clinico", "valor": texto, "fuente": e.get("fuente") or "Criterios clínicos por especialidad"}
-    if c["urgencia"]:
-        razones.insert(0, razon)
-    else:
-        razones.append(razon)
+    fuente = e.get("fuente") or "Criterios clínicos por especialidad"
+    nueva = categoria
+    if c["nivel"]:
+        crit = e.get("texto_criterio") or e["detalle"]
+        if ORDEN_CAT[c["nivel"]] > ORDEN_CAT[categoria]:
+            texto, nueva = f'{crit} → prioridad {c["nivel"]}', c["nivel"]
+        elif ORDEN_CAT[c["nivel"]] < ORDEN_CAT[categoria]:
+            texto = f'{crit} → sería {c["nivel"]}; se mantiene {categoria} (bajar lo decide el especialista)'
+        else:
+            texto = f'{crit} → prioridad {c["nivel"]} (coincide)'
+        razones.append({"factor": "criterio_clinico", "valor": texto, "fuente": fuente})
+    if c["urgencia"]:  # la urgencia prevalece sobre la clasificación electiva: alta y primera razón
+        razones.insert(0, {"factor": "urgencia", "valor": e.get("texto_urgencia") or e["detalle"], "fuente": fuente})
+        nueva = "alta"
     return nueva
 
 

@@ -787,7 +787,7 @@ function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso, onDes
           <Prioridad cat={p.categoria} />
         </div>
         {p.urgencia_hoy && <div className="mt-3 p-2.5 rounded bg-error text-on-error text-[14px] flex gap-2"><Icono n="emergency" className="text-[20px]" /><span>
-          <b>Derivar hoy a urgencia.</b> {p.razones.find((r) => r.factor === "urgencia")?.valor} No corresponde esperar una cita electiva.</span></div>}
+          <b>Derivar hoy a urgencia.</b> {p.razones.find((r) => r.factor === "urgencia")?.valor}. No corresponde esperar una cita electiva.</span></div>}
         {p.contactar_hoy && p.riesgo_vital && <div className="mt-3 p-2.5 rounded bg-error-container text-on-error-container text-[14px] flex gap-2"><Icono n="call" className="text-[20px]" /><span>
           <b>Descompensación grave: revisar su prioridad.</b> Evento del {fmt(p.evaluacion?.fecha_evento)}, en el sistema desde el {fmt(p.evaluacion?.llego_al_sistema)}.
           {p.evaluacion?.estado === "atrasada" ? <b> Atrasada: pasaron más de 72 h sin revisión.</b> : " Plazo: 72 h."} No hay registro posterior de estabilización ni de evaluación; el especialista decide.</span></div>}

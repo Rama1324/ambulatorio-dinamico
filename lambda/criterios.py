@@ -174,4 +174,6 @@ def evento(c, fecha):
     return {"fecha_evento": fecha, "tipo_evento": "criterio_clinico", "subtipo": sub,
             "severidad": "grave" if c["urgencia"] else {"alta": "moderada"}.get(c["nivel"], "leve"),
             "detalle": texto, "origen": "criterios_ia", "nivel_criterio": c["nivel"], "urgencia": bool(c["urgencia"]),
+            "texto_urgencia": c["urgencia"] and f'{c["urgencia"]} · "{c["cita_urgencia"]}"',
+            "texto_criterio": c["nivel"] and f'{c["enfermedad"]}, criterio {c["nivel"]}: {c["criterio"]} · "{c["cita"]}"',
             "fuente": c["fuente"]}
