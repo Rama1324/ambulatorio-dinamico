@@ -1212,6 +1212,18 @@ function Hoy({ vitales, todosPacientes, fecha, esp, setEsp, onVer, esApi, onCamb
             {" "}{pendientes.length ? <>Faltan <b>{pendientes.length} llamadas</b>.</> : <>Ya se llamó a todos.</>}</> : "No hay pacientes con riesgo vital."}
         </section>
       )}
+      {b && b.especialidades.some((e) => e.vitales_sin_cupo.length > 0) && (
+        <section className="rounded border-2 border-error bg-error-container/50 p-4 text-[14px]">
+          <div className="font-semibold text-on-error-container text-[15px] flex items-center gap-1"><Icono n="crisis_alert" className="text-[20px]" />
+            Capacidad insuficiente hoy: hay más pacientes con riesgo vital que horas libres</div>
+          <ul className="mt-1 space-y-0.5">
+            {b.especialidades.filter((e) => e.vitales_sin_cupo.length > 0).map((e) => (
+              <li key={e.especialidad}><b>{e.especialidad}:</b> {e.vitales_sin_cupo.length} paciente{e.vitales_sin_cupo.length !== 1 ? "s" : ""} con riesgo vital sin hora · {e.cupos_libres_hoy} hora{e.cupos_libres_hoy !== 1 ? "s" : ""} libre{e.cupos_libres_hoy !== 1 ? "s" : ""}</li>
+            ))}
+          </ul>
+          <p className="mt-2">Escalar a la jefatura: habilitar sobrecupos, pedir horas a médicos con tiempo libre (pestaña <i>Tengo horas libres</i>) o derivar a urgencia según criterio médico. Llamar en el orden de la lista (N°).</p>
+        </section>
+      )}
       {err && <Caja><p className="text-on-surface-variant">{err}</p></Caja>}
       {!err && !b && <p className="text-on-surface-variant">Cargando el día…</p>}
 
@@ -1223,6 +1235,7 @@ function Hoy({ vitales, todosPacientes, fecha, esp, setEsp, onVer, esApi, onCamb
             {pendientes.map((p) => (
               <li key={p.id_paciente} className="py-2.5 text-[14px]">
                 <button onClick={() => onVer(p.id_paciente)} className="text-left hover:underline">
+                  <span className="text-on-surface-variant text-[13px] mr-1">N° {p.posicion}</span>
                   <b>{p.nombre_fantasia}</b> <span className="text-on-surface-variant text-[13px]">· {p.edad} años · {p.especialidad} · {p.diagnostico_texto}</span>
                 </button>
                 <div className="text-[13px] mt-0.5">{b ? <Ofrecer p={p} /> : null}</div>
