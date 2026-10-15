@@ -60,7 +60,7 @@ export default function App() {
   const [iFechaSel, setIFecha] = useState(null);
   const iFecha = iFechaSel ?? fechas.length - 1;
   const [esp, setEsp] = useState("Todas");
-  const [vista, setVista] = useState(esApi ? "hoy" : "lista");
+  const [vista, setVista] = useState("lista")  // la lista de espera es la página principal;
   const [data, setData] = useState(null);
   const [sel, setSel] = useState(null);
   const [detalle, setDetalle] = useState(null);
@@ -145,7 +145,7 @@ export default function App() {
           </div>
         </div>
         <nav className="max-w-[1400px] mx-auto px-6 flex gap-6 text-[14px]">
-          {[["hoy", "Hoy", porContactar.length], ["box", "Gestión de box", null], ["medico", "Tengo horas libres", null], ["lista", "Lista de espera", null], ["indicadores", "Indicadores", null], ["cargar", "Cargar datos", null], ["criterios", "Criterios", null]].map(([k, t, n]) => (
+          {[["lista", "Lista de espera", null], ["hoy", "Alertas de hoy", porContactar.length], ["indicadores", "Indicadores", null], ["cargar", "Cargar datos", null], ["criterios", "Criterios", null]].map(([k, t, n]) => (
             <button key={k} onClick={() => setVista(k)}
               className={`py-2.5 border-b-2 -mb-px ${vista === k ? "border-primary text-primary font-semibold" : "border-transparent text-on-surface-variant hover:text-on-surface"}`}>
               {t}{n ? <span className="ml-1.5 px-1.5 rounded-full bg-error text-on-error text-[12px] font-semibold">{n}</span> : null}
@@ -1293,7 +1293,7 @@ function Hoy({ parte, vitales, todosPacientes, fecha, esp, setEsp, onVer, esApi,
 
   const registrar = async (p, resultado) => {
     setEnviando(p.id_paciente + resultado);
-    const h = hora[p.id_paciente];
+    const h = parte === "box" && hora[p.id_paciente];  // en Alertas no se reservan horas de box
     try {
       const r = await api.postContacto(p.id_paciente, { resultado, fecha_corte: fecha,
         ...(resultado === "citado" && h ? { hora: h.hora, hora_fin: h.hora_fin, id_box: h.id_box } : {}) });
@@ -1309,9 +1309,6 @@ function Hoy({ parte, vitales, todosPacientes, fecha, esp, setEsp, onVer, esApi,
     catch (e) { onAviso({ titulo: "No se pudo registrar: " + e.message }); } finally { setEnviando(null); }
   };
 
-  const Ofrecer = ({ p }) => hora[p.id_paciente]
-    ? <span className="text-hlf font-semibold">{hora[p.id_paciente].citado ? "Cita reservada" : "Hora disponible para ofrecer"}: {hora[p.id_paciente].hora} – {hora[p.id_paciente].hora_fin} h · {nombreBox(hora[p.id_paciente].id_box)}</span>
-    : <span className="text-error font-semibold">No queda hora hoy en {p.especialidad}: pedir evaluación médica para sobrecupo o derivación</span>;
   const Evaluacion = ({ p }) => p.evaluacion && (
     <div className={`text-[12px] font-semibold ${p.evaluacion.estado === "atrasada" ? "text-error" : "text-on-surface-variant"}`}>
       Evento grave del {fmt(p.evaluacion.fecha_evento)} · hace {p.evaluacion.dias_desde_evento} día{p.evaluacion.dias_desde_evento !== 1 ? "s" : ""}
@@ -1326,7 +1323,6 @@ function Hoy({ parte, vitales, todosPacientes, fecha, esp, setEsp, onVer, esApi,
 
   // Agrupa por especialidad (la que tiene más pacientes primero): cada especialista ve lo suyo
   const agrupar = (xs) => Object.entries(xs.reduce((m, p) => ((m[p.especialidad] ||= []).push(p), m), {})).sort((x, y) => y[1].length - x[1].length);
-  const porEsp = Object.fromEntries((b?.especialidades || []).map((e) => [e.especialidad, e]));
 
   return (
     <div className="flex flex-col gap-5">
@@ -1341,12 +1337,10 @@ function Hoy({ parte, vitales, todosPacientes, fecha, esp, setEsp, onVer, esApi,
           {parte === "hoy"
             ? <>{todos.length ? <>Hay <b>{todos.length} pacientes con descompensación grave</b>: <b className="text-hlf">{todos.length - pendientes.length} ya evaluados</b>
                 {pendientes.length > 0 && <>, <b className="text-error">{pendientes.length} esperan evaluación médica</b>{todos.filter((p) => p.evaluacion?.estado === "atrasada").length > 0 && <> ({todos.filter((p) => p.evaluacion?.estado === "atrasada").length} con más de 72 h)</>}</>}.
-                {" "}{conHora} tienen una hora de box hoy.</> : "No hay pacientes con descompensación grave por evaluar."}</>
+                </> : "No hay pacientes con descompensación grave por evaluar."}</>
             : <>quedan <b>{horasLibres} horas libres</b> en los box. <b>{conteo.propuesta || 0} propuestas</b> (aún no son citas) · <b className="text-hlf">{citasHechas} citas reservadas</b>
                 {conteo.confirmada ? <> ({conteo.confirmada} confirmadas)</> : null}{conteo.no_asistio ? <> · {conteo.no_asistio} no asistieron</> : null}.</>}
-          {parte === "hoy" && faltan.length > 0 && <div className="mt-1 text-[14px] text-error font-semibold">
-            <Icono n="crisis_alert" className="text-[18px]" /> Sin horas suficientes hoy: {faltan.map((e) => `${e.especialidad} (${e.vitales_sin_cupo.length} sin hora)`).join(", ")}. Escalar a la jefatura: sobrecupos, médicos con horas libres o evaluación de derivación.</div>}
-          {b.agenda_referencia && <div className="mt-1 text-[13px] text-on-surface-variant">Agenda de box: el registro sintético trae agenda hasta el {fmt(b.dia_agenda)}; se usa esa como agenda de referencia para hoy.</div>}
+          {parte === "box" && b.agenda_referencia && <div className="mt-1 text-[13px] text-on-surface-variant">Agenda de box: el registro sintético trae agenda hasta el {fmt(b.dia_agenda)}; se usa esa como agenda de referencia para hoy.</div>}
         </section>
       )}
       {err && <Caja><p className="text-on-surface-variant">{err}</p></Caja>}
@@ -1358,14 +1352,10 @@ function Hoy({ parte, vitales, todosPacientes, fecha, esp, setEsp, onVer, esApi,
           <p className="text-[13px] text-on-surface-variant mb-3">Se descompensaron de forma grave después de la interconsulta y no se han estabilizado. Requieren evaluación médica dentro de 72 h: el médico decide si es riesgo vital, si se cita o si se deriva. Llamar no basta para cerrar la alerta.</p>
           {todos.length === 0 && <p className="text-on-surface-variant">Nadie pendiente{esp !== "Todas" && ` en ${esp}`}.</p>}
           {agrupar(pendientes).map(([nombreEsp, grupo]) => {
-            const e = porEsp[nombreEsp];
-            const sinHora = e?.vitales_sin_cupo.length || 0;
             return (
           <div key={nombreEsp} className="mb-3">
             <div className="flex flex-wrap items-baseline justify-between gap-2 bg-surface-container-low rounded px-2 py-1.5 text-[14px]">
               <b>{nombreEsp} · {grupo.length} por evaluar</b>
-              {e && <span className={`text-[13px] ${sinHora ? "text-error font-semibold" : "text-on-surface-variant"}`}>
-                {e.cupos_libres_hoy} hora{e.cupos_libres_hoy !== 1 ? "s" : ""} libre{e.cupos_libres_hoy !== 1 ? "s" : ""} hoy{sinHora ? ` · ${sinHora} sin hora` : ""}</span>}
             </div>
           <ul className="divide-y divide-outline-variant/60">
             {grupo.map((p) => (
@@ -1375,12 +1365,12 @@ function Hoy({ parte, vitales, todosPacientes, fecha, esp, setEsp, onVer, esApi,
                   <b>{p.nombre_fantasia}</b> <span className="text-on-surface-variant text-[13px]">· {p.edad} años · {p.especialidad} · {p.diagnostico_texto}</span>
                 </button>
                 <Evaluacion p={p} />
-                <div className="text-[13px] mt-0.5">{b ? <Ofrecer p={p} /> : null}</div>
+                
                 {p.contacto?.intentos_sin_respuesta > 0 && <div className="text-[12px] text-ambar font-semibold">{p.contacto.intentos_sin_respuesta} intento{p.contacto.intentos_sin_respuesta > 1 ? "s" : ""} sin respuesta{p.contacto.intentos_sin_respuesta >= 3 ? ": evaluar visita domiciliaria o derivación" : ""}</div>}
                 {p.contacto?.resultado === "contactado" && <div className="text-[12px] text-on-surface-variant">Informado por teléfono: falta la decisión médica.</div>}
                 <div className="flex flex-wrap items-center gap-1 mt-1.5 text-[12px]">
                   <span className="text-on-surface-variant mr-1">Llamada:</span>
-                  {[["citado", hora[p.id_paciente] && !hora[p.id_paciente].citado ? "Reservar la hora" : "Citado (sobrecupo)"], ["derivado_urgencia", "Derivado a urgencia"], ["contactado", "Informado"], ["no_contesta", "No contesta"]].map(([k, t]) => (
+                  {[["citado", "Citado"], ["derivado_urgencia", "Derivado a urgencia"], ["contactado", "Informado"], ["no_contesta", "No contesta"]].map(([k, t]) => (
                     <button key={k} disabled={enviando} onClick={() => registrar(p, k)}
                       className={`px-2 py-1 rounded border font-semibold disabled:opacity-40 ${k === "derivado_urgencia" ? "border-error text-error" : k === "citado" ? "border-primary text-primary" : "border-outline-variant text-on-surface-variant"}`}>
                       {enviando === p.id_paciente + k ? "…" : t}</button>

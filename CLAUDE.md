@@ -44,7 +44,7 @@ Pacientes de demo: 00002 (salta del puesto 312 al 18 tras urgencia + hospitaliza
 
 ## Estado actual — publicado en AWS
 - 47 tests (`python -m pytest -q tests`). Página: https://main.d2jvqnf67i4lks.amplifyapp.com
-- Front: Hoy (descompensaciones por especialidad + avisar al especialista), Gestión de box, Tengo horas libres, Lista (ficha en pestañas), Indicadores, Cargar datos, Criterios. El nombre del usuario (arriba a la derecha) queda en cada registro.
+- Front (pedido del hospital, 15-10: el objetivo es la lista de espera, no la gestión de box): Lista de espera (página principal, ficha en pestañas), Alertas de hoy (descompensaciones por especialidad + avisar al especialista), Indicadores, Cargar datos, Criterios. Las pantallas de box quedan en el código pero fuera del menú. El nombre del usuario (arriba a la derecha) queda en cada registro.
 - Limpiar la demo publicada antes del pitch: `python scripts/limpiar_demo.py --borrar`.
 
 ## Pendiente
