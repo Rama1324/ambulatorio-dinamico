@@ -116,3 +116,17 @@ def test_con_reglas_el_informe_funciona_como_antes():
                        "body": json.dumps({"texto": "Se hospitaliza en medicina por neumonía.", "fecha_corte": CORTE.isoformat()})})
     r = json.loads(res["body"])
     assert "registrados" not in r and r["eventos"][0]["tipo_evento"] == "hospitalizacion"   # propone; no registra
+
+
+def test_revisar_archivo_dice_si_el_paciente_sube_baja_o_queda_igual_y_por_que():
+    import base64
+    pid = paciente()
+    csv = (f"id_paciente,fecha_evento,tipo_evento,subtipo,detalle\n{pid},2026-10-12,hospitalizacion,ingreso UCI,Ingreso a UCI\n"
+           f"PAC-HLF-00009,2026-10-12,control_aps,control,Control\n")
+    s, r = app.post_importar({"archivos": [{"nombre": "eventos.csv", "contenido_base64": base64.b64encode(csv.encode()).decode()}],
+                              "fecha_corte": CORTE.isoformat()})
+    x = next(i for i in r["impacto"] if i["id_paciente"] == pid)
+    assert x["cambio"] == "sube" and x["posicion_despues"] < x["posicion_antes"]
+    assert any("ingreso UCI" in m["valor"] for m in x["por_que"]) and any(m["factor"] == "prioridad" for m in x["por_que"])
+    assert not r["cargado"] and not any(e["subtipo"] == "ingreso UCI" and e["fecha_evento"] == "2026-10-12"
+                                        for e in app.perfiles_combinados()[0][pid]["eventos_clinicos"])   # nada se guardó

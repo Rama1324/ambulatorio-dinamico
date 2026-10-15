@@ -559,6 +559,44 @@ const TABLAS_IMPORT = [
   ["agenda_box", "Agenda de box", "id_box, fecha, especialidad, capacidad_cupos"],
 ];
 
+// Qué le pasa a cada paciente del archivo: N° antes → después, si sube, baja o queda igual, y por qué (razones nuevas)
+const CAMBIO = { sube: ["Sube", "bg-hlf-claro text-hlf", "arrow_upward"], baja: ["Baja", "bg-error-container text-on-error-container", "arrow_downward"],
+  igual: ["Queda igual", "bg-surface-container-low text-on-surface-variant", "remove"], ingresa: ["Ingresa a la lista", "bg-hlf-claro text-hlf", "add"],
+  sale: ["Sale de la lista", "bg-surface-container-low text-on-surface-variant", "logout"], fuera: ["No está en la lista", "bg-surface-container-low text-on-surface-variant", "block"] };
+const MOTIVO = { prioridad: "Prioridad", grupo_proteccion: "Grupo de especial protección", egreso: "Egreso", sin_cambio: "Sin cambio",
+  acg: "Estratificación ACG", oncologico: "Hallazgo oncológico" };
+function ImpactoCarga({ impacto, cargado }) {
+  return (
+    <div className="mb-4">
+      <p className="font-semibold text-[15px] mb-1">{cargado ? "Qué pasó con cada paciente" : "Qué pasará con cada paciente si carga el archivo"}</p>
+      <div className="divide-y divide-outline-variant/60 rounded border border-outline-variant">
+        {impacto.map((x) => {
+          const [txt, cls, ic] = CAMBIO[x.cambio];
+          return (
+            <div key={x.id_paciente} className="p-2.5 text-[14px]">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`rounded px-2 py-0.5 text-[13px] font-semibold flex items-center gap-1 ${cls}`}><Icono n={ic} className="text-[16px]" />{txt}</span>
+                <b>{x.nombre}</b>
+                <span className="text-on-surface-variant">
+                  {x.posicion_antes != null ? `N° ${x.posicion_antes}` : "—"} → {x.posicion_despues != null ? <b className="text-on-surface">N° {x.posicion_despues}</b> : "—"}
+                </span>
+                {x.categoria_despues && <Prioridad cat={x.categoria_despues} />}
+              </div>
+              <ul className="mt-1 ml-1 text-[13px] space-y-0.5">
+                {x.por_que.map((r, i) => (
+                  <li key={i}><span className="text-on-surface-variant">{FACTOR[r.factor] || MOTIVO[r.factor] || r.factor}:</span> {r.valor}
+                    {r.fuente && <span className="text-[12px] text-on-surface-variant italic"> · {r.fuente}</span>}</li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
+      {!cargado && <p className="text-[12px] text-on-surface-variant mt-1">Simulación con los datos del archivo: todavía no se guardó nada.</p>}
+    </div>
+  );
+}
+
 function CargarDatos({ esApi, onListo }) {
   const [archivos, setArchivos] = useState([]);
   const [rev, setRev] = useState(null);
@@ -626,6 +664,7 @@ function CargarDatos({ esApi, onListo }) {
               ))}
             </div>
             {rev.avisos.length > 0 && <div className="mb-3 rounded bg-ambar-container/50 p-2 text-[13px]">{rev.avisos.map((a, i) => <div key={i}>⚠ {a}</div>)}</div>}
+            {rev.impacto?.length > 0 && <ImpactoCarga impacto={rev.impacto} cargado={rev.cargado} />}
             <div className="space-y-3">
               {rev.informe.map((i, k) => (
                 <div key={k} className="rounded border border-outline-variant p-3 text-[14px]">

@@ -864,7 +864,8 @@ def post_importar(body):
     existentes, _ = perfiles_combinados()
     cat = {d["diagnostico_cie10"]: d for d in catalogo()["diagnosticos"]}
     perfs, agenda, resumen, avisos = importar.combinar(datos, existentes, cat)
-    out = {"informe": informe, "resumen": resumen, "avisos": avisos, "cargado": False}
+    out = {"informe": informe, "resumen": resumen, "avisos": avisos, "cargado": False,
+           "impacto": _impacto(existentes, perfs, perfiles_combinados()[1], date.fromisoformat(body.get("fecha_corte") or hoy().isoformat()))}
     if body.get("confirmar"):
         for pid, p in perfs.items():
             guardar({"id_paciente": pid, "sk": "paciente#", "perfil": json.dumps(p, ensure_ascii=False, default=str)})
@@ -872,6 +873,41 @@ def post_importar(body):
             guardar({"id_paciente": "_agenda", "sk": f'agenda#{a["fecha"]}#{a["id_box"]}', "fila": json.dumps(a, ensure_ascii=False)})
         out["cargado"] = True
     return 200, out
+
+
+def _impacto(existentes, nuevos, revs, corte, limite=100):
+    """Qué le pasa a cada paciente del archivo si se carga: simula la lista antes y después (sin guardar nada) y explica
+    el cambio con las razones nuevas del puntaje (evento, tabla del HLF, grupo de protección, cáncer…)."""
+    if not nuevos:
+        return []
+    simulado = {**existentes, **nuevos}
+    antes = {p["id_paciente"]: p for p in lista(corte, perfs=existentes, revs=revs)["pacientes"]}
+    despues = {p["id_paciente"]: p for p in lista(corte, perfs=simulado, revs=revs)["pacientes"]}
+    out = []
+    for pid in list(nuevos)[:limite]:
+        a, d = antes.get(pid), despues.get(pid)
+        fila = {"id_paciente": pid, "nombre": (d or a or {}).get("nombre_fantasia") or nuevos[pid]["paciente"].get("nombre_fantasia", pid),
+                "posicion_antes": a and a["posicion"], "posicion_despues": d and d["posicion"],
+                "categoria_antes": a and a["categoria"], "categoria_despues": d and d["categoria"], "por_que": []}
+        if not d:
+            r = puntaje.puntuar(simulado[pid], corte) or {}
+            fila["cambio"] = "sale" if a else "fuera"
+            fila["por_que"] = [{"factor": "egreso", "valor": {"fallecido": "fallecimiento registrado", "atendido": "ya fue atendido"}.get(
+                r.get("motivo"), "no está en la lista a esta fecha")}]
+            out.append(fila)
+            continue
+        fila["cambio"] = "ingresa" if not a else ("sube" if d["posicion"] < a["posicion"] else "baja" if d["posicion"] > a["posicion"] else "igual")
+        if a and a["categoria"] != d["categoria"]:
+            fila["por_que"].append({"factor": "prioridad", "valor": f'prioridad {a["categoria"]} → {d["categoria"]}'})
+        previas = {(r["factor"], r["valor"]) for r in (a or {}).get("razones", [])}
+        fila["por_que"] += [{"factor": r["factor"], "valor": r["valor"], "fuente": r.get("fuente")} for r in d["razones"]
+                            if (r["factor"], r["valor"]) not in previas and r["factor"] not in ("dias_espera", "lace")]
+        if a and not fila["por_que"]:
+            fila["por_que"] = [{"factor": "sin_cambio", "valor": "los datos nuevos no cambian su prioridad" +
+                                (": se movió solo porque cambió el orden de otros pacientes" if fila["cambio"] != "igual" else "")}]
+        out.append(fila)
+    orden = {"sube": 0, "ingresa": 1, "baja": 2, "sale": 3, "igual": 4, "fuera": 5}
+    return sorted(out, key=lambda f: (orden[f["cambio"]], f["posicion_despues"] or 10 ** 6))
 
 
 def agenda_combinada():
