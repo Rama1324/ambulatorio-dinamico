@@ -529,6 +529,16 @@ def test_ajuste_manual_sin_efecto_tras_un_evento():
     f = fila(l, pid)
     assert not f.get("ajuste_manual") and f["ajuste_manual_vencido"]["vencido_por"]   # el deterioro no queda escondido
 
+def test_rut_valida_digito_verificador():
+    assert app.normalizar_rut("12345678-5") == "12.345.678-5" and app.normalizar_rut("11.111.111-1") == "11.111.111-1"
+    assert app.normalizar_rut("12345678-4") is None and app.normalizar_rut("abc") is None and app.normalizar_rut("") is None
+    assert app.normalizar_rut("10.000.013-k") == "10.000.013-K"
+    base = {"nombre": "Prueba RUT", "edad": 50, "sexo": "F", "diagnostico_cie10": "I50", "prioridad_inicial": "media", "fecha_corte": "2026-10-13"}
+    assert call("POST", "/pacientes", body={**base, "rut": "12.345.678-4"})[0] == 400          # dígito verificador malo
+    s, r = call("POST", "/pacientes", body={**base, "rut": "12345678-5"})
+    assert s == 200 and r["paciente"]["rut"] == "12.345.678-5"
+    assert call("POST", "/pacientes", body={**base, "rut": "12.345.678-5"})[0] == 409          # misma interconsulta repetida
+
 def test_health_informa_fecha_y_modo():
     s, h = call("GET", "/health")
     assert s == 200 and h["datos"] == "sinteticos" and h["modo"] in ("simulacion", "tiempo_real") and h["fecha_hoy"]

@@ -23,6 +23,17 @@ const FACTOR = {
 };
 const TIPO_EVENTO = { visita_urgencia: "Urgencia", hospitalizacion: "Hospitalización", examen_alterado: "Examen alterado", cambio_farmaco: "Cambio de fármaco", control_aps: "Control APS" };
 const POR_PAGINA = 25;
+// RUT chileno: dígito verificador módulo 11. Devuelve "12.345.678-5" o null.
+function validarRut(valor) {
+  const s = String(valor || "").replace(/[^0-9kK]/g, "").toUpperCase();
+  if (s.length < 2 || !/^\d+$/.test(s.slice(0, -1))) return null;
+  const cuerpo = s.slice(0, -1).replace(/^0+/, ""), dv = s.slice(-1);
+  if (!cuerpo || cuerpo.length > 8) return null;
+  let suma = 0, factor = 2;
+  for (const d of [...cuerpo].reverse()) { suma += +d * factor; factor = factor === 7 ? 2 : factor + 1; }
+  const r = 11 - (suma % 11), esperado = r === 11 ? "0" : r === 10 ? "K" : String(r);
+  return dv === esperado ? `${Number(cuerpo).toLocaleString("es-CL")}-${dv}` : null;
+}
 const FILTRO_CAT = { todas: "Todas", alta: "Alta", media: "Media", baja: "Baja", vital: "Descompensación grave: revisar", ges: "GES: verificar plazo" };
 const FILTRO_GESTION = { todos: "Todos", pendiente_revision: "Pendiente de revisión", pendiente_contacto: "Pendiente de contacto",
   pendiente_cita: "Pendiente de cita", cita_reservada: "Cita reservada", atendido: "Atendido: registrar egreso",
@@ -130,6 +141,10 @@ export default function App() {
 
   const mostrarAviso = (a) => { setAviso(a); setTimeout(() => setAviso(null), 6000); };
   const abrir = (id) => { setSel(id); setVista("lista"); };
+  // en pantallas chicas la ficha queda debajo de la lista: bajar hasta ella al elegir un paciente
+  useEffect(() => {
+    if (sel && window.innerWidth < 1024) setTimeout(() => document.getElementById("ficha")?.scrollIntoView({ behavior: "smooth" }), 150);
+  }, [sel]);
 
   if (!data) return <div className="p-10 text-lg">{error ? `No se pudo cargar la lista: ${error}` : "Cargando lista de espera…"}</div>;
   const paciente = sel && data.pacientes.find((p) => p.id_paciente === sel);
@@ -148,22 +163,22 @@ export default function App() {
     <div className="min-h-screen flex flex-col">
       <header className="bg-surface-container-lowest border-b border-outline-variant">
         <div className="flex h-1.5"><div className="w-1/3 bg-primary" /><div className="w-2/3 bg-gob-rojo" /></div>
-        <div className="max-w-[1400px] mx-auto px-6 h-[72px] flex items-center justify-between gap-4">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-2 min-h-[72px] flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <div className="flex items-center gap-3">
             <Logo />
             <div className="leading-tight border-l border-outline-variant pl-3">
-              <div className="text-[16px] font-bold text-primary-container">Hospital Clínico Dra. Eloísa Díaz Inzunza</div>
-              <div className="text-[13px] text-on-surface-variant">La Florida · Servicio de Salud Metropolitano Sur Oriente</div>
+              <div className="text-[15px] sm:text-[16px] font-bold text-primary-container">Hospital Clínico Dra. Eloísa Díaz Inzunza</div>
+              <div className="hidden sm:block text-[13px] text-on-surface-variant">La Florida · Servicio de Salud Metropolitano Sur Oriente</div>
               <div className="text-[13px] font-semibold text-hlf">Lista de espera dinámica · Consultas de especialidad</div>
             </div>
           </div>
-          <div className="flex items-center gap-3 text-[13px]">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-[13px]">
             {esApi && <label className="flex items-center gap-1.5 text-on-surface-variant" title="Queda registrado en cada acción (trazabilidad)">
               <Icono n="badge" className="text-[18px]" />
               <input value={usuario} onChange={(e) => { setUsuarioLocal(e.target.value); api.setUsuario(e.target.value); }} placeholder="Su nombre y cargo"
-                className={`h-8 w-44 px-2 border rounded text-on-surface ${usuario.trim() ? "border-outline-variant" : "border-ambar bg-ambar-container/40"}`} />
+                className={`h-8 w-40 sm:w-44 px-2 border rounded text-on-surface ${usuario.trim() ? "border-outline-variant" : "border-ambar bg-ambar-container/40"}`} />
             </label>}
-            <span className="text-on-surface-variant border-l border-outline-variant pl-3">Lista al <b className="text-on-surface">{fmt(fecha)}</b></span>
+            <span className="hidden sm:inline text-on-surface-variant border-l border-outline-variant pl-3">Lista al <b className="text-on-surface">{fmt(fecha)}</b></span>
             <button onClick={cambiarTema} aria-label={oscuro ? "Usar tema claro" : "Usar tema oscuro"} title={oscuro ? "Tema claro" : "Tema oscuro"}
               className="w-9 h-9 flex items-center justify-center rounded border border-outline-variant text-on-surface-variant hover:text-on-surface">
               <Icono n={oscuro ? "light_mode" : "dark_mode"} className="text-[20px]" /></button>
@@ -172,10 +187,10 @@ export default function App() {
             </label>
           </div>
         </div>
-        <nav className="max-w-[1400px] mx-auto px-6 flex gap-6 text-[14px]">
+        <nav className="max-w-[1400px] mx-auto px-4 sm:px-6 flex gap-5 sm:gap-6 text-[14px] overflow-x-auto whitespace-nowrap" aria-label="Secciones">
           {[["simple", "Lista de espera", null], ["lista", "Lista detallada", null], ["hoy", "Alertas pendientes", porContactar.length], ["indicadores", "Indicadores", null], ["cargar", "Cargar datos", null], ["criterios", "Criterios", null]].map(([k, t, n]) => (
-            <button key={k} onClick={() => setVista(k)}
-              className={`py-2.5 border-b-2 -mb-px ${vista === k ? "border-primary text-primary font-semibold" : "border-transparent text-on-surface-variant hover:text-on-surface"}`}>
+            <button key={k} onClick={() => setVista(k)} aria-current={vista === k ? "page" : undefined}
+              className={`shrink-0 py-2.5 border-b-2 -mb-px ${vista === k ? "border-primary text-primary font-semibold" : "border-transparent text-on-surface-variant hover:text-on-surface"}`}>
               {t}{n ? <span className="ml-1.5 px-1.5 rounded-full bg-error text-on-error text-[12px] font-semibold">{n}</span> : null}
             </button>
           ))}
@@ -215,7 +230,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      <main className="flex-1 max-w-[1400px] w-full mx-auto px-6 py-5">
+      <main className="flex-1 max-w-[1400px] w-full mx-auto px-4 sm:px-6 py-5">
         {error && <div className="bg-error-container text-on-error-container p-3 mb-4 rounded">{error}</div>}
 
         {vista !== "simple" && <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-5">
@@ -272,10 +287,10 @@ export default function App() {
                 mostrarAviso({ titulo: `${r.paciente?.nombre_fantasia} ingresado a la lista`, despues: r.paciente?.posicion, antes: "—", cat: r.paciente?.categoria });
               }} />}
 
-              <section className="bg-surface-container-lowest border border-outline-variant rounded relative" aria-busy={actualizando}>
+              <section className="bg-surface-container-lowest border border-outline-variant rounded relative max-lg:overflow-x-auto" aria-busy={actualizando}>
                 {actualizando && <div className="absolute inset-x-0 top-0 z-20 flex justify-center pt-12 pointer-events-none">
                   <span className="bg-on-surface text-background text-[13px] px-3 py-1.5 rounded shadow flex items-center gap-1"><Icono n="progress_activity" className="text-[16px] animate-spin" />Actualizando…</span></div>}
-                <table className={`w-full text-left border-collapse text-[14px] ${actualizando ? "opacity-40 pointer-events-none" : ""}`}>
+                <table className={`w-full max-lg:min-w-[820px] text-left border-collapse text-[14px] ${actualizando ? "opacity-40 pointer-events-none" : ""}`}>
                   <thead className="sticky top-0 z-10">
                     <tr className="bg-surface-container-low text-[13px] text-on-surface-variant border-b border-outline-variant">
                       <th className="py-2 px-3 font-semibold w-14">N°</th><th className="py-2 px-2 font-semibold">Prioridad</th>
@@ -368,7 +383,7 @@ export default function App() {
               )}
             </div>
 
-            {paciente && <aside className="lg:col-span-5 xl:col-span-4 lg:sticky lg:top-4 flex flex-col gap-3 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto lg:overflow-x-hidden" aria-label="Detalle del paciente">
+            {paciente && <aside className="lg:col-span-5 xl:col-span-4 lg:sticky lg:top-4 flex flex-col gap-3 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto lg:overflow-x-hidden" aria-label="Detalle del paciente" id="ficha">
               <button onClick={() => setSel(null)} className="self-end text-[13px] text-on-surface-variant hover:text-on-surface flex items-center gap-1"><Icono n="close" className="text-[18px]" />Cerrar detalle</button>
               <Ficha key={paciente.id_paciente} p={paciente} total={data.total} detalle={detalle} fecha={fecha} esApi={esApi} demo={demo} onCambio={cargar} onAviso={mostrarAviso}
                 onDestacar={(id) => { setDestacado(id); setTimeout(() => setDestacado(null), 3000); }} />
@@ -502,11 +517,11 @@ function Novedad({ p, fecha, onListo, onAviso }) {
 const EVAL_TXT = { pendiente: "Pendiente (≤ 72 h)", atrasada: "Atrasada (> 72 h)", evaluada: "Evaluada" };
 const REV_TXT = { pendiente: "Pendiente", confirmado: "Confirmada", ajustado: "Ajustada", requiere_revision: "Requiere nueva revisión" };
 function exportarExcel(pacientes, fecha, { excluidos = [], filtros = [] } = {}) {
-  const lista = [["N°", "N° en su especialidad", "Prioridad", "Prioridad inicial (SIC)", "Paciente", "ID", "Edad", "Sexo", "Comuna", "Especialidad",
+  const lista = [["N°", "N° en su especialidad", "Prioridad", "Prioridad inicial (SIC)", "Paciente", "RUT / ID", "Edad", "Sexo", "Comuna", "Especialidad",
     "CIE-10", "Diagnóstico", "Fecha ingreso", "Días de espera", "Más de 1 año", "Estado clínico", "Descompensación grave: evaluación",
     "Días desde el evento", "Revisión de la prioridad", "Revisión sugerida por", "Ajuste manual", "Posición según el sistema", "GES: verificar plazo",
     "2 inasistencias seguidas", "LACE (experimental)"],
-    ...pacientes.map((p) => [p.posicion, p.posicion_especialidad ?? "", ETIQUETA[p.categoria], p.prioridad_inicial, p.nombre_fantasia, p.id_paciente,
+    ...pacientes.map((p) => [p.posicion, p.posicion_especialidad ?? "", ETIQUETA[p.categoria], p.prioridad_inicial, p.nombre_fantasia, p.rut || p.id_paciente,
       p.edad, p.sexo, p.comuna, p.especialidad, p.diagnostico_cie10, p.diagnostico_texto, fmt(p.fecha_ingreso_lista), p.dias_espera,
       p.antiguedad_mayor_1_anio ? "Sí" : "", (p.estado_clinico || "").replace("_", " "), p.riesgo_vital ? EVAL_TXT[p.evaluacion?.estado] || "Pendiente" : "",
       p.evaluacion?.dias_desde_evento ?? "", REV_TXT[p.estado_revision] || p.estado_revision,
@@ -722,7 +737,7 @@ function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso, onDes
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="text-[18px] font-semibold">{p.nombre_fantasia}</div>
-            <div className="text-[13px] text-on-surface-variant">{p.edad} años · {p.sexo === "F" ? "Femenino" : "Masculino"} · {p.comuna} · {p.id_paciente}</div>
+            <div className="text-[13px] text-on-surface-variant">{p.rut ? `RUT ${p.rut} · ` : ""}{p.edad} años · {p.sexo === "F" ? "Femenino" : "Masculino"} · {p.comuna} · {p.id_paciente}</div>
           </div>
           <Prioridad cat={p.categoria} />
         </div>
@@ -749,7 +764,7 @@ function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso, onDes
         {p.categoria !== p.categoria_sistema && <p className="mt-2 text-[13px] text-on-surface-variant">El sistema proponía prioridad {p.categoria_sistema}; el equipo clínico la cambió a {p.categoria}. Motivo: {p.revision?.motivo}</p>}
       </Caja>
 
-      <div className="flex border-b border-outline-variant bg-surface-container-lowest rounded-t text-[14px] sticky top-0 z-10">
+      <div className="flex border-b border-outline-variant bg-surface-container-lowest rounded-t text-[14px] sticky top-0 z-10 overflow-x-auto" role="tablist">
         {[["resumen", "Resumen"], ["gestion", "Gestión"], ["registrar", "Registrar"], ["puntaje", "Fundamento"], ["historia", "Historia"]].map(([k, t]) => (
           <button key={k} onClick={() => setTab(k)} className={`flex-1 py-2 border-b-2 -mb-px ${tab === k ? "border-primary text-primary font-semibold" : "border-transparent text-on-surface-variant"}`}>{t}</button>
         ))}
@@ -1013,13 +1028,13 @@ function ListaSimple({ data, fecha, esp, setEsp, actualizando, onVer }) {
   useEffect(() => setPagina(0), [busca, prioridad, esp]);
   const q = busca.trim().toLowerCase();
   const filas = data.pacientes.filter((p) => (prioridad === "todas" || p.categoria === prioridad) &&
-    (!q || [p.nombre_fantasia, p.id_paciente, p.diagnostico_texto, p.comuna].some((x) => (x || "").toLowerCase().includes(q))));
+    (!q || [p.nombre_fantasia, p.rut, (p.rut || "").replace(/[.-]/g, ""), p.id_paciente, p.diagnostico_texto, p.comuna].some((x) => (x || "").toLowerCase().includes(q))));
   const pag = filas.slice(pagina * POR_PAGINA_SIMPLE, (pagina + 1) * POR_PAGINA_SIMPLE);
   const paginas = Math.max(1, Math.ceil(filas.length / POR_PAGINA_SIMPLE));
   const SEXO = { F: "Femenino", M: "Masculino" };
   const columnas = ["N°", "Nombre", "RUT / ID", "Edad", "Sexo", "Comuna", "Previsión", "Especialidad", "Diagnóstico", "Prioridad", "Ingreso a la lista", "Días de espera"];
   const exportar = () => descargarExcel(`lista_espera_HLF_${fecha}.xlsx`, [{ nombre: "Lista de espera", filas: [columnas,
-    ...filas.map((p) => [p.posicion, p.nombre_fantasia, p.id_paciente, p.edad, SEXO[p.sexo] || p.sexo, p.comuna, p.prevision || "", p.especialidad,
+    ...filas.map((p) => [p.posicion, p.nombre_fantasia, p.rut || p.id_paciente, p.edad, SEXO[p.sexo] || p.sexo, p.comuna, p.prevision || "", p.especialidad,
       `${p.diagnostico_cie10} ${p.diagnostico_texto}`, ETIQUETA[p.categoria], fmt(p.fecha_ingreso_lista), p.dias_espera])] }]);
   const campo = "h-10 px-3 border border-outline-variant rounded bg-surface-container-lowest text-[15px]";
   return (
@@ -1047,7 +1062,7 @@ function ListaSimple({ data, fecha, esp, setEsp, actualizando, onVer }) {
                 className="cursor-pointer border-b border-outline-variant/60 hover:bg-primary/5 focus:bg-primary/10">
                 <td className="py-2 px-3 text-right font-semibold">{p.posicion}</td>
                 <td className="py-2 px-3 font-semibold text-primary whitespace-nowrap">{p.nombre_fantasia}</td>
-                <td className="py-2 px-3 whitespace-nowrap">{p.id_paciente}</td>
+                <td className="py-2 px-3 whitespace-nowrap">{p.rut || <span className="text-on-surface-variant">{p.id_paciente}</span>}</td>
                 <td className="py-2 px-3 text-right">{p.edad}</td>
                 <td className="py-2 px-3">{SEXO[p.sexo] || p.sexo}</td>
                 <td className="py-2 px-3 whitespace-nowrap">{p.comuna}</td>
@@ -1071,7 +1086,7 @@ function ListaSimple({ data, fecha, esp, setEsp, actualizando, onVer }) {
           <button disabled={pagina >= paginas - 1} onClick={() => setPagina(pagina + 1)} className="px-3 py-1.5 border border-outline-variant rounded bg-surface-container-lowest disabled:opacity-40">Siguiente</button>
         </div>
       </div>
-      <p className="text-[12px] text-on-surface-variant">Datos sintéticos: el registro de prueba no trae RUT, por eso se muestra el ID del paciente. Con las planillas del hospital, esta columna muestra el RUT.</p>
+      <p className="text-[12px] text-on-surface-variant">Datos sintéticos: el registro de prueba no trae RUT, por eso se muestra el ID (en gris). Los pacientes ingresados con RUT y las planillas del hospital muestran el RUT.</p>
     </div>
   );
 }
@@ -1405,17 +1420,19 @@ function Camara({ onFoto, onCerrar }) {
 
 function NuevoPaciente({ fecha, onCerrar, onListo }) {
   const [cat, setCat] = useState(null);
-  const [f, setF] = useState({ nombre: "", edad: "", sexo: "F", comuna: "La Florida", prevision: "FONASA B", especialidad: "", diagnostico_cie10: "", prioridad_inicial: "media", origen_derivacion: "CESFAM/APS", grupo_proteccion: "", acg: "" });
+  const [f, setF] = useState({ nombre: "", rut: "", edad: "", sexo: "F", comuna: "La Florida", prevision: "FONASA B", especialidad: "", diagnostico_cie10: "", prioridad_inicial: "media", origen_derivacion: "CESFAM/APS", grupo_proteccion: "", acg: "" });
   const [error, setError] = useState(null);
   const [enviando, setEnviando] = useState(false);
   useEffect(() => { api.getCatalogo().then(setCat).catch((e) => setError(e.message)); }, []);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value, ...(k === "especialidad" ? { diagnostico_cie10: "" } : {}) });
   const especialidades = cat ? [...new Set(cat.diagnosticos.map((d) => d.especialidad))] : [];
   const dxs = cat ? cat.diagnosticos.filter((d) => d.especialidad === f.especialidad) : [];
-  const valido = f.nombre.trim() && f.edad !== "" && f.diagnostico_cie10;
+  const rutOk = validarRut(f.rut);
+  const rutMal = f.rut.trim() !== "" && !rutOk;
+  const valido = f.nombre.trim() && f.edad !== "" && f.diagnostico_cie10 && !rutMal;
   const guardar = async () => {
     setEnviando(true); setError(null);
-    try { onListo(await api.postPaciente({ ...f, edad: Number(f.edad), fecha_corte: fecha })); }
+    try { onListo(await api.postPaciente({ ...f, rut: rutOk || undefined, edad: Number(f.edad), fecha_corte: fecha })); }
     catch (e) { setError(e.message); setEnviando(false); }
   };
   const campo = "h-9 px-2 border border-outline-variant rounded bg-surface-container-lowest w-full";
@@ -1428,6 +1445,12 @@ function NuevoPaciente({ fecha, onCerrar, onListo }) {
         </div>
         <div className="p-4 grid grid-cols-2 gap-3 text-[14px]">
           <Filtro label="Nombre del paciente"><input value={f.nombre} onChange={set("nombre")} className={campo} autoFocus /></Filtro>
+          <Filtro label="RUT">
+            <input value={f.rut} onChange={set("rut")} onBlur={() => rutOk && setF({ ...f, rut: rutOk })} placeholder="12.345.678-5" inputMode="text"
+              aria-invalid={rutMal} className={`${campo} ${rutMal ? "border-error" : ""}`} />
+            <span className={`text-[12px] ${rutMal ? "text-error" : rutOk ? "text-verde" : "text-on-surface-variant"}`}>
+              {rutMal ? "RUT inválido: revise el dígito verificador" : rutOk ? "RUT válido" : "Se valida el dígito verificador"}</span>
+          </Filtro>
           <div className="grid grid-cols-2 gap-2">
             <Filtro label="Edad"><input type="number" min={0} max={120} value={f.edad} onChange={set("edad")} className={campo} /></Filtro>
             <Filtro label="Sexo"><select value={f.sexo} onChange={set("sexo")} className={campo}><option value="F">Femenino</option><option value="M">Masculino</option></select></Filtro>

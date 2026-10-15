@@ -229,6 +229,7 @@ def _enriquecer(r, perfil, revision, pos_ant, corte=None, contacto=None, decisio
     out = {
         "id_paciente": r["id_paciente"],
         "nombre_fantasia": pac["nombre_fantasia"],
+        "rut": pac.get("rut"),
         "edad": pac["edad"],
         "sexo": pac["sexo"],
         "comuna": pac["comuna"],
@@ -611,6 +612,22 @@ def post_novedad(pid, body):
     return 200, {"id_paciente": pid, "mensaje": texto, "paciente": fila, "en_lista": fila is not None}
 
 
+def normalizar_rut(valor):
+    """RUT chileno validado con el dígito verificador (módulo 11). Devuelve '12.345.678-5' o None si no es válido."""
+    s = re.sub(r"[^0-9kK]", "", str(valor or "")).upper()
+    if len(s) < 2 or not s[:-1].isdigit():
+        return None
+    cuerpo, dv = s[:-1].lstrip("0"), s[-1]
+    if not cuerpo or len(cuerpo) > 8:
+        return None
+    suma, factor = 0, 2
+    for d in reversed(cuerpo):
+        suma += int(d) * factor
+        factor = 2 if factor == 7 else factor + 1
+    esperado = {11: "0", 10: "K"}.get(11 - suma % 11, str(11 - suma % 11))
+    return f"{int(cuerpo):,}".replace(",", ".") + f"-{dv}" if dv == esperado else None
+
+
 def post_paciente(body):
     """Ingresa una nueva interconsulta a la lista (la prioridad inicial la define quien prioriza la SIC)."""
     cat = {d["diagnostico_cie10"]: d for d in catalogo()["diagnosticos"]}
@@ -623,12 +640,21 @@ def post_paciente(body):
     if not nombre or not dx or body.get("prioridad_inicial") not in puntaje.ORDEN_CAT or not 0 <= edad <= 120 \
             or body.get("sexo") not in ("F", "M"):
         return 400, {"error": "requiere nombre, edad (0-120), sexo (F/M), diagnostico_cie10 del catálogo y prioridad_inicial (alta|media|baja)"}
+    rut = None
+    if body.get("rut"):
+        rut = normalizar_rut(body["rut"])
+        if not rut:
+            return 400, {"error": f"RUT inválido: '{body['rut']}' (revise el dígito verificador)"}
+        existente = next((pid for pid, x in perfiles_combinados()[0].items() if x["paciente"].get("rut") == rut
+                          and x["lista_espera"].get("diagnostico_cie10") == body.get("diagnostico_cie10")), None)
+        if existente:
+            return 409, {"error": f"El RUT {rut} ya tiene una interconsulta por ese diagnóstico en la lista ({existente})"}
     corte = date.fromisoformat(body.get("fecha_corte") or hoy().isoformat())
     ingreso = body.get("fecha_ingreso_lista") or corte.isoformat()
     pid = "PAC-NUEVO-" + uuid.uuid4().hex[:5].upper()
     perfil = {
         "id_paciente": pid,
-        "paciente": {"nombre_fantasia": nombre, "edad": edad, "sexo": body["sexo"], "comuna": body.get("comuna") or "La Florida",
+        "paciente": {"nombre_fantasia": nombre, "rut": rut, "edad": edad, "sexo": body["sexo"], "comuna": body.get("comuna") or "La Florida",
                      "prevision": body.get("prevision") or "FONASA B", "nivel_socioeconomico": "", "fallecido": False,
                      "fecha_defuncion": None,
                      "grupo_proteccion": body.get("grupo_proteccion") if body.get("grupo_proteccion") in puntaje.GRUPOS_PROTECCION else None,

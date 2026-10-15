@@ -65,7 +65,7 @@ Sin `fecha_corte`, la API usa `FECHA_REFERENCIA` (variable de entorno): `hoy` = 
 | GET | `/pacientes/{id}` | Perfil completo con línea de tiempo (eventos, mediciones, citas) |
 | POST | `/pacientes/{id}/informe` | Lee un informe (`texto` o `imagen_base64` + `media_type`) y **propone** un evento. No guarda nada |
 | POST | `/eventos` | Agrega un evento confirmado → recalcula → devuelve la lista nueva |
-| POST | `/pacientes` | Ingresa una interconsulta nueva (`nombre, edad, sexo, diagnostico_cie10, prioridad_inicial`, opcionales comuna, previsión, origen) |
+| POST | `/pacientes` | Ingresa una interconsulta nueva (`nombre, edad, sexo, diagnostico_cie10, prioridad_inicial`, opcionales comuna, previsión, origen)  · `rut` opcional: se valida el dígito verificador (400 si es inválido) y se guarda como `12.345.678-5`; 409 si ese RUT ya tiene una interconsulta por el mismo diagnóstico |
 | POST | `/pacientes/{id}/novedad` | `tipo`: `comorbilidad` (`condicion` de Charlson o `cie10`), `diagnostico` (`cie10`), `fallecimiento` o `atendido` (`fecha`). Queda registro `novedad#` |
 | GET | `/pacientes/{id}/historia?fecha_corte=` | Posición y categoría cada 14 días (gráfico de evolución) |
 | POST | `/pacientes/{id}/contacto` | Llamada: `resultado` citado · derivado_urgencia · contactado · no_contesta (+ `nota`). `citado` con `hora`, `hora_fin`, `id_box` reserva la hora (409 si ya está reservada). Solo citado y derivado_urgencia cierran la alerta. **Cambio:** `se_mantiene` pasó a `/decision` (`mantener`) |
