@@ -20,6 +20,8 @@ SUBTIPOS = {
     "examen_alterado": {"resultado alterado": "moderada"},
     "cambio_farmaco": {"aumento dosis": "moderada", "reducción dosis": "leve"},
     "control_aps": {"estabilización": "leve", "buena respuesta": "leve", "control": "leve"},
+    # Hallazgo en un informe (biopsia, epicrisis): no es una descompensación; sube por las filas oncológicas de la tabla HLF
+    "hallazgo_oncologico": {"cáncer confirmado": "grave", "sospecha de cáncer": "grave"},
 }
 CONFIANZA_MINIMA = 90.0   # % por línea bajo el cual se marca para revisar
 CONFIANZA_LEGIBLE = 80.0  # % promedio bajo el cual se pide repetir la foto
@@ -64,7 +66,7 @@ class EventoPropuesto(BaseModel):
     """Evento clínico detectado en un informe. Se valida contra el documento y la fecha de corte (context)."""
     model_config = ConfigDict(extra="ignore")
 
-    tipo_evento: Literal["hospitalizacion", "visita_urgencia", "examen_alterado", "cambio_farmaco", "control_aps"]
+    tipo_evento: Literal["hospitalizacion", "visita_urgencia", "examen_alterado", "cambio_farmaco", "control_aps", "hallazgo_oncologico"]
     subtipo: str
     severidad: Literal["leve", "moderada", "grave"]
     fecha_evento: Optional[date] = None

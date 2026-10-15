@@ -94,7 +94,10 @@ def decidir(perfil, resp, corte, kb):
     eventos, fecha_ev = _eventos(perfil, corte), None
     # El LLM lee; el código comprueba en el registro que lo citado diga lo que el LLM afirma (si no, revisa un humano)
     respaldo = [c for c in ev.citas if (x := _registro(eventos, c)) and puntaje.descompensa(x)] if ev.valor == "si" else []
-    if ev.valor == "desconocido":
+    solo_onco = ev.valor == "si" and ev.citas and all((x := _registro(eventos, c)) and x["tipo_evento"] == "hallazgo_oncologico" for c in ev.citas)
+    if solo_onco:
+        pass  # el LLM llamó "evento grave" a un hallazgo oncológico: lo resuelve la regla oncológica de abajo (código)
+    elif ev.valor == "desconocido":
         revision.append({"motivo": "dato_desconocido", "detalle": "no se pudo determinar si hubo un evento grave", "bloqueante": True})
     elif ev.valor == "si" and not respaldo:
         revision.append({"motivo": "cita_no_respalda", "bloqueante": True,
@@ -148,6 +151,14 @@ def decidir(perfil, resp, corte, kb):
                 else:
                     revision.append({"motivo": "descompensacion_sin_fila", "bloqueante": False,
                                      "detalle": dx.get("detalle") or "la tabla del HLF no define fila de descompensación para este diagnóstico"})
+
+    # Cáncer activo o sospechoso registrado (verificado al leer el documento): lo decide el código con la tabla del HLF
+    onco = puntaje.regla_oncologica(eventos, le["especialidad"])
+    if onco:
+        categoria = _mayor(categoria, onco["fila"][1])
+        razones.append(puntaje.razon_oncologica(onco))
+        if onco["a_validar"]:
+            revision.append({"motivo": "fila_a_validar", "bloqueante": False, "detalle": "hallazgo oncológico en una especialidad sin fila oncológica propia"})
 
     # Medición clave: el LLM dice si empeora; el código lo confirma con los valores registrados y compara el último
     # con el umbral con fuente (nunca usa el número que escribió el LLM)

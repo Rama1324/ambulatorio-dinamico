@@ -19,9 +19,9 @@ const EVENTOS = {
 const FACTOR = {
   riesgo_vital: "Descompensación grave: evaluar", prioridad_inicial: "Priorización de la interconsulta", evento: "Evento posterior a la interconsulta",
   tabla_oficial: "Tabla de priorización HLF", dias_espera: "Tiempo de espera", ges: "Garantía GES", medicion: "Última medición",
-  lace: "Puntaje LACE (experimental)",
+  lace: "Puntaje LACE (experimental)", oncologico: "Hallazgo oncológico (informe)", ventana: "Vigencia del evento",
 };
-const TIPO_EVENTO = { visita_urgencia: "Urgencia", hospitalizacion: "Hospitalización", examen_alterado: "Examen alterado", cambio_farmaco: "Cambio de fármaco", control_aps: "Control APS" };
+const TIPO_EVENTO = { visita_urgencia: "Urgencia", hospitalizacion: "Hospitalización", examen_alterado: "Examen alterado", cambio_farmaco: "Cambio de fármaco", control_aps: "Control APS", hallazgo_oncologico: "Hallazgo oncológico" };
 const POR_PAGINA = 25;
 // RUT chileno: dígito verificador módulo 11. Devuelve "12.345.678-5" o null.
 function validarRut(valor) {
@@ -245,7 +245,7 @@ export default function App() {
         {vista === "simple" && <ListaSimple data={data} fecha={fecha} esp={esp} setEsp={setEsp} actualizando={actualizando} onVer={abrir} />}
 
         {(vista === "hoy" || vista === "box") && <Hoy parte={vista} vitales={vitales} todosPacientes={data.pacientes} fecha={fecha} esp={esp} setEsp={setEsp} onVer={abrir} esApi={esApi} onCambio={cargar} onAviso={mostrarAviso} />}
-        {vista === "criterios" && <Criterios />}
+        {vista === "criterios" && <Criterios ia={data.pacientes.some((p) => p.algoritmo)} />}
         {vista === "medico" && <MedicoDisponible fecha={fecha} esApi={esApi} espInicial={esp} onVer={abrir} onCambio={cargar} onAviso={mostrarAviso} />}
         {vista === "indicadores" && <Indicadores fecha={fecha} esApi={esApi} data={data} esp={esp} setEsp={setEsp} onVer={abrir} />}
         {vista === "cargar" && <CargarDatos esApi={esApi} onListo={async (r) => {
@@ -843,7 +843,9 @@ function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso, onDes
 
       {tab === "registrar" && (esApi ? (
         <>
-          <Informe p={p} fecha={fecha} cargando={cargando} onConfirmar={(ev) => registrarEvento(ev, "Evento del informe registrado")} onAviso={onAviso} />
+          <Informe p={p} fecha={fecha} cargando={cargando} onConfirmar={(ev) => registrarEvento(ev, "Evento del informe registrado")} onAviso={onAviso}
+            onRegistrado={async (r) => { await onCambio(); onDestacar(p.id_paciente);
+              onAviso({ titulo: `La IA leyó el informe y registró: ${r.registrados.map((e) => e.subtipo).join(", ")}. Lista actualizada`, antes: r.posicion_antes, despues: r.posicion_despues, cat: r.paciente?.categoria }); }} />
 
           <Novedad p={p} fecha={fecha} onListo={async (r) => {
             await onCambio();
@@ -1869,7 +1871,7 @@ function NuevoPaciente({ fecha, onCerrar, onListo }) {
   );
 }
 
-function Informe({ p, fecha, cargando, onConfirmar, onAviso }) {
+function Informe({ p, fecha, cargando, onConfirmar, onAviso, onRegistrado }) {
   const [texto, setTexto] = useState("");
   const [res, setRes] = useState(null);
   const [leyendo, setLeyendo] = useState(false);
@@ -1878,7 +1880,11 @@ function Informe({ p, fecha, cargando, onConfirmar, onAviso }) {
   const [esDelPaciente, setEsDelPaciente] = useState(false);
   const analizar = async (body) => {
     setLeyendo(true); setRes(null); setElegido(0); setEsDelPaciente(false);
-    try { setRes(await api.postInforme(p.id_paciente, { ...body, fecha_corte: fecha })); }
+    try {
+      const r = await api.postInforme(p.id_paciente, { ...body, fecha_corte: fecha });
+      setRes(r);
+      if (r.registrados?.length) await onRegistrado?.(r);
+    }
     catch (e) { onAviso({ titulo: "No se pudo leer el informe: " + e.message }); }
     finally { setLeyendo(false); }
   };
@@ -1889,7 +1895,9 @@ function Informe({ p, fecha, cargando, onConfirmar, onAviso }) {
   const bloqueado = res?.otro_paciente || (res?.lectura && !res.lectura.legible);
   return (
     <Caja titulo="Registrar informe recibido">
-      <p className="text-[13px] text-on-surface-variant mb-2">Epicrisis, DAU de urgencia o nota clínica. Se propone el evento y usted confirma antes de actualizar la lista.</p>
+      <p className="text-[13px] text-on-surface-variant mb-2">Epicrisis, DAU de urgencia, biopsia o nota clínica. {p.algoritmo
+        ? "La IA lo lee 3 veces y lo que verifica en el texto (cáncer, hospitalización, descompensación…) se registra solo y la lista se recalcula. Lo que podría bajar una prioridad lo confirma usted."
+        : "Se propone el evento y usted confirma antes de actualizar la lista."}</p>
       <textarea rows={3} value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Ej.: Consulta en urgencia por dolor torácico en reposo. Se hospitaliza en cardiología."
         className="w-full p-2 border border-outline-variant rounded focus:outline-none focus:border-primary resize-y text-[14px]" />
       <div className="flex gap-2 mt-2">
@@ -1906,7 +1914,22 @@ function Informe({ p, fecha, cargando, onConfirmar, onAviso }) {
           ))}
         </div>
       )}
-      {res && !ev && <p className="mt-2 text-[13px] text-on-surface-variant">{res.mensaje}</p>}
+      {res?.registrados?.length > 0 && (
+        <div className="mt-3 rounded border border-hlf bg-hlf-claro p-3 text-[14px] space-y-1.5">
+          <p className="font-semibold text-hlf flex items-center gap-1"><Icono n="check_circle" className="text-[18px]" />Registrado automáticamente ({res.ia?.lecturas} lecturas iguales de la IA, cita verificada en el documento)</p>
+          {res.registrados.map((e, i) => (
+            <div key={i}><b>{TIPO_EVENTO[e.tipo_evento] || e.tipo_evento}</b> · {e.subtipo} · {fmt(e.fecha_evento)}
+              <blockquote className="border-l-4 border-hlf px-2 italic text-[13px]">“{e.cita}”</blockquote></div>
+          ))}
+          {res.posicion_antes != null && <p className="text-[13px]">N° {res.posicion_antes} → <b>N° {res.posicion_despues}</b> · prioridad <Prioridad cat={res.paciente?.categoria} /></p>}
+          {res.paciente?.razones?.filter((r) => r.factor === "oncologico" || r.factor === "tabla_oficial").map((r, i) => <p key={i} className="text-[12px] text-on-surface-variant">{r.valor} · Fuente: {r.fuente}</p>)}
+        </div>
+      )}
+      {res?.informativos?.length > 0 && res.informativos.map((h, i) => (
+        <p key={i} className="mt-2 text-[13px] text-on-surface-variant">ℹ “{h.cita}”: {h.nota}.</p>
+      ))}
+      {res?.segundos != null && <p className="mt-1 text-[12px] text-on-surface-variant">Leído por IA (Amazon Bedrock) en {res.segundos} s.</p>}
+      {res && !ev && !res.registrados?.length && <p className="mt-2 text-[13px] text-on-surface-variant">{res.mensaje}</p>}
       {res?.transcripcion && (
         <details className="mt-2 text-[13px]" open={dudosas.size > 0}>
           <summary className="cursor-pointer text-on-surface-variant">
@@ -1917,9 +1940,10 @@ function Informe({ p, fecha, cargando, onConfirmar, onAviso }) {
           </div>
         </details>
       )}
-      {res?.descartados?.length > 0 && <p className="mt-1 text-[12px] text-on-surface-variant">Descartados por la validación: {res.descartados.map((d) => `${d.subtipo} (${d.motivo})`).join("; ")}</p>}
+      {res?.descartados?.length > 0 && <p className="mt-1 text-[12px] text-on-surface-variant">Descartados por la validación: {res.descartados.map((d) => `${d.subtipo}${d.cita ? ` “${d.cita}”` : ""} (${d.motivo})`).join("; ")}</p>}
       {ev && (
         <div className="mt-3 border border-outline-variant rounded p-3 space-y-2 text-[14px]">
+          {res.modo === "ia" && <p className="text-[13px] font-semibold text-ambar">Para confirmar: {ev.motivo}</p>}
           {eventos.length > 1 && <p className="text-[13px] font-semibold">Se encontraron {eventos.length} eventos en el documento. Elija cuál registrar:</p>}
           <div className="space-y-1">
             {eventos.map((e, i) => (
@@ -1928,7 +1952,7 @@ function Informe({ p, fecha, cargando, onConfirmar, onAviso }) {
                 <span>
                   <b>{TIPO_EVENTO[e.tipo_evento]}</b> · {e.subtipo} · {fmt(e.fecha_evento)}
                   {!e.fecha_en_documento && <span className="text-ambar text-[12px]"> (fecha no encontrada: verificar)</span>}
-                  {e.detectado_por === "bedrock" && <span className="ml-1 text-[11px] rounded bg-tertiary-fixed text-on-tertiary-fixed-variant px-1">sugerido por IA</span>}
+                  {(e.detectado_por === "bedrock" || e.detectado_por === "ia") && <span className="ml-1 text-[11px] rounded bg-tertiary-fixed text-on-tertiary-fixed-variant px-1">leído por IA</span>}
                 </span>
               </label>
             ))}
@@ -1946,7 +1970,7 @@ function Informe({ p, fecha, cargando, onConfirmar, onAviso }) {
             <button onClick={() => setRes(null)} className="flex-1 py-2 rounded border border-outline-variant font-semibold">Descartar</button>
           </div>
           <p className="text-[12px] text-on-surface-variant">
-            {res.transcripcion ? "Leído con Amazon Textract (OCR). " : ""}Evento detectado por {ev.detectado_por === "bedrock" ? "IA (respaldo)" : "reglas"} y validado (Pydantic): tipo y severidad del registro, frase presente en el documento, fecha no futura.
+            {res.transcripcion ? "Leído con Amazon Textract (OCR). " : ""}Evento detectado por {ev.detectado_por === "bedrock" ? "IA (respaldo)" : ev.detectado_por === "ia" ? "IA (Amazon Bedrock)" : "reglas"} y validado: tipo y severidad del registro, frase presente en el documento, fecha no futura.
           </p>
         </div>
       )}
@@ -2326,7 +2350,7 @@ function MapaBox({ mapa, dia, esp, setEsp }) {
   );
 }
 
-function Criterios() {
+function Criterios({ ia }) {
   const filas = [["I50", "Insuficiencia cardíaca descompensada", "Alta", 85], ["I20", "Angina inestable", "Alta", 85],
     ["J44", "EPOC grave no controlado", "Alta", 95], ["J45", "Asma grave no controlada", "Alta", 95],
     ["K70", "Cirrosis hepática descompensada", "Alta", 95], ["E11", "DM2 descontrolada", "Media", 101],
@@ -2335,9 +2359,11 @@ function Criterios() {
     <div className="grid gap-5 lg:grid-cols-2 text-[14px] leading-relaxed">
       <Caja titulo="Cómo se ordena la lista">
         <ol className="list-decimal pl-5 space-y-2">
-          <li><b>Prioridad (alta, media, baja).</b> Se parte de la prioridad asignada por el especialista al revisar la interconsulta. Si después el paciente presenta una descompensación (urgencia, hospitalización o evento grave) que no estaba en la interconsulta, la prioridad sube a la que indica la <i>Tabla de priorización SSMSO 2025, Hospital Dra. Eloísa Díaz</i> (págs. 84–111) para ese diagnóstico descompensado. El sistema nunca baja una prioridad por sí solo.</li>
-          <li><b>Descompensación grave: requiere evaluación.</b> Evento grave sin estabilización posterior en un diagnóstico cuya fila de la tabla es prioridad alta. Va primero dentro de su prioridad y pide evaluación médica dentro de 72 h (KPI del hospital). El sistema no declara "riesgo vital": eso lo decide el médico. La alerta se cierra con una decisión clínica registrada, una cita o una derivación; si pasan más de 72 h, queda "atrasada".</li>
-          <li><b>Orden dentro de cada prioridad</b> (MINSAL, Ord. 536 del 21-03-2025): criterio médico, grupos de especial protección, antigüedad en lista mayor a 1 año y fecha de ingreso. El <b>puntaje LACE</b> es experimental: solo desempata a pacientes con la misma prioridad y antigüedad.</li>
+          <li><b>Prioridad (alta, media, baja).</b> Se parte de la prioridad asignada por el especialista al revisar la interconsulta. Si después el paciente presenta una descompensación (urgencia, hospitalización o evento grave) que no estaba en la interconsulta, la prioridad sube a la que indica la <i>Tabla de priorización SSMSO 2025, Hospital Dra. Eloísa Díaz</i> (págs. 84–111) para ese diagnóstico descompensado. Si llega un <b>cáncer confirmado o sospechoso</b>, sube a alta (todas las filas de cáncer activo de la tabla del HLF son alta). La lista se mueve sola: el sistema sube automáticamente, pero <b>nunca baja una prioridad por sí solo</b>; bajar lo decide el equipo clínico.</li>
+          <li><b>Descompensación grave: requiere evaluación.</b> Evento grave sin estabilización posterior en un diagnóstico cuya fila de la tabla es prioridad alta. Va primero dentro de su prioridad y pide evaluación médica dentro de 72 h (KPI del hospital). El sistema no declara "riesgo vital": eso lo decide el médico. La alerta se cierra cuando el especialista revisa: una decisión clínica registrada, confirmar o ajustar la prioridad, o un ajuste manual de la posición (llamar o citar no la cierran); si pasan más de 72 h, queda "atrasada".</li>
+          <li><b>Orden dentro de cada prioridad</b> (MINSAL, Ord. 536 del 21-03-2025): criterio médico (descompensación grave primero), grupos de especial protección (PRAIS, NNA bajo protección del Estado, Valech, Rettig), antigüedad en lista mayor a 1 año y fecha de ingreso. {ia
+            ? <>No se usa ningún puntaje adicional: <b>sin LACE</b>, solo la cascada oficial.</>
+            : <>El <b>puntaje LACE</b> es experimental: solo desempata a pacientes con la misma prioridad y antigüedad.</>}</li>
           <li><b>Observaciones</b> que no cambian el orden: posible incumplimiento GES (a verificar, porque el plazo corre desde un hito que el registro no trae); 2 inasistencias consecutivas (posible causal de egreso 8); última medición fuera de rango.</li>
           <li><b>Egreso por fallecimiento</b> (causal 9, Manual de Gestión de la Demanda SSMSO).</li>
         </ol>
@@ -2348,10 +2374,29 @@ function Criterios() {
           <tbody>{filas.map(([c, f, pr, pg]) => <tr key={c} className="border-b border-outline-variant/50"><td className="py-1 font-semibold">{c}</td><td>{f}</td><td>{pr}</td><td>{pg}</td></tr>)}</tbody>
         </table>
         <p className="text-[13px] text-on-surface-variant mt-2">I10, K21, F32, F41, G43, E66, M17, M54 y M75 no tienen fila de "descompensado" en la tabla del HLF: mantienen su prioridad y el evento queda visible para revisión clínica.</p>
+        <p className="text-[13px] font-semibold mt-3">Cáncer (informes, biopsias, epicrisis)</p>
+        <table className="w-full text-[14px]">
+          <tbody>
+            {[["Broncopulmonar", "Cáncer de pulmón sospechoso", "Alta", "95"], ["Traumatología", "Osteosarcoma / tumores musculoesqueléticos", "Alta", "111"],
+              ["Otras especialidades", "Toda fila de cáncer activo o sospechoso es alta (equivalencia a validar)", "Alta", "88, 94, 95, 111"],
+              ["Cualquiera", "Antecedente de neoplasia en remisión", "Baja (no sube)", "102"]].map(([e, f, pr, pg]) => (
+              <tr key={e + f} className="border-b border-outline-variant/50"><td className="py-1 font-semibold">{e}</td><td>{f}</td><td>{pr}</td><td>{pg}</td></tr>))}
+          </tbody>
+        </table>
         <p className="text-[13px] text-ambar mt-1"><b>Equivalencias a validar con los especialistas:</b> K70 (enfermedad hepática alcohólica) se asimila a la fila de cirrosis; I20 incluye toda angina, la fila es solo angina inestable; G40 usa la fila "crisis mensuales" porque no hay fila de epilepsia descompensada.</p>
         <p className="text-[13px] mt-1">Fuente: <a className="text-primary underline" target="_blank" rel="noreferrer" href="https://redsalud.ssmso.cl/wp-content/uploads/2025/07/PRIORIZACION-SSMSO-02.07.2025-I-ETAPA.pdf">Priorización SSMSO 2025 (PDF)</a></p>
       </Caja>
-      <Caja titulo="Puntaje LACE (experimental, solo desempate)">
+      {ia && <Caja titulo="Algoritmo con IA: la IA lee, el código decide">
+        <ol className="list-decimal pl-5 space-y-2">
+          <li><b>Lectura.</b> Un modelo de IA (Claude, en Amazon Bedrock) lee el historial del paciente <b>3 veces</b> y responde preguntas cerradas (¿hubo descompensación?, ¿se estabilizó después?, ¿empeora su medición clave?, ¿cambió el tratamiento por mal control?), citando cada registro. La IA no asigna prioridades.</li>
+          <li><b>Verificación.</b> El código comprueba en el registro cada cita: que exista, que sea de verdad una descompensación, que la estabilización sea posterior y que la medición realmente empeore (con los valores registrados, no los que escribe la IA).</li>
+          <li><b>Fórmula fija.</b> Con lo verificado, la prioridad sale de la tabla del HLF. Un evento sigue vigente durante su ventana con evidencia publicada (PubMed); sin evidencia, no vence.</li>
+          <li><b>Controles.</b> Si una cita no existe o no respalda lo dicho, las 3 lecturas no coinciden, el resultado bajaría a alguien o le quitaría la alerta de descompensación grave, difiere en más de un nivel de las reglas, hay un dato desconocido o la IA falla, el paciente <b>no se mueve solo</b>: conserva su prioridad y queda para revisión del especialista.</li>
+          <li><b>Cuándo.</b> Al llegar un evento o un informe, el paciente se reevalúa en segundos (KPI: menos de 72 h). Un barrido nocturno revisa al resto.</li>
+        </ol>
+        <p className="text-[13px] text-on-surface-variant mt-2">Probado con 409 pacientes y 2.454 lecturas reales: 0 lecturas fallidas, nadie baja sin una persona. Cuando la IA decidía sola, concordaba con la tabla oficial apenas κ 0,09; por eso decide la fórmula.</p>
+      </Caja>}
+      {!ia && <Caja titulo="Puntaje LACE (experimental, solo desempate)">
         <p className="mb-2">Índice validado para riesgo de muerte o reingreso no planificado tras un alta hospitalaria (<a className="text-primary underline" target="_blank" rel="noreferrer" href="https://pmc.ncbi.nlm.nih.gov/articles/PMC2845681/">van Walraven et al., <i>CMAJ</i> 2010;182(6):551-7</a>). Estadístico C 0,68–0,71 en Ontario. <b>No está validado para listas de espera</b>: por eso aquí solo desempata.</p>
         <table className="w-full text-[14px]">
           <tbody className="divide-y divide-outline-variant/60">
@@ -2362,13 +2407,15 @@ function Criterios() {
           </tbody>
         </table>
         <p className="text-[13px] text-on-surface-variant mt-2">Validación en este registro (datos sintéticos): a más puntos, más eventos en los 90 días siguientes (LACE 0: 11% · 2: 14% · 3: 17%), con discriminación baja (AUC 0,54). Debe recalibrarse con datos reales del HLF.</p>
-      </Caja>
+      </Caja>}
       <Caja titulo="Garantías GES · atención por especialista">
         <p>Depresión (N°34): 30 días · Hipertensión (N°21): 45 · EPOC (N°38): 45 · Diabetes tipo 2 (N°7): 60 · Asma (N°61): 60 · Epilepsia (N°60): 60 · Artrosis de rodilla, 55 años o más (N°41): 120.</p>
         <p className="text-[13px] text-on-surface-variant mt-1">El plazo corre desde la derivación con sospecha o confirmación diagnóstica; el registro solo trae el ingreso a la lista, así que la herramienta marca "posible incumplimiento: verificar". Fuente: <a className="text-primary underline" target="_blank" rel="noreferrer" href="https://auge.minsal.cl">auge.minsal.cl</a></p>
       </Caja>
       <Caja titulo="Lectura automática de informes">
-        <p>Las fotos de informes se leen con Amazon Textract (OCR). Reglas con detección de negaciones buscan urgencias, hospitalizaciones, exámenes alterados y cambios de fármaco, y cada propuesta se valida con Pydantic, citando la frase exacta del documento. Se verifica que el documento sea del paciente. Ninguna prioridad cambia sin confirmación del equipo clínico. No se hacen predicciones: las alertas se basan en eventos ya registrados.</p>
+        {ia
+          ? <p>Las fotos se leen con Amazon Textract (OCR). La IA lee el informe 3 veces y lista los hallazgos (cáncer confirmado o sospechoso, hospitalización, UCI, descompensación, examen alterado, cambio de tratamiento) <b>copiando la frase del documento</b>. El código verifica que la frase esté en el texto; lo que aparece en las 3 lecturas y no puede bajar a nadie <b>se registra solo y la lista se recalcula</b>. Si hay una negación cerca ("se descarta neoplasia"), si las lecturas no coinciden, si el documento podría ser de otro paciente o si el hallazgo podría bajar una prioridad (estabilización), lo confirma el equipo clínico. Un cáncer en remisión no sube (tabla pág. 102).</p>
+          : <p>Las fotos de informes se leen con Amazon Textract (OCR). Reglas con detección de negaciones buscan urgencias, hospitalizaciones, exámenes alterados y cambios de fármaco, y cada propuesta se valida con Pydantic, citando la frase exacta del documento. Se verifica que el documento sea del paciente. Ninguna prioridad cambia sin confirmación del equipo clínico. No se hacen predicciones: las alertas se basan en eventos ya registrados.</p>}
       </Caja>
       <Caja titulo="Datos de esta demostración">
         <p>Registro sintético entregado por el hospital: 500 pacientes, 7 especialidades, eventos hasta el 13-10-2026. No contiene pacientes reales. La versión publicada trabaja con la fecha de hoy en Chile; el modo demostración permite ver la lista en fechas anteriores.</p>

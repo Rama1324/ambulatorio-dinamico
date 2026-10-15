@@ -45,6 +45,15 @@ EQUIVALENCIA_A_VALIDAR = {
     "I20": "I20 incluye toda angina de pecho; la fila oficial es solo angina inestable",
     "G40": "la tabla no tiene fila 'epilepsia descompensada'; se usa 'crisis mensuales'",
 }
+# Cáncer activo o sospechoso. En la sección del HLF de la tabla SSMSO 2025 TODA fila de cáncer activo o sospechoso es
+# ALTA (verificado en imagen: págs. 88, 94, 95 y 111); "antecedente de neoplasia en remisión" es BAJA (pág. 102) y no sube.
+# Especialidades con fila propia → esa fila; las demás usan el patrón de la tabla (equivalencia a validar).
+FILA_ONCOLOGICA = {
+    "Broncopulmonar": ("Cáncer de pulmón sospechoso", "alta", 95),
+    "Traumatología": ("Osteosarcoma / tumores musculoesqueléticos", "alta", 111),
+}
+PATRON_ONCOLOGICO = ("toda fila de cáncer activo o sospechoso de la tabla del HLF es prioridad alta (págs. 88, 94, 95, 111)",
+                     "alta", "88, 94, 95, 111")
 DIAS_EVALUACION = 3  # KPI del hospital: reevaluación clínica < 72 h tras un evento
 
 # Garantía GES de oportunidad: atención por especialista (días). auge.minsal.cl/problemasdesalud/index/<N°>
@@ -130,8 +139,27 @@ def d(s): return date.fromisoformat(s)
 
 def descompensa(ev):
     """Evento que el propio dataset etiqueta como descompensación o severidad grave
-    (urgencia ESI 2, descompensación, hospitalización, UCI)."""
+    (urgencia ESI 2, descompensación, hospitalización, UCI). Un hallazgo oncológico no es una descompensación."""
+    if ev.get("tipo_evento") == "hallazgo_oncologico":
+        return False
     return ev.get("severidad") == "grave" or "descompensaci" in (ev.get("subtipo") or "").lower()
+
+
+def regla_oncologica(eventos, especialidad):
+    """Último hallazgo oncológico (cáncer confirmado o sospecha) y la fila de la tabla que lo respalda."""
+    onco = [e for e in eventos if e.get("tipo_evento") == "hallazgo_oncologico"]
+    if not onco:
+        return None
+    fila = FILA_ONCOLOGICA.get(especialidad)
+    return {"evento": onco[-1], "fila": fila or PATRON_ONCOLOGICO, "a_validar": fila is None}
+
+
+def razon_oncologica(o):
+    e, (texto, prioridad, pag) = o["evento"], o["fila"]
+    cita = (e.get("detalle") or "").replace("Informe (leído por IA): ", "")
+    return {"factor": "oncologico", "valor": f'{e["subtipo"]} ({e["fecha_evento"]}){": " + cita if cita else ""} → prioridad {prioridad}' +
+            (" · equivalencia a validar: la especialidad no tiene fila oncológica propia" if o["a_validar"] else ""),
+            "fuente": f'{FUENTE_TABLA}, pág. {pag}: "{texto}"'}
 
 
 def estabiliza(ev):
@@ -224,6 +252,10 @@ def puntuar(perfil, corte):
             razones.append({"factor": "tabla_oficial", "valor": "la tabla del HLF no tiene fila para este diagnóstico descompensado: "
                                                                 "se mantiene la prioridad y se sugiere revisión clínica",
                             "fuente": FUENTE_TABLA})
+    onco = regla_oncologica(eventos, le["especialidad"])
+    if onco:
+        categoria = categoria if ORDEN_CAT[categoria] >= ORDEN_CAT[onco["fila"][1]] else onco["fila"][1]
+        razones.append(razon_oncologica(onco))
     if riesgo_vital:
         razones.insert(0, {"factor": "riesgo_vital",
                            "valor": f'Descompensación grave ({fila[0]}) sin registro posterior de estabilización: su prioridad '
@@ -270,6 +302,9 @@ def puntuar(perfil, corte):
     if estado == "descompensado" and fila:
         senales.append({"motivo": "descompensación (prioridad ajustada por tabla HLF)", "fecha": ult_desc["fecha_evento"],
                         "registrado": ult_desc.get("registrado")})
+    if onco:
+        senales.append({"motivo": f'hallazgo oncológico: {onco["evento"]["subtipo"]} (prioridad alta por tabla HLF)',
+                        "fecha": onco["evento"]["fecha_evento"], "registrado": onco["evento"].get("registrado")})
 
     grupo = pac.get("grupo_proteccion") if pac.get("grupo_proteccion") in GRUPOS_PROTECCION else None
     if grupo:

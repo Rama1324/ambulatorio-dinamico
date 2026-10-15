@@ -306,6 +306,15 @@ GES como "verificar"; LACE experimental; equivalencias "a validar"; indicadores 
   paciente **no se mueve solo**: queda con las reglas y para revisión humana. El código verifica cada cita en el registro
   (el LLM no decide qué es una descompensación). La lectura se guarda y la fórmula se reaplica a cada fecha de corte.
 - **Revisión adversaria:** `docs/algoritmo/REVISION_ADVERSARIA.md` (11 hallazgos, todos corregidos con test).
+- **Lector de informes con IA** (`lambda/lector_documento.py`, solo con `ALGORITMO=rubrica`): Claude lee el informe 3 veces
+  y lista hallazgos de una lista cerrada (cáncer confirmado/sospecha/antecedente, UCI, hospitalización, descompensación,
+  examen alterado, aumento de tratamiento, estabilización) copiando la frase. El código verifica la frase en el texto;
+  lo estable y que no puede bajar a nadie **se registra solo** y la lista se recalcula. Negaciones cerca, lecturas que no
+  coinciden, documento de otro paciente o estabilización → lo confirma una persona. ~2 s y ~USD 0,013 por informe.
+- **Regla oncológica** (`puntaje.regla_oncologica`, ambos modos): evento `hallazgo_oncologico` → prioridad alta. Tabla del
+  HLF verificada en imagen: toda fila de cáncer activo o sospechoso es ALTA (págs. 88, 94, 95, 111); fila propia en
+  Broncopulmonar (pág. 95) y Traumatología (pág. 111); el resto es equivalencia a validar. "Antecedente de neoplasia en
+  remisión" es BAJA (pág. 102): no sube. No activa la alerta de descompensación grave (no es una descompensación).
 - **Interruptor:** `ALGORITMO=reglas` (por defecto; la API responde idéntico a `main`) o `rubrica`.
 - **Archivos:** `lambda/rubrica.py`, `decisor.py`, `controles.py`, `algoritmo.py`, `lambda/conocimiento/*.json`
   (tabla verificada página por página, PMID verificados en NCBI, umbrales de guías, 17 pendientes para médicos).

@@ -43,7 +43,7 @@ def hoy():
         return (datetime.now(timezone.utc) - timedelta(hours=3)).date()
 
 
-TIPOS_EVENTO = {"cambio_farmaco", "control_aps", "examen_alterado", "hospitalizacion", "visita_urgencia"}
+TIPOS_EVENTO = {"cambio_farmaco", "control_aps", "examen_alterado", "hospitalizacion", "visita_urgencia", "hallazgo_oncologico"}
 # Contacto = lo que hace quien llama (enfermería/administrativo). No es una decisión clínica.
 RESULTADOS_CONTACTO = {
     "citado": "Contactado: citado (sobrecupo o cupo liberado)",
@@ -505,10 +505,10 @@ def _aplicar_rubrica(activos, perfs, corte, evs=None):
             # y notas se muestran, pero no anulan una decisión humana (si no, una falla de Bedrock bajaría a alguien).
             extra = [{"motivo": f"algoritmo: sube a {e['categoria_final']} por la rúbrica", "fecha": e["fecha_corte"], "registrado": e["fecha"],
                       "algoritmo": True}] if e["movido_por_rubrica"] else []
-            extra += [{"motivo": f"algoritmo: {m['motivo']} — {m['detalle']}", "fecha": e["fecha_corte"], "registrado": e["fecha"],
-                       "algoritmo": True, "informativa": True} for m in e["controles"]]
-            extra += [{"motivo": f"rúbrica: {x['motivo']} — {x['detalle']}", "fecha": e["fecha_corte"], "registrado": e["fecha"],
-                       "algoritmo": True, "informativa": True} for x in e.get("revision_sugerida", [])]
+            # el detalle de los controles está en la ficha (Fundamento → "Cómo se calculó"); aquí basta un aviso corto
+            if e["requiere_revision"]:
+                extra.append({"motivo": "algoritmo: no se movió solo, requiere revisión (ver Fundamento)", "fecha": e["fecha_corte"],
+                              "registrado": e["fecha"], "algoritmo": True, "informativa": True})
             r["senales"] = list(r.get("senales", [])) + extra
         else:
             r = {**r, "algoritmo": "reglas (sin evaluación vigente)", "controles": [], "rubrica": None}
@@ -1140,7 +1140,11 @@ def post_informe(pid, body):
         return 200, {"id_paciente": pid, "eventos": [], "evento": None,
                      "mensaje": "No se pudo leer la foto con Amazon Textract (OCR). Verifique la conexión a AWS o "
                                 "escriba el texto del informe."}
-    eventos, descartados, avisos = informe.analizar(lectura, corte)
+    if algoritmo_activo() == "rubrica":  # lo lee la IA (_informe_con_ia); aquí solo la legibilidad de la foto
+        eventos, descartados, avisos = [], [], [] if lectura.legible else [
+            f"Foto poco legible (confianza media {lectura.confianza_media}%): repita la foto con buena luz y el documento completo."]
+    else:
+        eventos, descartados, avisos = informe.analizar(lectura, corte)
 
     # Identidad: el error más grave sería registrar el evento en otro paciente
     pac = perfs[pid]["paciente"]
@@ -1151,6 +1155,10 @@ def post_informe(pid, body):
         avisos.insert(0, f"¡Atención! El documento menciona a otro paciente ({', '.join(o.upper() for o in otros)}). No lo registre aquí.")
     elif lectura.origen == "foto" and not menciona:
         avisos.insert(0, f"El documento no menciona a {pac['nombre_fantasia']} ni su ID: confirme que corresponde a este paciente.")
+
+    if algoritmo_activo() == "rubrica":  # la IA lee el documento y lo verificado se registra solo
+        dudoso = bool(otros) or (lectura.origen == "foto" and (not menciona or not lectura.legible))
+        return 200, _informe_con_ia(pid, lectura, corte, perfs, avisos, dudoso, menciona, body)
 
     antes = puntaje.puntuar(perfs[pid], corte)
     propuestas = []
@@ -1174,6 +1182,65 @@ def post_informe(pid, body):
         out["mensaje"] = ("No encontré en el informe un evento del registro (urgencia, hospitalización, examen alterado, "
                           "cambio de fármaco o control APS). Puede registrarlo manualmente.")
     return 200, out
+
+
+def _vista_previa(perfil, e, corte):
+    """Categoría que tendría el paciente si se registra el evento (para que el equipo confirme sabiendo el efecto)."""
+    sim = copy.deepcopy(perfil)
+    sim.setdefault("eventos_clinicos", []).append({**e, "id_evento": "EV-PREVIEW"})
+    r = puntaje.puntuar(sim, corte)
+    return {"categoria_propuesta": r and r.get("categoria"),
+            "razones_propuestas": r and [x for x in r["razones"] if x["factor"] in ("tabla_oficial", "oncologico")]}
+
+
+def _informe_con_ia(pid, lectura, corte, perfs, avisos, dudoso, menciona, body):
+    """Claude lee el documento 3 veces (lector_documento). Lo verificado, estable y que no puede bajar a nadie se registra
+    solo y la lista se recalcula; lo demás queda como propuesta para que el equipo confirme."""
+    import lector_documento
+    t0 = time.perf_counter()
+    r = lector_documento.leer_documento(lectura.texto, cliente_llm())
+    aceptados = r["aceptados"]
+    if dudoso and aceptados:  # identidad o legibilidad en duda: nada se registra solo
+        r["propuestos"] = [{**h, "motivo": "no se pudo confirmar que el documento sea de este paciente o es poco legible"} for h in aceptados] + r["propuestos"]
+        aceptados = []
+    existentes = {(e["fecha_evento"], e["tipo_evento"], e["subtipo"]) for e in perfs[pid].get("eventos_clinicos", [])}
+    registrados, pos_antes, fila = [], None, None
+    if aceptados:
+        pos_antes = next((p["posicion"] for p in lista(corte)["pacientes"] if p["id_paciente"] == pid), None)
+        ahora = datetime.now(timezone.utc).isoformat(timespec="microseconds")
+        for h in aceptados:
+            ev = lector_documento.evento_registrable(h, corte)
+            if (ev["fecha_evento"], ev["tipo_evento"], ev["subtipo"]) in existentes:
+                continue
+            ev.update(id_evento="EV-DOC-" + uuid.uuid4().hex[:6].upper(), registrado=ahora, usuario=body.get("usuario", "equipo clínico"))
+            guardar({"id_paciente": pid, "sk": f"evento#{ev['fecha_evento']}#{ev['id_evento']}", "evento": json.dumps(ev, ensure_ascii=False)})
+            registrados.append(ev)
+            existentes.add((ev["fecha_evento"], ev["tipo_evento"], ev["subtipo"]))
+        if registrados:
+            evaluar_y_guardar(pid, corte)
+            fila = next((p for p in lista(corte)["pacientes"] if p["id_paciente"] == pid), None)
+    perfil = perfiles_combinados()[0][pid]
+    propuestas = []
+    for h in r["propuestos"]:
+        e = {"tipo_evento": h["tipo_evento"], "subtipo": h["subtipo"], "severidad": h["severidad"],
+             "fecha_evento": h["fecha"] if h["fecha"] and h["fecha"] <= corte.isoformat() else corte.isoformat(),
+             "fecha_en_documento": h["fecha_en_documento"], "evidencia": h["cita"], "detectado_por": "ia", "motivo": h["motivo"]}
+        propuestas.append({**e, **_vista_previa(perfil, e, corte)})
+    out = {"id_paciente": pid, "modo": "ia", "lectura": lectura.resumen(),
+           "transcripcion": lectura.texto if lectura.origen == "foto" else None,
+           "registrados": registrados, "posicion_antes": pos_antes, "posicion_despues": fila and fila["posicion"],
+           "paciente": fila, "categoria_actual": (fila or {}).get("categoria") or (puntaje.puntuar(perfil, corte) or {}).get("categoria"),
+           "eventos": propuestas, "evento": propuestas[0] if propuestas else None,
+           "descartados": [{"subtipo": d["tipo"], "motivo": d["motivo"], "cita": d["cita"]} for d in r["descartados"]],
+           "informativos": r["informativos"], "advertencias": avisos, "identidad_en_documento": menciona,
+           "otro_paciente": any("otro paciente" in a for a in avisos), "fuente": "ia",
+           "ia": {k: r[k] for k in ("version", "lecturas", "errores", "tokens_entrada", "tokens_salida")},
+           "segundos": round(time.perf_counter() - t0, 1)}
+    if not registrados and not propuestas:
+        out["mensaje"] = ("La IA no encontró en el informe un hallazgo que cambie la prioridad (cáncer, hospitalización, "
+                          "descompensación, examen alterado o cambio de tratamiento)." +
+                          (" Hubo un error al leerlo: " + r["errores"][0] if r["errores"] else ""))
+    return out
 
 
 def post_explicar(pid, corte):
