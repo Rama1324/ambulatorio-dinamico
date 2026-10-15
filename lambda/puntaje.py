@@ -335,9 +335,10 @@ def puntuar(perfil, corte):
 
 
 def clave_orden(r, categoria=None):
-    """MINSAL Ord. 536/2025: criterio médico (categoría y descompensación grave) → grupos de especial protección
-    → antigüedad > 1 año → LACE (componente experimental, solo desempata) → orden de llegada."""
-    return (-ORDEN_CAT[categoria or r["categoria"]], not r["riesgo_vital"], not r.get("grupo_proteccion"),
+    """MINSAL Ord. 536/2025: criterio médico (categoría, descompensación grave y cualquier descompensación vigente)
+    → grupos de especial protección → antigüedad > 1 año → LACE (componente experimental, solo desempata) → orden de llegada.
+    El criterio médico va antes que el grupo de protección: un descompensado no queda bajo uno estable de la misma prioridad."""
+    return (-ORDEN_CAT[categoria or r["categoria"]], not r["riesgo_vital"], r.get("estado_clinico") != "descompensado", not r.get("grupo_proteccion"),
             not r["antiguedad_mayor_1_anio"], -r["lace"]["total"], -r["dias_espera"], r["id_paciente"])
 
 

@@ -431,3 +431,16 @@ def test_r11_cada_fecha_de_corte_usa_su_evaluacion_vigente():
     finally:
         os.environ.pop("ALGORITMO", None)
         app._llm["cliente"] = None
+
+
+def test_descompensado_va_antes_que_grupo_de_proteccion_estable():
+    """Reclamo del HLF: una paciente Rettig recién ingresada (alta, estable) quedó sobre Iris 435 (alta, hospitalización
+    grave, HTA sin fila en la tabla). El criterio médico del Ord. 536 va antes que el grupo de protección."""
+    iris = {"id_paciente": "IRIS", "categoria": "alta", "riesgo_vital": False, "estado_clinico": "descompensado", "grupo_proteccion": None,
+            "dias_espera": 177, "antiguedad_mayor_1_anio": False, "lace": {"total": 4}}
+    maria = {"id_paciente": "MARIA", "categoria": "alta", "riesgo_vital": False, "estado_clinico": "sin_cambios", "grupo_proteccion": "Rettig",
+             "dias_espera": 0, "antiguedad_mayor_1_anio": False, "lace": {"total": 0}}
+    for clave in (decisor.clave_orden_536, puntaje.clave_orden):
+        assert [x["id_paciente"] for x in sorted([maria, iris], key=clave)] == ["IRIS", "MARIA"]
+    grave = {**iris, "id_paciente": "GRAVE", "riesgo_vital": True}
+    assert sorted([iris, grave], key=decisor.clave_orden_536)[0]["id_paciente"] == "GRAVE"   # la alerta de 72 h sigue primero

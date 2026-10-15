@@ -215,7 +215,8 @@ def decidir(perfil, resp, corte, kb):
 
 
 def clave_orden_536(r):
-    """Ord. MINSAL 536/2025: criterio médico (categoría y descompensación grave) → grupo de especial protección →
-    antigüedad > 1 año → orden de llegada. Sin LACE."""
-    return (-ORDEN_CAT[r["categoria"]], not r.get("riesgo_vital"), not r.get("grupo_proteccion"),
+    """Ord. MINSAL 536/2025: criterio médico (categoría, descompensación grave y cualquier descompensación vigente) →
+    grupo de especial protección → antigüedad > 1 año → orden de llegada. Sin LACE. El criterio médico va antes que el
+    grupo de protección: un paciente descompensado no puede quedar bajo uno estable de la misma prioridad."""
+    return (-ORDEN_CAT[r["categoria"]], not r.get("riesgo_vital"), r.get("estado_clinico") != "descompensado", not r.get("grupo_proteccion"),
             not (r["dias_espera"] > DIAS_ANTIGUEDAD), -r["dias_espera"], r["id_paciente"])
