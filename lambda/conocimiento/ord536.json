@@ -1,0 +1,17 @@
+{
+  "version": "ord536_v1",
+  "fuente": {
+    "tipo": "normativa_minsal",
+    "ref": "MINSAL Ord. C N°536 (21-03-2025), criterios de orden de la lista de espera, recogido en el Manual de Gestión de la Demanda SSMSO 2025 (RE 2679), pág. 13",
+    "consultado": "2026-10-15",
+    "estado": "fuente_secundaria",
+    "pendiente": "Obtener el texto original del Ord. 536 para citar el numeral exacto."
+  },
+  "cascada": [
+    {"orden": 1, "criterio": "criterio_medico", "detalle": "Prioridad clínica (alta > media > baja) y, dentro de ella, descompensación grave vigente primero", "numeral": "criterio 1 (criterio médico)"},
+    {"orden": 2, "criterio": "grupo_especial_proteccion", "detalle": "PRAIS, NNA bajo protección del Estado, Valech, Rettig", "numeral": "criterio 2"},
+    {"orden": 3, "criterio": "antiguedad_mayor_1_anio", "detalle": "Más de 365 días en la lista", "numeral": "criterio 3"},
+    {"orden": 4, "criterio": "orden_de_llegada", "detalle": "Fecha de ingreso a la lista (más días esperando, antes)", "numeral": "orden de llegada"}
+  ],
+  "nota": "El algoritmo con rúbrica NO usa LACE: LACE está validado para reingreso o muerte tras un alta hospitalaria, no para listas de espera ambulatorias (van Walraven 2010)."
+}

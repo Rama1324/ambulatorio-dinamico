@@ -1,0 +1,475 @@
+{
+ "version": "rubrica_v1",
+ "generado": "2026-10-15",
+ "fuentes": {
+  "ssmso": "Tabla SSMSO 2025, HLF",
+  "ssmso_ref": {
+   "tipo": "tabla_ssmso",
+   "ref": "SSMSO (2025). Priorización diagnósticos especialidades médicas y odontológicas No GES, código PA–DPGCH, versión 1.0, junio 2025. §11.1 Hospital Dra. Eloísa Díaz Inzunza, págs. 84–111",
+   "url": "https://redsalud.ssmso.cl/wp-content/uploads/2025/07/PRIORIZACION-SSMSO-02.07.2025-I-ETAPA.pdf",
+   "consultado": "2026-10-15",
+   "metodo": "PDF oficial descargado y convertido a texto; cada fila se verificó a mano en el texto de su página. En el texto extraído la etiqueta ALTA/MEDIANA/BAJA queda después del primer diagnóstico de su grupo; los grupos se reconstruyeron con esa regla y se revisaron uno por uno."
+  },
+  "ord536": {
+   "tipo": "normativa_minsal",
+   "ref": "MINSAL Ord. C N°536 (21-03-2025), criterios de orden de la lista de espera, recogido en el Manual de Gestión de la Demanda SSMSO 2025 (RE 2679), pág. 13",
+   "consultado": "2026-10-15",
+   "estado": "fuente_secundaria",
+   "pendiente": "Obtener el texto original del Ord. 536 para citar el numeral exacto."
+  }
+ },
+ "cascada_orden": [
+  {
+   "orden": 1,
+   "criterio": "criterio_medico",
+   "detalle": "Prioridad clínica (alta > media > baja) y, dentro de ella, descompensación grave vigente primero",
+   "numeral": "criterio 1 (criterio médico)"
+  },
+  {
+   "orden": 2,
+   "criterio": "grupo_especial_proteccion",
+   "detalle": "PRAIS, NNA bajo protección del Estado, Valech, Rettig",
+   "numeral": "criterio 2"
+  },
+  {
+   "orden": 3,
+   "criterio": "antiguedad_mayor_1_anio",
+   "detalle": "Más de 365 días en la lista",
+   "numeral": "criterio 3"
+  },
+  {
+   "orden": 4,
+   "criterio": "orden_de_llegada",
+   "detalle": "Fecha de ingreso a la lista (más días esperando, antes)",
+   "numeral": "orden de llegada"
+  }
+ ],
+ "diagnosticos": {
+  "I50": {
+   "texto": "Insuficiencia cardíaca",
+   "fila_descompensado": {
+    "texto_pdf": "INSUFICIENCIA CARDÍACA DESCOMPENSADA",
+    "prioridad": "alta",
+    "pagina": 85,
+    "especialidad_pdf": "CARDIOLOGÍA ADULTO"
+   },
+   "estado": "con_fuente",
+   "equivalencia": null,
+   "detalle": null,
+   "candidata": null,
+   "ventana": {
+    "valor": null,
+    "estado": "a_validar_por_medico",
+    "fuente": "sin fuente: el evento grave sigue vigente hasta una estabilización (conservador)"
+   },
+   "medicion_clave": null
+  },
+  "I20": {
+   "texto": "Angina de pecho",
+   "fila_descompensado": {
+    "texto_pdf": "ANGINA INESTABLE",
+    "prioridad": "alta",
+    "pagina": 85,
+    "especialidad_pdf": "CARDIOLOGÍA ADULTO"
+   },
+   "estado": "con_fuente",
+   "equivalencia": {
+    "estado": "a_validar_por_medico",
+    "detalle": "I20 incluye toda angina de pecho; la fila oficial es solo angina inestable. Se usa como fila 'descompensado' (mismo criterio que las reglas actuales)."
+   },
+   "detalle": null,
+   "candidata": null,
+   "ventana": {
+    "valor": null,
+    "estado": "a_validar_por_medico",
+    "fuente": "sin fuente: el evento grave sigue vigente hasta una estabilización (conservador)"
+   },
+   "medicion_clave": null
+  },
+  "I10": {
+   "texto": "Hipertensión esencial",
+   "fila_descompensado": null,
+   "estado": "a_validar_por_medico",
+   "equivalencia": null,
+   "detalle": "HTA resistente (no controlada con 3 fármacos) no equivale a 'descompensada'. Solo genera revisión.",
+   "candidata": {
+    "texto_pdf": "HIPERTENSIÓN ARTERIAL RESISTENTE",
+    "prioridad": "media",
+    "pagina": 85,
+    "especialidad_pdf": "CARDIOLOGÍA ADULTO"
+   },
+   "ventana": {
+    "valor": null,
+    "estado": "a_validar_por_medico",
+    "fuente": "sin fuente: el evento grave sigue vigente hasta una estabilización (conservador)"
+   },
+   "medicion": {
+    "tipo": "presion_sistolica",
+    "umbral": {
+     "valor": null,
+     "sentido": "mayor_igual",
+     "estado": "a_validar_por_medico",
+     "fuente": "sin fuente"
+    },
+    "sube_a_fila": false,
+    "definida_por": "equipo (a validar por médico)"
+   },
+   "medicion_clave": "presion_sistolica"
+  },
+  "J44": {
+   "texto": "EPOC",
+   "fila_descompensado": {
+    "texto_pdf": "EPOC GRAVE NO CONTROLADO",
+    "prioridad": "alta",
+    "pagina": 95,
+    "especialidad_pdf": "ENFERMEDAD RESPIRATORIA DE ADULTO"
+   },
+   "estado": "con_fuente",
+   "equivalencia": null,
+   "detalle": null,
+   "candidata": null,
+   "ventana": {
+    "valor": null,
+    "estado": "a_validar_por_medico",
+    "fuente": "sin fuente: el evento grave sigue vigente hasta una estabilización (conservador)"
+   },
+   "medicion": {
+    "tipo": "saturacion_o2",
+    "umbral": {
+     "valor": null,
+     "sentido": "menor_igual",
+     "estado": "a_validar_por_medico",
+     "fuente": "sin fuente"
+    },
+    "sube_a_fila": false,
+    "definida_por": "equipo (a validar por médico)"
+   },
+   "medicion_clave": "saturacion_o2"
+  },
+  "J45": {
+   "texto": "Asma",
+   "fila_descompensado": {
+    "texto_pdf": "ASMA GRAVE NO CONTROLADA",
+    "prioridad": "alta",
+    "pagina": 95,
+    "especialidad_pdf": "ENFERMEDAD RESPIRATORIA DE ADULTO"
+   },
+   "estado": "con_fuente",
+   "equivalencia": null,
+   "detalle": null,
+   "candidata": null,
+   "ventana": {
+    "valor": null,
+    "estado": "a_validar_por_medico",
+    "fuente": "sin fuente: el evento grave sigue vigente hasta una estabilización (conservador)"
+   },
+   "medicion": {
+    "tipo": "peak_flow",
+    "umbral": {
+     "valor": null,
+     "sentido": "menor_igual",
+     "estado": "a_validar_por_medico",
+     "fuente": "sin fuente"
+    },
+    "sube_a_fila": false,
+    "definida_por": "equipo (a validar por médico)"
+   },
+   "medicion_clave": "peak_flow"
+  },
+  "K70": {
+   "texto": "Enfermedad hepática alcohólica",
+   "fila_descompensado": {
+    "texto_pdf": "CIRROSIS HEPÁTICA DESCOMPENSADA",
+    "prioridad": "alta",
+    "pagina": 95,
+    "especialidad_pdf": "GASTROENTEROLOGÍA ADULTO"
+   },
+   "estado": "con_fuente",
+   "equivalencia": {
+    "estado": "a_validar_por_medico",
+    "detalle": "K70 es enfermedad hepática alcohólica; se asimila a la fila de cirrosis descompensada."
+   },
+   "detalle": null,
+   "candidata": null,
+   "ventana": {
+    "valor": null,
+    "estado": "a_validar_por_medico",
+    "fuente": "sin fuente: el evento grave sigue vigente hasta una estabilización (conservador)"
+   },
+   "medicion_clave": null
+  },
+  "K21": {
+   "texto": "Reflujo gastroesofágico",
+   "fila_descompensado": null,
+   "estado": "a_validar_por_medico",
+   "equivalencia": null,
+   "detalle": "'Refractaria' no está definida en el registro (¿cuántos cambios de tratamiento?). Solo genera revisión.",
+   "candidata": {
+    "texto_pdf": "ERGE REFRACTARIA",
+    "prioridad": "media",
+    "pagina": 95,
+    "especialidad_pdf": "GASTROENTEROLOGÍA ADULTO"
+   },
+   "ventana": {
+    "valor": null,
+    "estado": "a_validar_por_medico",
+    "fuente": "sin fuente: el evento grave sigue vigente hasta una estabilización (conservador)"
+   },
+   "medicion_clave": null
+  },
+  "E11": {
+   "texto": "Diabetes mellitus tipo 2",
+   "fila_descompensado": {
+    "texto_pdf": "DM2 DESCONTROLADA",
+    "prioridad": "media",
+    "pagina": 101,
+    "especialidad_pdf": "MEDICINA INTERNA"
+   },
+   "estado": "con_fuente",
+   "equivalencia": null,
+   "detalle": null,
+   "candidata": null,
+   "ventana": {
+    "valor": null,
+    "estado": "a_validar_por_medico",
+    "fuente": "sin fuente: el evento grave sigue vigente hasta una estabilización (conservador)"
+   },
+   "medicion": {
+    "tipo": "HbA1c",
+    "umbral": {
+     "valor": null,
+     "sentido": "mayor_igual",
+     "estado": "a_validar_por_medico",
+     "fuente": "sin fuente"
+    },
+    "sube_a_fila": true,
+    "definida_por": "equipo (a validar por médico)"
+   },
+   "fila_por_medicion": {
+    "texto_pdf": "DM2 DESCONTROLADA",
+    "prioridad": "media",
+    "pagina": 101,
+    "especialidad_pdf": "MEDICINA INTERNA"
+   },
+   "medicion_clave": "HbA1c"
+  },
+  "E03": {
+   "texto": "Hipotiroidismo",
+   "fila_descompensado": {
+    "texto_pdf": "HIPOTIROIDISMO SINTOMÁTICO",
+    "prioridad": "media",
+    "pagina": 94,
+    "especialidad_pdf": "ENDOCRINOLOGÍA ADULTO"
+   },
+   "estado": "con_fuente",
+   "equivalencia": null,
+   "detalle": null,
+   "candidata": null,
+   "ventana": {
+    "valor": null,
+    "estado": "a_validar_por_medico",
+    "fuente": "sin fuente: el evento grave sigue vigente hasta una estabilización (conservador)"
+   },
+   "medicion_clave": null
+  },
+  "E66": {
+   "texto": "Obesidad",
+   "fila_descompensado": null,
+   "estado": "sin_fila",
+   "equivalencia": null,
+   "detalle": "La tabla no tiene fila de obesidad descompensada: mantiene su prioridad.",
+   "candidata": null,
+   "ventana": {
+    "valor": null,
+    "estado": "a_validar_por_medico",
+    "fuente": "sin fuente: el evento grave sigue vigente hasta una estabilización (conservador)"
+   },
+   "medicion_clave": null
+  },
+  "G40": {
+   "texto": "Epilepsia",
+   "fila_descompensado": {
+    "texto_pdf": "EPILEPSIA CON CRISIS MENSUALES",
+    "prioridad": "media",
+    "pagina": 103,
+    "especialidad_pdf": "NEUROLOGÍA ADULTO"
+   },
+   "estado": "con_fuente",
+   "equivalencia": {
+    "estado": "a_validar_por_medico",
+    "detalle": "La tabla no tiene fila 'epilepsia descompensada'; se usa 'crisis mensuales' (media). Crisis diarias (alta) no se pueden distinguir en el registro."
+   },
+   "detalle": null,
+   "candidata": null,
+   "ventana": {
+    "valor": null,
+    "estado": "a_validar_por_medico",
+    "fuente": "sin fuente: el evento grave sigue vigente hasta una estabilización (conservador)"
+   },
+   "medicion_clave": null
+  },
+  "G43": {
+   "texto": "Migraña",
+   "fila_descompensado": null,
+   "estado": "a_validar_por_medico",
+   "equivalencia": null,
+   "detalle": "'Crónica refractaria' requiere criterios clínicos que el registro no trae. Solo genera revisión.",
+   "candidata": {
+    "texto_pdf": "MIGRAÑA CRÓNICA REFRACTARIA",
+    "prioridad": "alta",
+    "pagina": 103,
+    "especialidad_pdf": "NEUROLOGÍA ADULTO"
+   },
+   "ventana": {
+    "valor": null,
+    "estado": "a_validar_por_medico",
+    "fuente": "sin fuente: el evento grave sigue vigente hasta una estabilización (conservador)"
+   },
+   "medicion_clave": null
+  },
+  "F32": {
+   "texto": "Episodio depresivo",
+   "fila_descompensado": null,
+   "estado": "a_validar_por_medico",
+   "equivalencia": null,
+   "detalle": "En el texto del PDF la prioridad de 'EPISODIO DEPRESIVO' (pág. 110) no se puede leer con certeza. Pendiente de verificar en el PDF original. Solo genera revisión.",
+   "candidata": {
+    "texto_pdf": "EPISODIO DEPRESIVO",
+    "prioridad": null,
+    "pagina": 110,
+    "especialidad_pdf": "PSIQUIATRÍA ADULTO"
+   },
+   "ventana": {
+    "valor": null,
+    "estado": "a_validar_por_medico",
+    "fuente": "sin fuente: el evento grave sigue vigente hasta una estabilización (conservador)"
+   },
+   "medicion": {
+    "tipo": "PHQ9",
+    "umbral": {
+     "valor": null,
+     "sentido": "mayor_igual",
+     "estado": "a_validar_por_medico",
+     "fuente": "sin fuente"
+    },
+    "sube_a_fila": false,
+    "definida_por": "equipo (a validar por médico)"
+   },
+   "medicion_clave": "PHQ9"
+  },
+  "F41": {
+   "texto": "Trastorno de ansiedad",
+   "fila_descompensado": null,
+   "estado": "sin_fila",
+   "equivalencia": null,
+   "detalle": "No se encontró fila de ansiedad en §11.1.",
+   "candidata": null,
+   "ventana": {
+    "valor": null,
+    "estado": "a_validar_por_medico",
+    "fuente": "sin fuente: el evento grave sigue vigente hasta una estabilización (conservador)"
+   },
+   "medicion_clave": null
+  },
+  "M17": {
+   "texto": "Artrosis de rodilla",
+   "fila_descompensado": null,
+   "estado": "sin_fila",
+   "equivalencia": null,
+   "detalle": "Sin fila de descompensación: mantiene su prioridad.",
+   "candidata": null,
+   "ventana": {
+    "valor": null,
+    "estado": "a_validar_por_medico",
+    "fuente": "sin fuente: el evento grave sigue vigente hasta una estabilización (conservador)"
+   },
+   "medicion": {
+    "tipo": "escala_dolor_eva",
+    "umbral": {
+     "valor": null,
+     "sentido": "mayor_igual",
+     "estado": "a_validar_por_medico",
+     "fuente": "sin fuente"
+    },
+    "sube_a_fila": false,
+    "definida_por": "equipo (a validar por médico)"
+   },
+   "medicion_clave": "escala_dolor_eva"
+  },
+  "M54": {
+   "texto": "Dorsalgia / lumbago",
+   "fila_descompensado": null,
+   "estado": "sin_fila",
+   "equivalencia": null,
+   "detalle": "Sin fila de descompensación: mantiene su prioridad.",
+   "candidata": null,
+   "ventana": {
+    "valor": null,
+    "estado": "a_validar_por_medico",
+    "fuente": "sin fuente: el evento grave sigue vigente hasta una estabilización (conservador)"
+   },
+   "medicion": {
+    "tipo": "escala_dolor_eva",
+    "umbral": {
+     "valor": null,
+     "sentido": "mayor_igual",
+     "estado": "a_validar_por_medico",
+     "fuente": "sin fuente"
+    },
+    "sube_a_fila": false,
+    "definida_por": "equipo (a validar por médico)"
+   },
+   "medicion_clave": "escala_dolor_eva"
+  },
+  "M75": {
+   "texto": "Lesiones del hombro",
+   "fila_descompensado": null,
+   "estado": "sin_fila",
+   "equivalencia": null,
+   "detalle": "Sin fila de descompensación: mantiene su prioridad.",
+   "candidata": null,
+   "ventana": {
+    "valor": null,
+    "estado": "a_validar_por_medico",
+    "fuente": "sin fuente: el evento grave sigue vigente hasta una estabilización (conservador)"
+   },
+   "medicion": {
+    "tipo": "escala_dolor_eva",
+    "umbral": {
+     "valor": null,
+     "sentido": "mayor_igual",
+     "estado": "a_validar_por_medico",
+     "fuente": "sin fuente"
+    },
+    "sube_a_fila": false,
+    "definida_por": "equipo (a validar por médico)"
+   },
+   "medicion_clave": "escala_dolor_eva"
+  }
+ },
+ "pendientes_medicos": [
+  "I50: ¿cuántos días después de una urgencia u hospitalización grave sigue vigente la fila 'descompensado'?",
+  "I20: ¿cuántos días después de una urgencia u hospitalización grave sigue vigente la fila 'descompensado'?",
+  "I20: I20 incluye toda angina de pecho; la fila oficial es solo angina inestable. Se usa como fila 'descompensado' (mismo criterio que las reglas actuales).",
+  "I10: umbral de presion_sistolica que define descompensación",
+  "I10: HTA resistente (no controlada con 3 fármacos) no equivale a 'descompensada'. Solo genera revisión.",
+  "J44: ¿cuántos días después de una urgencia u hospitalización grave sigue vigente la fila 'descompensado'?",
+  "J44: umbral de saturacion_o2 que define descompensación",
+  "J45: ¿cuántos días después de una urgencia u hospitalización grave sigue vigente la fila 'descompensado'?",
+  "J45: umbral de peak_flow que define descompensación",
+  "K70: ¿cuántos días después de una urgencia u hospitalización grave sigue vigente la fila 'descompensado'?",
+  "K70: K70 es enfermedad hepática alcohólica; se asimila a la fila de cirrosis descompensada.",
+  "K21: 'Refractaria' no está definida en el registro (¿cuántos cambios de tratamiento?). Solo genera revisión.",
+  "E11: ¿cuántos días después de una urgencia u hospitalización grave sigue vigente la fila 'descompensado'?",
+  "E11: umbral de HbA1c que define descompensación",
+  "E03: ¿cuántos días después de una urgencia u hospitalización grave sigue vigente la fila 'descompensado'?",
+  "G40: ¿cuántos días después de una urgencia u hospitalización grave sigue vigente la fila 'descompensado'?",
+  "G40: La tabla no tiene fila 'epilepsia descompensada'; se usa 'crisis mensuales' (media). Crisis diarias (alta) no se pueden distinguir en el registro.",
+  "G43: 'Crónica refractaria' requiere criterios clínicos que el registro no trae. Solo genera revisión.",
+  "F32: umbral de PHQ9 que define descompensación",
+  "F32: En el texto del PDF la prioridad de 'EPISODIO DEPRESIVO' (pág. 110) no se puede leer con certeza. Pendiente de verificar en el PDF original. Solo genera revisión.",
+  "M17: umbral de escala_dolor_eva que define descompensación",
+  "M54: umbral de escala_dolor_eva que define descompensación",
+  "M75: umbral de escala_dolor_eva que define descompensación"
+ ]
+}

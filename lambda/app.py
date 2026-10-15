@@ -429,18 +429,100 @@ def _aplicar_ajustes(pacientes, senales, corte):
         p["ajuste_manual"] = a
 
 
+# ---------- algoritmo decisor (rama feat/algoritmo-decisor) ----------
+# ALGORITMO=reglas (por defecto): puntaje.py, sin cambios. ALGORITMO=rubrica: LLM con rúbrica + fórmula fija
+# (lambda/algoritmo.py). Con 'rubrica' se usa la última evaluación VIGENTE de cada paciente (misma firma del historial);
+# sin evaluación vigente el paciente queda con las reglas y se marca.
+_llm = {"cliente": None}
+
+
+def algoritmo_activo():
+    return os.environ.get("ALGORITMO", "reglas")
+
+
+def cliente_llm():
+    if _llm["cliente"] is None:
+        import rubrica
+        _llm["cliente"] = rubrica.ClienteBedrock()
+    return _llm["cliente"]
+
+
+def evaluaciones():
+    return _ultimo_por_paciente("evaluacion#", "evaluacion")
+
+
+def evaluar_y_guardar(pid, corte, perfs=None):
+    import algoritmo
+    perfs = perfs or perfiles_combinados()[0]
+    reg = algoritmo.evaluar_paciente(perfs[pid], corte, cliente_llm())
+    if reg:
+        guardar({"id_paciente": pid, "sk": f"evaluacion#{reg['fecha']}", "evaluacion": json.dumps(reg, ensure_ascii=False, default=str)})
+    return reg
+
+
+def _aplicar_rubrica(activos, perfs, corte):
+    import rubrica
+    evs = evaluaciones()
+    out = []
+    for r in activos:
+        e = evs.get(r["id_paciente"])
+        if e and e["fecha_corte"] <= corte.isoformat() and e["firma"] == rubrica.firma(perfs[r["id_paciente"]], corte):
+            r = {**r, "categoria": e["categoria_final"], "riesgo_vital": e["descompensacion_grave_final"], "razones": e["razones"],
+                 "algoritmo": "rubrica", "controles": e["controles"],
+                 "rubrica": {k: e.get(k) for k in ("fecha", "fecha_corte", "categoria_reglas", "categoria_rubrica", "categorias_corridas",
+                                                   "requiere_revision", "movido_por_rubrica", "revision_sugerida", "version_rubrica",
+                                                   "version_kb", "modelo", "hash_prompt")}}
+            extra = [{"motivo": f"algoritmo: {m['motivo']} — {m['detalle']}", "fecha": e["fecha_corte"], "registrado": e["fecha"]}
+                     for m in e["controles"]]
+            extra += [{"motivo": f"rúbrica: {x['motivo']} — {x['detalle']}", "fecha": e["fecha_corte"], "registrado": e["fecha"]}
+                      for x in e.get("revision_sugerida", [])]
+            r["senales"] = list(r.get("senales", [])) + extra
+        else:
+            r = {**r, "algoritmo": "reglas (sin evaluación vigente)", "controles": [], "rubrica": None}
+        out.append(r)
+    return out
+
+
+def barrido(corte=None, limite=60, en_paralelo=4):
+    """Evalúa a quienes no tienen una evaluación vigente (lo llama EventBridge Scheduler cada noche)."""
+    import rubrica
+    from concurrent.futures import ThreadPoolExecutor
+    corte = corte or hoy()
+    perfs, _ = perfiles_combinados()
+    activos, _ = puntaje.priorizar(list(perfs.values()), corte)
+    evs = evaluaciones()
+    faltan = [r["id_paciente"] for r in activos
+              if not (evs.get(r["id_paciente"]) and evs[r["id_paciente"]]["firma"] == rubrica.firma(perfs[r["id_paciente"]], corte))][:limite]
+    with ThreadPoolExecutor(max_workers=en_paralelo) as ex:
+        regs = list(ex.map(lambda pid: evaluar_y_guardar(pid, corte, perfs), faltan))
+    return {"evaluados": len([x for x in regs if x]), "pendientes_antes": len(faltan), "fecha_corte": corte.isoformat()}
+
+
+def barrido_handler(event, context=None):
+    """Punto de entrada de la función de barrido (EventBridge Scheduler)."""
+    _req["registros"] = None
+    return barrido(limite=int((event or {}).get("limite", 400)), en_paralelo=int((event or {}).get("en_paralelo", 6)))
+
+
 def lista(corte, especialidad=None, perfs=None, revs=None):
     if perfs is None:
         perfs, revs = perfiles_combinados()
     vals = list(perfs.values())
     activos, excluidos = puntaje.priorizar(vals, corte, especialidad)
+    rubrica_activa = algoritmo_activo() == "rubrica"
+    if rubrica_activa:
+        activos = _aplicar_rubrica(activos, perfs, corte)
     ant, _ = puntaje.priorizar(vals, corte - timedelta(days=14), especialidad)
     pos_ant = {r["id_paciente"]: r["posicion"] for r in ant}
     cont, dec, aj = contactos(), decisiones(), ajustes_orden()
     pacientes = [_enriquecer(r, perfs[r["id_paciente"]], revs.get(r["id_paciente"]), pos_ant.get(r["id_paciente"]), corte,
                              cont.get(r["id_paciente"]), dec.get(r["id_paciente"]), aj.get(r["id_paciente"])) for r in activos]
+    if rubrica_activa:  # campos opcionales del algoritmo (solo con ALGORITMO=rubrica)
+        for p, r in zip(pacientes, activos):
+            p.update({k: r.get(k) for k in ("algoritmo", "controles", "rubrica")})
     # el equipo clínico decide: si ajustó la categoría, esa manda en el orden (mismos criterios MINSAL)
-    pacientes.sort(key=puntaje.clave_orden)
+    import decisor
+    pacientes.sort(key=decisor.clave_orden_536 if rubrica_activa else puntaje.clave_orden)
     for i, p in enumerate(pacientes, 1):
         p["posicion_sistema"] = i
     _aplicar_ajustes(pacientes, {r["id_paciente"]: r.get("senales", []) for r in activos}, corte)
@@ -570,11 +652,17 @@ def post_evento(body):
         "usuario": body.get("usuario", "equipo clínico"),
     }
     guardar({"id_paciente": pid, "sk": f"evento#{ev['fecha_evento']}#{ev['id_evento']}", "evento": json.dumps(ev, ensure_ascii=False)})
+    evaluacion = None
+    if algoritmo_activo() == "rubrica":  # el disparador: solo este paciente se reevalúa, en el momento
+        evaluacion = evaluar_y_guardar(pid, corte)
     despues = lista(corte)
     fila = next((p for p in despues["pacientes"] if p["id_paciente"] == pid), None)
     ms = round((time.perf_counter() - t0) * 1000)
-    return 200, {"evento": ev, "paciente": fila, "posicion_antes": pos_antes,
-                 "posicion_despues": fila and fila["posicion"], "reevaluado_en_ms": ms, "lista": despues}
+    out = {"evento": ev, "paciente": fila, "posicion_antes": pos_antes,
+           "posicion_despues": fila and fila["posicion"], "reevaluado_en_ms": ms, "lista": despues}
+    if evaluacion:
+        out["evaluacion"] = evaluacion
+    return 200, out
 
 
 def catalogo():
@@ -1282,6 +1370,17 @@ def handler(event, context=None):
             return _resp(*post_cita(partes[1], body))
         if method == "GET" and partes == ["disponible"]:
             return _resp(*disponible(_fecha(qs), qs.get("especialidad"), qs.get("cupos"), qs.get("desde"), qs.get("hasta")))
+        if method == "POST" and len(partes) == 3 and partes[0] == "pacientes" and partes[2] == "evaluar":
+            if partes[1] not in perfiles_combinados()[0]:
+                return _resp(404, {"error": "paciente no existe"})
+            reg = evaluar_y_guardar(partes[1], _fecha({**qs, **body}))
+            return _resp(200, {"evaluacion": reg, "algoritmo_activo": algoritmo_activo()})
+        if method == "GET" and len(partes) == 3 and partes[0] == "pacientes" and partes[2] == "evaluaciones":
+            evs = sorted((json.loads(r["evaluacion"]) for r in registros() if r["id_paciente"] == partes[1] and r["sk"].startswith("evaluacion#")),
+                         key=lambda e: e["fecha"], reverse=True)
+            return _resp(200, {"id_paciente": partes[1], "evaluaciones": evs, "algoritmo_activo": algoritmo_activo()})
+        if method == "POST" and partes == ["algoritmo", "barrido"]:
+            return _resp(200, barrido(_fecha({**qs, **body}), limite=int(body.get("limite", 20))))
         if method == "GET" and partes == ["estadisticas"]:
             return _resp(200, estadisticas(_fecha(qs), qs.get("especialidad") or None))
         if method == "GET" and partes == ["kpis"]:
