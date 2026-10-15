@@ -15,6 +15,10 @@ const EVENTOS = {
   hospitalizacion: { label: "Hospitalización", tipo_evento: "hospitalizacion", subtipo: "ingreso hospitalario", severidad: "grave" },
   examen: { label: "Examen alterado", tipo_evento: "examen_alterado", subtipo: "resultado alterado", severidad: "moderada" },
   mejora: { label: "Buena respuesta en APS", tipo_evento: "control_aps", subtipo: "buena respuesta", severidad: "leve" },
+  leve: { label: "Urgencia leve (ESI 4-5): dolor de dedo", tipo_evento: "visita_urgencia", subtipo: "triage ESI 4-5", severidad: "leve",
+    motivo_clinico: "dolor de dedo tras golpe", relacionado: false },
+  ajena: { label: "Hospitalización sin relación: amputación traumática", tipo_evento: "hospitalizacion", subtipo: "ingreso hospitalario", severidad: "grave",
+    motivo_clinico: "amputación traumática de pierna (accidente)", relacionado: false },
 };
 const FACTOR = {
   riesgo_vital: "Descompensación grave: evaluar", prioridad_inicial: "Priorización de la interconsulta", evento: "Evento posterior a la interconsulta",
@@ -749,7 +753,8 @@ function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso, onDes
   };
   const registrarEvento = (ev, origen) => correr("evento", async () => {
     const r = await api.postEvento({ id_paciente: p.id_paciente, fecha_corte: fecha, fecha_evento: ev.fecha_evento || fecha,
-      tipo_evento: ev.tipo_evento, subtipo: ev.subtipo, severidad: ev.severidad, detalle: ev.detalle });
+      tipo_evento: ev.tipo_evento, subtipo: ev.subtipo, severidad: ev.severidad, detalle: ev.detalle,
+      ...(ev.motivo_clinico ? { motivo: ev.motivo_clinico } : {}), ...(ev.relacionado != null ? { relacionado: ev.relacionado } : {}) });
     await onCambio(); onDestacar(p.id_paciente);
     onAviso({ titulo: `${origen}. Lista actualizada`, antes: r.posicion_antes, despues: r.posicion_despues, cat: r.paciente?.categoria });
   });
@@ -1960,6 +1965,8 @@ function Informe({ p, fecha, cargando, onConfirmar, onAviso, onRegistrado }) {
           <p className="font-semibold text-hlf flex items-center gap-1"><Icono n="check_circle" className="text-[18px]" />Registrado automáticamente ({res.ia?.lecturas} lecturas iguales de la IA, cita verificada en el documento)</p>
           {res.registrados.map((e, i) => (
             <div key={i}><b>{TIPO_EVENTO[e.tipo_evento] || e.tipo_evento}</b> · {e.subtipo} · {fmt(e.fecha_evento)}
+              {e.motivo && <span> · motivo: {e.motivo}</span>}
+              {e.relacionado === false && <span className="ml-1 text-[12px] rounded bg-surface-container-low px-1">sin relación con su diagnóstico: no cambia su prioridad</span>}
               <blockquote className="border-l-4 border-hlf px-2 italic text-[13px]">“{e.cita}”</blockquote></div>
           ))}
           {res.posicion_antes != null && <p className="text-[13px]">N° {res.posicion_antes} → <b>N° {res.posicion_despues}</b> · prioridad <Prioridad cat={res.paciente?.categoria} /></p>}

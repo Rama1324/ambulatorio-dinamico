@@ -49,7 +49,9 @@ def historial(perfil, corte):
     le, pac = perfil["lista_espera"], perfil["paciente"]
     corte_iso = corte.isoformat()
     eventos = sorted(({"fecha": e["fecha_evento"], "tipo": e["tipo_evento"], "valor": e.get("subtipo") or "",
-                       "severidad": e.get("severidad")} for e in perfil.get("eventos_clinicos", [])
+                       "severidad": e.get("severidad"), **({"motivo": e["motivo"]} if e.get("motivo") else {}),
+                       **({"relacionado_con_su_diagnostico": e["relacionado"]} if e.get("relacionado") is not None else {})}
+                      for e in perfil.get("eventos_clinicos", [])
                       if le["fecha_ingreso_lista"] <= e["fecha_evento"] <= corte_iso), key=lambda x: x["fecha"])
     mediciones = sorted(({"fecha": m["fecha_medicion"], "tipo": m["tipo_medicion"], "valor": _num(m["valor"]),
                           "unidad": m.get("unidad"), "fuera_de_rango": m.get("fuera_de_rango")}
@@ -230,7 +232,7 @@ def respuesta_determinista(hist, dx_kb, tolerancia=0.05):
     en la evaluación: si el LLM no supera a este lector, no aporta con datos estructurados."""
     def cita(r):
         return {"fecha": r["fecha"], "tipo": r["tipo"], "valor": r["valor"]}
-    graves = [e for e in hist["eventos"] if e["tipo"] != "hallazgo_oncologico" and
+    graves = [e for e in hist["eventos"] if e["tipo"] != "hallazgo_oncologico" and e.get("relacionado_con_su_diagnostico") is not False and
               (e["severidad"] == "grave" or "descompensaci" in _norm(e["valor"]))]  # = puntaje.descompensa
     ultimo = graves[-1] if graves else None
     estab = [e for e in hist["eventos"] if e["tipo"] == "control_aps" and _norm(e["valor"]) in ("estabilizacion", "buena respuesta")

@@ -704,6 +704,8 @@ def post_evento(body):
         "subtipo": body["subtipo"],
         "severidad": subtipos[body["subtipo"]],
         "detalle": body.get("detalle") or f'{body.get("subtipo", body["tipo_evento"])} ({especialidad})',
+        **({"motivo": str(body["motivo"])[:300]} if body.get("motivo") else {}),
+        **({"relacionado": bool(body["relacionado"])} if body.get("relacionado") is not None else {}),
         "registrado": datetime.now(timezone.utc).isoformat(timespec="microseconds"),
         "usuario": body.get("usuario", "equipo clínico"),
     }
@@ -1240,24 +1242,25 @@ def _informe_con_ia(pid, lectura, corte, perfs, avisos, dudoso, menciona, body):
     solo y la lista se recalcula; lo demás queda como propuesta para que el equipo confirme."""
     import lector_documento
     t0 = time.perf_counter()
-    r = lector_documento.leer_documento(lectura.texto, cliente_llm())
+    le = perfs[pid]["lista_espera"]
+    r = lector_documento.leer_documento(lectura.texto, cliente_llm(), diagnostico=f'{le["diagnostico_texto"]} ({le["diagnostico_cie10"]}, {le["especialidad"]})')
     aceptados = r["aceptados"]
     if dudoso and aceptados:  # identidad o legibilidad en duda: nada se registra solo
         r["propuestos"] = [{**h, "motivo": "no se pudo confirmar que el documento sea de este paciente o es poco legible"} for h in aceptados] + r["propuestos"]
         aceptados = []
-    existentes = {(e["fecha_evento"], e["tipo_evento"], e["subtipo"]) for e in perfs[pid].get("eventos_clinicos", [])}
+    existentes = {(e["fecha_evento"], e["tipo_evento"], e["subtipo"], e.get("motivo") or "") for e in perfs[pid].get("eventos_clinicos", [])}
     registrados, pos_antes, fila = [], None, None
     if aceptados:
         pos_antes = next((p["posicion"] for p in lista(corte)["pacientes"] if p["id_paciente"] == pid), None)
         ahora = datetime.now(timezone.utc).isoformat(timespec="microseconds")
         for h in aceptados:
             ev = lector_documento.evento_registrable(h, corte)
-            if (ev["fecha_evento"], ev["tipo_evento"], ev["subtipo"]) in existentes:
+            if (ev["fecha_evento"], ev["tipo_evento"], ev["subtipo"], ev.get("motivo") or "") in existentes:
                 continue
             ev.update(id_evento="EV-DOC-" + uuid.uuid4().hex[:6].upper(), registrado=ahora, usuario=body.get("usuario", "equipo clínico"))
             guardar({"id_paciente": pid, "sk": f"evento#{ev['fecha_evento']}#{ev['id_evento']}", "evento": json.dumps(ev, ensure_ascii=False)})
             registrados.append(ev)
-            existentes.add((ev["fecha_evento"], ev["tipo_evento"], ev["subtipo"]))
+            existentes.add((ev["fecha_evento"], ev["tipo_evento"], ev["subtipo"], ev.get("motivo") or ""))
         if registrados:
             evaluar_y_guardar(pid, corte)
             fila = next((p for p in lista(corte)["pacientes"] if p["id_paciente"] == pid), None)
@@ -1266,7 +1269,9 @@ def _informe_con_ia(pid, lectura, corte, perfs, avisos, dudoso, menciona, body):
     for h in r["propuestos"]:
         e = {"tipo_evento": h["tipo_evento"], "subtipo": h["subtipo"], "severidad": h["severidad"],
              "fecha_evento": h["fecha"] if h["fecha"] and h["fecha"] <= corte.isoformat() else corte.isoformat(),
-             "fecha_en_documento": h["fecha_en_documento"], "evidencia": h["cita"], "detectado_por": "ia", "motivo": h["motivo"]}
+             "fecha_en_documento": h["fecha_en_documento"], "evidencia": h["cita"], "detectado_por": "ia", "motivo": h["motivo"],
+             **({"motivo_clinico": h["motivo_clinico"]} if h.get("motivo_clinico") else {}),
+             **({"relacionado": h["relacionado"]} if h.get("relacionado") is not None else {})}
         propuestas.append({**e, **_vista_previa(perfil, e, corte)})
     out = {"id_paciente": pid, "modo": "ia", "lectura": lectura.resumen(),
            "transcripcion": lectura.texto if lectura.origen == "foto" else None,

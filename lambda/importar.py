@@ -25,7 +25,8 @@ TABLAS = {
                      "campos": ["id_paciente", "id_solicitud", "especialidad", "sub_especialidad", "diagnostico_cie10", "diagnostico_texto",
                                 "prioridad_inicial", "fecha_ingreso_lista", "origen_derivacion", "estado"]},
     "eventos_clinicos": {"nombre": "Eventos clínicos", "requeridas": ["id_paciente", "fecha_evento", "tipo_evento"],
-                         "campos": ["id_paciente", "id_evento", "fecha_evento", "tipo_evento", "subtipo", "severidad", "detalle"]},
+                         "campos": ["id_paciente", "id_evento", "fecha_evento", "tipo_evento", "subtipo", "severidad", "detalle",
+                                    "motivo", "relacionado"]},
     "mediciones": {"nombre": "Mediciones", "requeridas": ["id_paciente", "fecha_medicion", "tipo_medicion", "valor"],
                    "campos": ["id_paciente", "fecha_medicion", "tipo_medicion", "valor", "unidad", "fuera_de_rango"]},
     "citaciones": {"nombre": "Citaciones", "requeridas": ["id_paciente", "fecha_cita", "estado_cita"],
@@ -59,7 +60,9 @@ SINONIMOS = {
     "id_evento": ["evento_id"],
     "fecha_evento": ["fecha", "f_evento"],
     "tipo_evento": ["tipo", "evento"],
-    "subtipo": ["sub_tipo", "detalle_tipo", "motivo"],
+    "subtipo": ["sub_tipo", "detalle_tipo", "triage", "categorizacion"],
+    "motivo": ["motivo_consulta", "motivo_ingreso", "causa", "diagnostico_egreso", "diagnostico_urgencia"],
+    "relacionado": ["relacionado_con_diagnostico", "relacion", "relacionado_dg", "asociado_a_diagnostico"],
     "severidad": ["gravedad"],
     "detalle": ["descripcion", "observacion", "observaciones", "comentario"],
     "fecha_medicion": ["fecha", "f_medicion", "fecha_examen"],
@@ -87,7 +90,8 @@ VOCAB = {
     "tipo_evento": {"visita_urgencia": "visita_urgencia", "urgencia": "visita_urgencia", "consulta_urgencia": "visita_urgencia",
                     "hospitalizacion": "hospitalizacion", "hospitalizado": "hospitalizacion", "ingreso_hospitalario": "hospitalizacion",
                     "examen_alterado": "examen_alterado", "examen": "examen_alterado", "cambio_farmaco": "cambio_farmaco",
-                    "cambio_de_farmaco": "cambio_farmaco", "farmaco": "cambio_farmaco", "control_aps": "control_aps", "control": "control_aps"},
+                    "cambio_de_farmaco": "cambio_farmaco", "farmaco": "cambio_farmaco", "control_aps": "control_aps", "control": "control_aps",
+                    "hallazgo_oncologico": "hallazgo_oncologico", "cancer": "hallazgo_oncologico", "oncologico": "hallazgo_oncologico"},
     "severidad": {"leve": "leve", "moderada": "moderada", "moderado": "moderada", "grave": "grave", "severa": "grave", "severo": "grave"},
     "estado_cita": {"asistio": "asistio", "si": "asistio", "atendido": "asistio", "no_asistio": "no_asistio", "no": "no_asistio",
                     "nsp": "no_asistio", "inasistencia": "no_asistio", "reprogramo": "reprogramo", "reprogramada": "reprogramo",
@@ -232,6 +236,7 @@ CONVERSORES = {
     "tipo_evento": lambda v: a_vocab("tipo_evento", v), "severidad": lambda v: a_vocab("severidad", v),
     "estado_cita": lambda v: a_vocab("estado_cita", v), "estado": lambda v: a_vocab("estado", v),
     "grupo_proteccion": lambda v: None if norm(v) in NO else a_vocab("grupo_proteccion", v),
+    "relacionado": lambda v: True if norm(v) in SI else (False if norm(v) in NO - {""} else None),
     "acg": lambda v: a_vocab("acg", str(int(v)) if isinstance(v, float) else v),
     "id_paciente": a_id_paciente,
     "diagnostico_cie10": lambda v: str(v).strip().upper().split(".")[0][:3],
@@ -406,7 +411,8 @@ def combinar(datos, existentes, catalogo):
             return None
         return {"id_evento": r.get("id_evento") or f'EV-IMP-{r["id_paciente"]}-{r["fecha_evento"]}-{tipo}-{sub}',
                 "fecha_evento": r["fecha_evento"], "tipo_evento": tipo, "subtipo": sub, "severidad": vocab[sub],
-                "detalle": r.get("detalle") or ""}
+                "detalle": r.get("detalle") or "", **({"motivo": r["motivo"]} if r.get("motivo") else {}),
+                **({"relacionado": r["relacionado"]} if r.get("relacionado") is not None else {})}
 
     agregar("eventos_clinicos", "eventos_clinicos", lambda e: (e["fecha_evento"], e["tipo_evento"], e["subtipo"]), nuevo_evento)
 

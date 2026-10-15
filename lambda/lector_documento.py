@@ -33,7 +33,10 @@ EVENTO_DE = {
     "examen_alterado": ("examen_alterado", "resultado alterado"),
     "aumento_tratamiento": ("cambio_farmaco", "aumento dosis"),
     "estabilizacion": ("control_aps", "estabilización"),
+    "urgencia_leve": ("visita_urgencia", "triage ESI 4-5"),
 }
+# hallazgos en los que importa si el motivo tiene relación con la enfermedad por la que el paciente espera
+CON_RELACION = {"ingreso_uci", "hospitalizacion", "descompensacion_grave", "descompensacion", "urgencia_leve"}
 NO_AUTOMATICO = {"estabilizacion"}  # podría bajar la prioridad: siempre lo confirma una persona
 ONCOLOGICO = re.compile(r"c[aá]ncer|carcinoma|adenocarcinoma|neoplasia|neoplasico|tumor maligno|malign|linfoma|leucemia|sarcoma|"
                         r"melanoma|mieloma|metast|blastoma|\bca\.? de\b|bi-?rads\s*[45]|lesion sospechosa", re.IGNORECASE)
@@ -41,8 +44,11 @@ ONCOLOGICO = re.compile(r"c[aá]ncer|carcinoma|adenocarcinoma|neoplasia|neoplasi
 
 class Hallazgo(BaseModel):
     tipo: Literal["cancer_confirmado", "sospecha_cancer", "antecedente_cancer", "ingreso_uci", "hospitalizacion",
-                  "descompensacion_grave", "descompensacion", "examen_alterado", "aumento_tratamiento", "estabilizacion"]
+                  "descompensacion_grave", "descompensacion", "examen_alterado", "aumento_tratamiento", "estabilizacion",
+                  "urgencia_leve"]
     cita: str = Field(min_length=4, max_length=400)
+    motivo: str = Field(default="", max_length=200)
+    relacionado: Literal["si", "no", "desconocido"] = "desconocido"
 
 
 class LecturaDocumento(BaseModel):
@@ -61,6 +67,13 @@ chileno. NO asignas prioridades: solo listas los hallazgos del documento que est
 - examen_alterado: examen o laboratorio alterado relevante.
 - aumento_tratamiento: aumento de dosis o nuevo fármaco por mal control.
 - estabilizacion: el paciente está estable, compensado o con buena respuesta.
+- urgencia_leve: consulta de urgencia por un problema menor (triage ESI 4-5: p. ej. dolor de un dedo, herida pequeña).
+Para urgencias, hospitalizaciones y descompensaciones indica también:
+- "motivo": el motivo en pocas palabras (p. ej. "amputación traumática de pierna", "edema pulmonar").
+- "relacionado": "si" si el motivo es por la ENFERMEDAD POR LA QUE ESPERA el paciente (se indica abajo) o una complicación
+  directa de ella; "no" si es por otra causa (p. ej. un accidente en un paciente que espera por cardiología);
+  "desconocido" si el documento no permite saberlo. La gravedad del motivo importa: una amputación es grave, un dolor de
+  dedo es leve.
 Reglas:
 1. "cita" es una frase COPIADA TEXTUAL del documento (sin cambiar palabras), de 4 a 400 caracteres.
 2. Un hallazgo negado o descartado NO es un hallazgo ("se descarta neoplasia", "sin hospitalización").
@@ -69,13 +82,15 @@ Reglas:
 HERRAMIENTA = {"toolSpec": {"name": "listar_hallazgos", "description": "Hallazgos del documento con cita textual.",
                             "inputSchema": {"json": {"type": "object", "properties": {"hallazgos": {"type": "array", "items": {
                                 "type": "object", "properties": {"tipo": {"type": "string", "enum": list(EVENTO_DE)},
-                                                                 "cita": {"type": "string"}},
+                                                                 "cita": {"type": "string"}, "motivo": {"type": "string"},
+                                                                 "relacionado": {"type": "string", "enum": ["si", "no", "desconocido"]}},
                                 "required": ["tipo", "cita"]}}}, "required": ["hallazgos"]}}}}
 
 
-def _leer(texto, cliente):
+def _leer(texto, cliente, diagnostico=None):
     try:
-        crudo, uso = cliente.leer(SISTEMA, "DOCUMENTO:\n" + texto, HERRAMIENTA, 700)
+        cab = f"ENFERMEDAD POR LA QUE ESPERA EL PACIENTE: {diagnostico}\n\n" if diagnostico else ""
+        crudo, uso = cliente.leer(SISTEMA, cab + "DOCUMENTO:\n" + texto, HERRAMIENTA, 900)
         return LecturaDocumento.model_validate(crudo), uso, None
     except ValidationError as e:
         return None, {}, f"json_invalido: {e.errors()[0]['msg']}"
@@ -94,10 +109,10 @@ def verificar(h: Hallazgo, texto):
     return i, None
 
 
-def leer_documento(texto, cliente, lecturas=LECTURAS):
+def leer_documento(texto, cliente, lecturas=LECTURAS, diagnostico=None):
     """Lee el documento N veces y devuelve {aceptados, propuestos, descartados, informativos, lecturas, tokens}."""
     with ThreadPoolExecutor(max_workers=lecturas) as ex:
-        crudas = list(ex.map(lambda _: _leer(texto, cliente), range(lecturas)))
+        crudas = list(ex.map(lambda _: _leer(texto, cliente, diagnostico), range(lecturas)))
     validas = [r for r, _, err in crudas if r is not None]
     errores = [err for _, _, err in crudas if err]
     por_tipo, descartados = {}, []
@@ -107,7 +122,9 @@ def leer_documento(texto, cliente, lecturas=LECTURAS):
             if motivo:
                 descartados.append({"tipo": h.tipo, "cita": h.cita, "motivo": motivo})
                 continue
-            por_tipo.setdefault(h.tipo, {"cita": h.cita, "pos": pos, "lecturas": set()})["lecturas"].add(k)
+            x = por_tipo.setdefault(h.tipo, {"cita": h.cita, "pos": pos, "lecturas": set(), "relaciones": [], "motivo": h.motivo})
+            x["lecturas"].add(k)
+            x["relaciones"].append(h.relacionado)
     doc = normalizar(texto)
     aceptados, propuestos, informativos = [], [], []
     for tipo, x in por_tipo.items():
@@ -119,7 +136,10 @@ def leer_documento(texto, cliente, lecturas=LECTURAS):
             informativos.append({**h, "nota": "antecedente o remisión: la tabla del HLF lo deja en prioridad baja (pág. 102); no cambia la prioridad"})
             continue
         t, sub = EVENTO_DE[tipo]
-        h.update(tipo_evento=t, subtipo=sub, severidad=SUBTIPOS[t][sub])
+        h.update(tipo_evento=t, subtipo=sub, severidad=SUBTIPOS[t][sub], motivo_clinico=x["motivo"])
+        if tipo in CON_RELACION:
+            # "no relacionado" solo si TODAS las lecturas lo dicen; ante la duda se asume relacionado (no baja a nadie)
+            h["relacionado"] = False if x["relaciones"] and all(r == "no" for r in x["relaciones"]) else None
         negado = informe._negado(doc, x["pos"])  # NegEx puede equivocarse: si hay duda, decide una persona
         if tipo in NO_AUTOMATICO:
             propuestos.append({**h, "motivo": "podría bajar la prioridad: lo confirma el equipo clínico"})
@@ -142,4 +162,6 @@ def evento_registrable(h, corte):
     """Evento listo para guardar (la fecha del documento, o la de hoy si no trae; nunca posterior al corte)."""
     f = h["fecha"] if h["fecha"] and h["fecha"] <= corte.isoformat() else corte.isoformat()
     return {"fecha_evento": f, "tipo_evento": h["tipo_evento"], "subtipo": h["subtipo"], "severidad": h["severidad"],
-            "detalle": f'Informe (leído por IA): "{h["cita"]}"', "origen": "documento_ia", "cita": h["cita"]}
+            "detalle": f'Informe (leído por IA): "{h["cita"]}"', "origen": "documento_ia", "cita": h["cita"],
+            **({"motivo": h["motivo_clinico"]} if h.get("motivo_clinico") else {}),
+            **({"relacionado": h["relacionado"]} if h.get("relacionado") is not None else {})}

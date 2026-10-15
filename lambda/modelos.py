@@ -16,7 +16,8 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, model_validat
 # Vocabulario del registro (diccionario_datos.md): subtipo → severidad
 SUBTIPOS = {
     "hospitalizacion": {"ingreso UCI": "grave", "ingreso hospitalario": "grave"},
-    "visita_urgencia": {"descompensación grave": "grave", "triage ESI 2": "grave", "descompensación": "moderada"},
+    "visita_urgencia": {"descompensación grave": "grave", "triage ESI 1": "grave", "triage ESI 2": "grave", "descompensación": "moderada",
+                        "triage ESI 3": "moderada", "triage ESI 4-5": "leve"},
     "examen_alterado": {"resultado alterado": "moderada"},
     "cambio_farmaco": {"aumento dosis": "moderada", "reducción dosis": "leve"},
     "control_aps": {"estabilización": "leve", "buena respuesta": "leve", "control": "leve"},

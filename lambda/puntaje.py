@@ -140,9 +140,15 @@ def d(s): return date.fromisoformat(s)
 def descompensa(ev):
     """Evento que el propio dataset etiqueta como descompensación o severidad grave
     (urgencia ESI 2, descompensación, hospitalización, UCI). Un hallazgo oncológico no es una descompensación."""
-    if ev.get("tipo_evento") == "hallazgo_oncologico":
+    if ev.get("tipo_evento") == "hallazgo_oncologico" or no_relacionado(ev):
         return False
     return ev.get("severidad") == "grave" or "descompensaci" in (ev.get("subtipo") or "").lower()
+
+
+def no_relacionado(ev):
+    """El evento se registró como NO relacionado con el diagnóstico por el que espera (p. ej. una amputación traumática en
+    un paciente de cardiología). Sin dato se asume relacionado, como trae el registro del hospital ("ESI 2 (Cardiología)")."""
+    return ev.get("relacionado") is False
 
 
 def regla_oncologica(eventos, especialidad):
@@ -302,6 +308,11 @@ def puntuar(perfil, corte):
     if estado == "descompensado" and fila:
         senales.append({"motivo": "descompensación (prioridad ajustada por tabla HLF)", "fecha": ult_desc["fecha_evento"],
                         "registrado": ult_desc.get("registrado")})
+    for e in eventos:
+        if no_relacionado(e) and e.get("severidad") == "grave":
+            senales.append({"motivo": f'evento grave sin relación con {le["diagnostico_texto"]}: {e.get("motivo") or e["subtipo"]} '
+                                      "(no cambia esta prioridad; revisar si requiere otra derivación)",
+                            "fecha": e["fecha_evento"], "registrado": e.get("registrado")})
     if onco:
         senales.append({"motivo": f'hallazgo oncológico: {onco["evento"]["subtipo"]} (prioridad alta por tabla HLF)',
                         "fecha": onco["evento"]["fecha_evento"], "registrado": onco["evento"].get("registrado")})

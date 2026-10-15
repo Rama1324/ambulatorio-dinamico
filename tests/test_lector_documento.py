@@ -130,3 +130,46 @@ def test_revisar_archivo_dice_si_el_paciente_sube_baja_o_queda_igual_y_por_que()
     assert any("ingreso UCI" in m["valor"] for m in x["por_que"]) and any(m["factor"] == "prioridad" for m in x["por_que"])
     assert not r["cargado"] and not any(e["subtipo"] == "ingreso UCI" and e["fecha_evento"] == "2026-10-12"
                                         for e in app.perfiles_combinados()[0][pid]["eventos_clinicos"])   # nada se guardó
+
+
+# ---------- motivo del evento: amputación ≠ dolor de dedo; relacionado o no con la enfermedad por la que espera ----------
+def test_evento_grave_no_relacionado_no_sube_la_prioridad_de_su_especialidad():
+    p = copy.deepcopy(app.perfiles()[paciente("Cardiología", "baja")])
+    antes = puntaje.puntuar(p, CORTE)
+    p["eventos_clinicos"].append({"id_evento": "A", "fecha_evento": "2026-10-10", "tipo_evento": "hospitalizacion", "subtipo": "ingreso hospitalario",
+                                  "severidad": "grave", "motivo": "amputación traumática de pierna", "relacionado": False})
+    r = puntaje.puntuar(p, CORTE)
+    assert r["categoria"] == antes["categoria"] and r["estado_clinico"] == antes["estado_clinico"] and not r["riesgo_vital"]
+    assert any("sin relación" in s["motivo"] and "amputación" in s["motivo"] for s in r["senales"])   # queda visible para revisar
+    p["eventos_clinicos"][-1]["relacionado"] = True                                                  # la misma hospitalización, por su cardiopatía
+    assert puntaje.puntuar(p, CORTE)["estado_clinico"] == "descompensado"
+
+
+def test_urgencia_leve_no_es_descompensacion():
+    p = copy.deepcopy(app.perfiles()[paciente("Cardiología", "baja")])
+    antes = puntaje.puntuar(p, CORTE)
+    p["eventos_clinicos"].append({"id_evento": "D", "fecha_evento": "2026-10-10", "tipo_evento": "visita_urgencia", "subtipo": "triage ESI 4-5",
+                                  "severidad": "leve", "motivo": "dolor de dedo"})
+    r = puntaje.puntuar(p, CORTE)
+    assert r["categoria"] == antes["categoria"] and r["estado_clinico"] == antes["estado_clinico"]
+
+
+def test_ia_amputacion_en_paciente_cardiologico_no_lo_sube():
+    pid = paciente("Cardiología", "baja")
+    texto = "DAU urgencia 12/10/2026. Ingresa por accidente de tránsito con amputación traumática de pierna derecha. Se hospitaliza en traumatología."
+    cli = rubrica.ClienteFalso({"hallazgos": [{"tipo": "hospitalizacion", "cita": "Se hospitaliza en traumatología", "motivo": "amputación traumática",
+                                               "relacionado": "no"}]})
+    s, r = informe(pid, texto, cli)
+    assert r["registrados"] and r["registrados"][0]["relacionado"] is False
+    assert r["paciente"]["categoria"] == "baja" and r["posicion_despues"] == r["posicion_antes"]
+    assert any("sin relación" in x["motivo"] for x in r["paciente"]["revision_sugerida"])
+
+
+def test_ia_descompensacion_relacionada_si_sube():
+    pid = next(p["id_paciente"] for p in app.lista(CORTE)["pacientes"] if p["diagnostico_cie10"] == "I50" and p["categoria"] != "alta")
+    texto = "Epicrisis 12/10/2026. Hospitalización por insuficiencia cardíaca descompensada con edema pulmonar."
+    cli = rubrica.ClienteFalso({"hallazgos": [{"tipo": "hospitalizacion", "cita": "Hospitalización por insuficiencia cardíaca descompensada",
+                                               "motivo": "insuficiencia cardíaca descompensada", "relacionado": "si"}]})
+    s, r = informe(pid, texto, cli)
+    assert r["registrados"] and r["registrados"][0].get("relacionado") is not False
+    assert r["posicion_despues"] < r["posicion_antes"]
