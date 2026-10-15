@@ -792,9 +792,11 @@ function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso, onDes
             respondió preguntas cerradas con citas; una fórmula fija con la tabla del HLF calculó la prioridad. La IA no decide.</p>
           <p className="text-[13px] text-on-surface-variant">Reglas: {p.rubrica.categoria_reglas} · rúbrica: {p.rubrica.categoria_rubrica ?? "—"} ·
             lecturas: {(p.rubrica.categorias_corridas || []).map((c) => c || "falló").join(" / ")} · {p.rubrica.modelo} · {p.rubrica.version_kb}</p>
-          {p.controles?.length > 0
-            ? <div className="rounded bg-ambar-container/60 text-ambar p-2 text-[13px]"><b>Requiere revisión humana:</b> {p.controles.map((m) => m.detalle).join(" · ")}. Se mantiene la prioridad de las reglas.</div>
-            : <div className="rounded bg-hlf-claro text-hlf p-2 text-[13px]">Controles OK: citas verificadas, 3 lecturas iguales, no baja a nadie.</div>}
+          {p.rubrica.requiere_revision
+            ? <div className="rounded bg-ambar-container/60 text-ambar p-2 text-[13px]"><b>Podría bajar de prioridad:</b> {p.controles.filter((m) => m.motivo === "bajaria").map((m) => m.detalle).join(" · ")}. El sistema nunca baja solo: mantiene la prioridad hasta que el especialista decida.</div>
+            : p.controles?.length > 0
+              ? <div className="rounded bg-surface-container-low text-on-surface-variant p-2 text-[13px]">Esta vez se usaron las reglas (la lectura de la IA no se pudo verificar: {p.controles.map((m) => m.motivo.replaceAll("_", " ")).join(", ")}). No requiere acción.</div>
+              : <div className="rounded bg-hlf-claro text-hlf p-2 text-[13px]">Controles OK: citas verificadas en el registro, 3 lecturas iguales, no baja a nadie.</div>}
         </div> : <p className="text-[13px] text-on-surface-variant">Sin evaluación vigente del algoritmo con rúbrica: se usan las reglas actuales.</p>}
       </Caja>}
       <Caja titulo={`Fundamento de la prioridad ${ETIQUETA[p.categoria].toLowerCase()}`}>
@@ -2391,10 +2393,10 @@ function Criterios({ ia }) {
           <li><b>Lectura.</b> Un modelo de IA (Claude, en Amazon Bedrock) lee el historial del paciente <b>3 veces</b> y responde preguntas cerradas (¿hubo descompensación?, ¿se estabilizó después?, ¿empeora su medición clave?, ¿cambió el tratamiento por mal control?), citando cada registro. La IA no asigna prioridades.</li>
           <li><b>Verificación.</b> El código comprueba en el registro cada cita: que exista, que sea de verdad una descompensación, que la estabilización sea posterior y que la medición realmente empeore (con los valores registrados, no los que escribe la IA).</li>
           <li><b>Fórmula fija.</b> Con lo verificado, la prioridad sale de la tabla del HLF. Un evento sigue vigente durante su ventana con evidencia publicada (PubMed); sin evidencia, no vence.</li>
-          <li><b>Controles.</b> Si una cita no existe o no respalda lo dicho, las 3 lecturas no coinciden, el resultado bajaría a alguien o le quitaría la alerta de descompensación grave, difiere en más de un nivel de las reglas, hay un dato desconocido o la IA falla, el paciente <b>no se mueve solo</b>: conserva su prioridad y queda para revisión del especialista.</li>
+          <li><b>Controles.</b> Si la IA no puede leer un dato, lo responde el registro. Si una cita no existe o no respalda lo dicho, las 3 lecturas no coinciden o la IA falla, se usan las reglas <b>sin pedirle nada a nadie</b>. Solo cuando la evidencia indica que un paciente podría <b>bajar</b> de prioridad, el sistema no lo baja: lo deja como está y avisa al especialista (en este registro, 2 de 409 pacientes).</li>
           <li><b>Cuándo.</b> Al llegar un evento o un informe, el paciente se reevalúa en segundos (KPI: menos de 72 h). Un barrido nocturno revisa al resto.</li>
         </ol>
-        <p className="text-[13px] text-on-surface-variant mt-2">Probado con 409 pacientes y 2.454 lecturas reales: 0 lecturas fallidas, nadie baja sin una persona. Cuando la IA decidía sola, concordaba con la tabla oficial apenas κ 0,09; por eso decide la fórmula.</p>
+        <p className="text-[13px] text-on-surface-variant mt-2">Probado con 409 pacientes y 2.454 lecturas reales: 0 lecturas fallidas, 3 lecturas iguales en el 100 % de los pacientes, nadie baja sin una persona y solo 2 pacientes requieren al especialista. Cuando la IA decidía sola, concordaba con la tabla oficial apenas κ 0,09; por eso decide la fórmula.</p>
       </Caja>}
       {!ia && <Caja titulo="Puntaje LACE (experimental, solo desempate)">
         <p className="mb-2">Índice validado para riesgo de muerte o reingreso no planificado tras un alta hospitalaria (<a className="text-primary underline" target="_blank" rel="noreferrer" href="https://pmc.ncbi.nlm.nih.gov/articles/PMC2845681/">van Walraven et al., <i>CMAJ</i> 2010;182(6):551-7</a>). Estadístico C 0,68–0,71 en Ontario. <b>No está validado para listas de espera</b>: por eso aquí solo desempata.</p>

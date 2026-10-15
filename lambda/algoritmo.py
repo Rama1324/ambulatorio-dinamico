@@ -2,7 +2,8 @@
 
 evaluar_paciente: lee el historial N veces con la rúbrica (Bedrock, en paralelo), aplica la fórmula fija a cada
 lectura, corre los controles y devuelve el registro auditable. Si un control falla, la categoría final es la de las
-reglas actuales (puntaje.py) y el paciente queda 'requiere_revision'.
+reglas actuales (puntaje.py). Solo pide revisión del especialista cuando el resultado BAJARÍA a alguien (decisión
+clínica); un problema técnico de la IA (cita que no calza, lecturas distintas, falla) usa las reglas sin pedir nada a nadie.
 
 combinar: la parte sin LLM (validar citas, fórmula, controles). Es pura: se guarda la lectura y se vuelve a combinar a
 otra fecha de corte sin llamar al LLM (la ventana de un evento depende del corte).
@@ -38,6 +39,9 @@ def combinar(perfil, corte, crudas, kb, reglas=None):
     if errores:
         motivos.append({"motivo": "error_formula", "detalle": errores[0]})
     bloquea = [m for m in motivos if m["motivo"] in controles.BLOQUEANTES]
+    # "bajaría" es una decisión clínica solo si la lectura está verificada; si la IA leyó mal, es un problema técnico
+    tecnicos = [m for m in bloquea if m["motivo"] not in controles.CLINICOS + ("discrepancia",)]
+    clinicos = [m for m in bloquea if m["motivo"] in controles.CLINICOS] if not tecnicos else []
     propuesto = next((x for x in resultados if x), None)
     if bloquea or not propuesto:
         final = {"categoria_final": reglas["categoria"], "descompensacion_grave_final": reglas["riesgo_vital"],
@@ -49,7 +53,7 @@ def combinar(perfil, corte, crudas, kb, reglas=None):
                  "razones": propuesto["razones"]}
     return {"lecturas_validadas": lecturas, "categoria_reglas": reglas["categoria"], "categoria_rubrica": propuesto and propuesto["categoria"],
             "categorias_corridas": [x and x["categoria"] for x in resultados],
-            "controles": motivos, "requiere_revision": bool(bloquea), **final,
+            "controles": motivos, "requiere_revision": bool(clinicos), "respaldo_reglas": bool(bloquea), **final,
             "estado_clinico_rubrica": propuesto and propuesto["estado_clinico"],
             "revision_sugerida": [rv for rv in (propuesto or {}).get("revision", []) if not rv["bloqueante"]],
             "movido_por_rubrica": (not bloquea) and bool(propuesto) and propuesto["categoria"] != reglas["categoria"]}

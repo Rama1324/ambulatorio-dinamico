@@ -499,7 +499,7 @@ def _aplicar_rubrica(activos, perfs, corte, evs=None):
                  "registro_descompensacion": r.get("registro_descompensacion") if r.get("riesgo_vital") else (e["fecha"] if grave else None),
                  "algoritmo": "rubrica", "controles": e["controles"],
                  "rubrica": {k: e.get(k) for k in ("fecha", "fecha_corte", "fecha_corte_aplicada", "categoria_reglas", "categoria_rubrica",
-                                                   "categorias_corridas", "requiere_revision", "movido_por_rubrica", "revision_sugerida",
+                                                   "categorias_corridas", "requiere_revision", "respaldo_reglas", "movido_por_rubrica", "revision_sugerida",
                                                    "version_rubrica", "version_kb", "modelo", "hash_prompt")}}
             # Solo un cambio del algoritmo (sube al paciente) pide revisar de nuevo lo que el equipo ya decidió. Los controles
             # y notas se muestran, pero no anulan una decisión humana (si no, una falla de Bedrock bajaría a alguien).
@@ -507,7 +507,7 @@ def _aplicar_rubrica(activos, perfs, corte, evs=None):
                       "algoritmo": True}] if e["movido_por_rubrica"] else []
             # el detalle de los controles está en la ficha (Fundamento → "Cómo se calculó"); aquí basta un aviso corto
             if e["requiere_revision"]:
-                extra.append({"motivo": "algoritmo: no se movió solo, requiere revisión (ver Fundamento)", "fecha": e["fecha_corte"],
+                extra.append({"motivo": "la evidencia sugiere que podría bajar de prioridad: lo decide el especialista (ver Fundamento)", "fecha": e["fecha_corte"],
                               "registrado": e["fecha"], "algoritmo": True, "informativa": True})
             r["senales"] = list(r.get("senales", [])) + extra
         else:

@@ -483,7 +483,7 @@ def test_ges_y_equivalencias_se_informan_para_verificar():
     g = next(p for p in d["pacientes"] if p["ges"] and p["ges"]["vencida"])
     assert g["ges"]["verificar"] and any("posible incumplimiento" in r["valor"] for r in g["razones"])
     k = next((p for p in d["pacientes"] if p["diagnostico_cie10"] == "K70" and p["estado_clinico"] == "descompensado"), None)
-    assert k is None or any("a validar" in r["valor"] for r in k["razones"] if r["factor"] == "tabla_oficial")
+    assert k is None or any("equivalencia usada" in r["valor"] for r in k["razones"] if r["factor"] == "tabla_oficial")
 
 def test_agenda_de_referencia_despues_del_registro():
     _, b = call("GET", "/boxes", {"fecha_corte": "2026-10-16"})

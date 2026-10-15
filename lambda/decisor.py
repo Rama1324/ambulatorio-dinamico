@@ -6,7 +6,8 @@ PubMed). Reglas:
   rúbrica lo respalda con citas. Nunca baja (bajar siempre requiere un humano: lo controla controles.py).
 - Un evento grave sin estabilización posterior mantiene la fila 'descompensado' mientras esté dentro de su ventana
   (días con fuente). Sin ventana con fuente se usa la opción conservadora: sigue vigente (no baja a nadie).
-- "desconocido" en evento_grave o estabilizado_despues no se trata como "no": genera revisión.
+- "desconocido" en evento_grave o estabilizado_despues no se trata como "no": lo responde el registro estructurado
+  (¿hay una descompensación?, ¿hay un control de estabilización posterior?), que es un hecho y no un juicio clínico.
 - El LLM no decide qué es una descompensación: el código comprueba en el registro que el evento citado lo sea, que la
   estabilización sea posterior y que la medición realmente empeore (usa los valores registrados, no los del LLM).
 - Orden: cascada del Ord. 536 (criterio médico → grupo de especial protección → antigüedad > 1 año → llegada). Sin LACE.
@@ -14,6 +15,7 @@ PubMed). Reglas:
 import json
 import os
 from datetime import date
+from types import SimpleNamespace
 
 import puntaje
 
@@ -50,6 +52,10 @@ def _eventos(perfil, corte):
 def _registro(eventos, cita):
     """Evento del registro al que apunta la cita (el código verifica lo que dice el LLM; no le cree)."""
     return next((e for e in eventos if e["fecha_evento"] == cita.fecha and e["tipo_evento"] == cita.tipo), None)
+
+
+def _cita_de(e):
+    return SimpleNamespace(fecha=e["fecha_evento"], tipo=e["tipo_evento"], valor=e.get("subtipo") or "")
 
 
 def serie_medicion(perfil, tipo, corte):
@@ -91,36 +97,44 @@ def decidir(perfil, resp, corte, kb):
     fila = dx.get("fila_descompensado") if dx.get("estado") == "con_fuente" else None
 
     ev, est = resp.evento_grave, resp.estabilizado_despues
-    eventos, fecha_ev = _eventos(perfil, corte), None
+    eventos, fecha_ev = sorted(_eventos(perfil, corte), key=lambda e: e["fecha_evento"]), None
+    ev_valor, ev_citas = ev.valor, list(ev.citas)
+    if ev_valor == "desconocido":
+        # Si la IA no puede leerlo, lo responde el registro estructurado (es un hecho, no un juicio clínico)
+        desc = [e for e in eventos if puntaje.descompensa(e)]
+        ev_valor, ev_citas = ("si", [_cita_de(desc[-1])]) if desc else ("no", [])
+        revision.append({"motivo": "resuelto_con_registro", "bloqueante": False,
+                         "detalle": "la IA no pudo determinar si hubo descompensación: se usó el registro"})
     # El LLM lee; el código comprueba en el registro que lo citado diga lo que el LLM afirma (si no, revisa un humano)
-    respaldo = [c for c in ev.citas if (x := _registro(eventos, c)) and puntaje.descompensa(x)] if ev.valor == "si" else []
-    solo_onco = ev.valor == "si" and ev.citas and all((x := _registro(eventos, c)) and x["tipo_evento"] == "hallazgo_oncologico" for c in ev.citas)
+    respaldo = [c for c in ev_citas if (x := _registro(eventos, c)) and puntaje.descompensa(x)] if ev_valor == "si" else []
+    solo_onco = ev_valor == "si" and ev_citas and all((x := _registro(eventos, c)) and x["tipo_evento"] == "hallazgo_oncologico" for c in ev_citas)
     if solo_onco:
         pass  # el LLM llamó "evento grave" a un hallazgo oncológico: lo resuelve la regla oncológica de abajo (código)
-    elif ev.valor == "desconocido":
-        revision.append({"motivo": "dato_desconocido", "detalle": "no se pudo determinar si hubo un evento grave", "bloqueante": True})
-    elif ev.valor == "si" and not respaldo:
+    elif ev_valor == "si" and not respaldo:
         revision.append({"motivo": "cita_no_respalda", "bloqueante": True,
                          "detalle": "lo citado como descompensación no figura así en el registro (severidad o subtipo)"})
-    elif ev.valor == "si":
+    elif ev_valor == "si":
         cita_ult = max(respaldo, key=lambda c: c.fecha)
         fecha_ev = cita_ult.fecha
         cita_txt = "; ".join(f"{c.fecha} {c.tipo} {c.valor}" for c in respaldo)
         razones.append({"factor": "evento", "valor": f"evento grave: {cita_txt}", "fuente": "Registro clínico posterior a la SIC (cita verificada)"})
         estab_reg = [e for e in eventos if puntaje.estabiliza(e) and e["fecha_evento"] > fecha_ev]
-        estab_ok = [c for c in est.citas if (x := _registro(eventos, c)) and puntaje.estabiliza(x) and c.fecha > fecha_ev]
-        if est.valor == "si" and not estab_ok:
+        est_valor, est_citas = est.valor, list(est.citas)
+        if est_valor == "desconocido":  # lo responde el registro: ¿hay un control de estabilización posterior?
+            est_valor, est_citas = ("si", [_cita_de(estab_reg[-1])]) if estab_reg else ("no", [])
+            revision.append({"motivo": "resuelto_con_registro", "bloqueante": False,
+                             "detalle": "la IA no pudo determinar si se estabilizó: se usó el registro"})
+        estab_ok = [c for c in est_citas if (x := _registro(eventos, c)) and puntaje.estabiliza(x) and c.fecha > fecha_ev]
+        if est_valor == "si" and not estab_ok:
             revision.append({"motivo": "cita_no_respalda", "bloqueante": True,
                              "detalle": f"la estabilización citada no es un control de estabilización posterior al evento del {fecha_ev}"})
-        elif est.valor == "no" and estab_reg:
+        elif est_valor == "no" and estab_reg:
             revision.append({"motivo": "contradice_registro", "bloqueante": True,
                              "detalle": f"el registro muestra estabilización el {estab_reg[-1]['fecha_evento']}, posterior al evento"})
-        elif est.valor == "si":
+        elif est_valor == "si":
             estado = "estabilizado"
             razones.append({"factor": "evento", "valor": "estabilización posterior: " + "; ".join(f"{c.fecha} {c.valor}" for c in estab_ok) +
                             " · el sistema no baja la prioridad solo", "fuente": "Principio de diseño: bajar requiere un humano"})
-        elif est.valor == "desconocido":
-            revision.append({"motivo": "dato_desconocido", "detalle": "no se pudo determinar si se estabilizó", "bloqueante": True})
         else:
             # ventana del tipo de evento citado; si ese tipo no tiene ventana con fuente directa, no vence (conservador)
             v = (dx.get("ventanas") or {}).get(cita_ult.tipo)
@@ -142,7 +156,7 @@ def decidir(perfil, resp, corte, kb):
                     nota = " (no supera la actual)" if categoria == base and ORDEN_CAT[fila["prioridad"]] <= ORDEN_CAT[base] else ""
                     eq = dx.get("equivalencia")
                     razones.append({"factor": "tabla_oficial", "valor": f'"{fila["texto_pdf"].capitalize()}" → prioridad {fila["prioridad"]}{nota}' +
-                                    (f" · equivalencia a validar: {eq['detalle']}" if eq else ""),
+                                    (f" · equivalencia usada: {eq['detalle']}" if eq else ""),
                                     "fuente": f"{fuente_tabla}, pág. {fila['pagina']}"})
                     if grave:
                         razones.insert(0, {"factor": "riesgo_vital", "valor": f'Descompensación grave ({fila["texto_pdf"].capitalize()}) sin registro '

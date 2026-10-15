@@ -14,6 +14,10 @@ Criterios en formato EARS. Cada uno indica el test que lo cubre (`tests/test_alg
 
 ## Criterios de aceptación
 
+**Revisión humana:** solo cuando el resultado verificado BAJARÍA a alguien (`requiere_revision`). Los controles técnicos
+(cita inválida o que no respalda, lecturas distintas, falla de Bedrock o de la fórmula) usan las reglas y quedan
+registrados (`respaldo_reglas`), sin pedirle nada al equipo clínico. En el registro: 2 de 409 pacientes.
+
 | # | Requisito (EARS) | Test |
 |---|---|---|
 | R1 | CUANDO llega un evento nuevo de un paciente y `ALGORITMO=rubrica`, EL SISTEMA DEBE reevaluar a ese paciente en el mismo momento (muy por debajo de 72 h) y registrar la evaluación. | `test_evento_nuevo_dispara_la_reevaluacion` |
@@ -21,7 +25,7 @@ Criterios en formato EARS. Cada uno indica el test que lo cubre (`tests/test_alg
 | R3 | CUANDO el resultado bajaría la categoría **o quitaría la marca de descompensación grave**, EL SISTEMA DEBE mantener lo vigente y pedir revisión humana (`bajaria`). Las notas o fallas del algoritmo no anulan una decisión humana. | `test_bajar_siempre_requiere_humano`, `test_evento_fuera_de_ventana_no_mantiene_descompensado`, `test_propiedad_ninguna_respuesta_baja_a_alguien_sin_humano`, `test_propiedad_nunca_se_pierde_la_marca_grave_sin_humano`, `test_a1_…`, `test_a3_a4_…` |
 | R4 | CUANDO 3 corridas no coinciden en la categoría, EL SISTEMA DEBE marcar `requiere_revision` con motivo `inestable` y usar las reglas. | `test_tres_corridas_distintas_es_inestable` |
 | R5 | CUANDO Bedrock falla, excede el tiempo o devuelve JSON inválido, o la fórmula lanza un error, EL SISTEMA DEBE usar las reglas actuales y registrarlo (`fallo_llm` / `error_formula`). | `test_bedrock_falla_usa_reglas_y_lo_registra`, `test_json_invalido_es_fallo`, `test_a7_una_excepcion_en_la_formula_cae_a_las_reglas`, `test_a2_marca_grave_sin_fecha_no_tumba_la_lista` |
-| R6 | CUANDO un dato es "desconocido", EL SISTEMA NO DEBE tratarlo como normal: en el evento o la estabilización marca `dato_desconocido` y no mueve al paciente; en la tendencia o el cambio de tratamiento deja la nota `sin_dato`. | `test_un_desconocido_no_es_normal`, `test_a9_desconocido_en_las_otras_preguntas_no_es_no` |
+| R6 | CUANDO un dato es "desconocido", EL SISTEMA NO DEBE tratarlo como normal: en el evento o la estabilización lo responde el registro estructurado (nota `resuelto_con_registro`); en la tendencia o el cambio de tratamiento deja la nota `sin_dato`. | `test_un_desconocido_no_es_normal_lo_responde_el_registro`, `test_a9_desconocido_en_las_otras_preguntas_no_es_no` |
 | R7 | EL SISTEMA DEBE adjuntar a cada razón su `fuente` (página SSMSO, numeral del Ord. 536, PMID o guía). | `test_00002_sube_a_alta_por_angina_inestable` |
 | R8 | CUANDO la categoría de la rúbrica difiere en más de 1 nivel de la de las reglas, EL SISTEMA DEBE pedir revisión (`discrepancia`). | `test_discrepancia_de_mas_de_un_nivel_pide_revision` |
 | R9 | EL SISTEMA DEBE ordenar con la cascada del Ord. 536 (criterio médico → grupo de protección → antigüedad > 1 año → llegada), sin LACE. | `test_orden_536_no_usa_lace` |

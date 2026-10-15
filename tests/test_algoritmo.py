@@ -71,13 +71,15 @@ def test_00009_fallecido_sale_de_la_lista():
     assert algoritmo.evaluar_paciente(perfil("PAC-HLF-00009"), CORTE, oraculo("PAC-HLF-00009")) is None
 
 
-def test_un_desconocido_no_es_normal():
-    p = perfil("PAC-HLF-00002")
-    r = decisor.decidir(p, resp(evento="desconocido"), CORTE, KB)
-    assert any(x["motivo"] == "dato_desconocido" and x["bloqueante"] for x in r["revision"])
-    reg = algoritmo.evaluar_paciente(p, CORTE, rubrica.ClienteFalso(resp(evento="desconocido").model_dump()))
-    assert reg["requiere_revision"] and any(m["motivo"] == "dato_desconocido" for m in reg["controles"])
-    assert reg["categoria_final"] == puntaje.puntuar(p, CORTE)["categoria"]
+def test_un_desconocido_no_es_normal_lo_responde_el_registro():
+    """Si la IA no puede leer un dato, no se toma como 'no' ni se manda a un humano: lo responde el registro estructurado."""
+    p = perfil("PAC-HLF-00002")                                   # tiene hospitalización grave, sin estabilización posterior
+    r = decisor.decidir(p, resp(evento="desconocido", estab="desconocido"), CORTE, KB)
+    assert r["estado_clinico"] == "descompensado" and r["categoria"] == "alta" and r["descompensacion_grave"]
+    assert any(x["motivo"] == "resuelto_con_registro" and not x["bloqueante"] for x in r["revision"])
+    p["eventos_clinicos"].append({"id_evento": "X", "fecha_evento": "2026-10-01", "tipo_evento": "control_aps", "subtipo": "estabilización", "severidad": "leve"})
+    r = decisor.decidir(p, resp(evento="si", estab="desconocido", citas_ev=[{"fecha": "2026-08-06", "tipo": "hospitalizacion", "valor": "ingreso hospitalario"}]), CORTE, KB)
+    assert r["estado_clinico"] == "estabilizado"                  # el registro sí muestra la estabilización
 
 
 # ---------- R: controles antes de mover ----------
@@ -85,7 +87,7 @@ def test_cita_inexistente_mantiene_reglas_y_pide_revision():
     p = perfil("PAC-HLF-00002")
     falsa = resp(evento="si", citas_ev=[{"fecha": "2026-09-09", "tipo": "hospitalizacion", "valor": "ingreso UCI"}]).model_dump()
     reg = algoritmo.evaluar_paciente(p, CORTE, rubrica.ClienteFalso(falsa))
-    assert reg["requiere_revision"] and any(m["motivo"] == "cita_invalida" for m in reg["controles"])
+    assert reg["respaldo_reglas"] and not reg["requiere_revision"] and any(m["motivo"] == "cita_invalida" for m in reg["controles"])
     assert reg["categoria_final"] == reg["categoria_reglas"]
 
 
@@ -101,14 +103,14 @@ def test_tres_corridas_distintas_es_inestable():
     vacia = resp().model_dump()
     ciclo = itertools.cycle([buena, vacia, buena])
     reg = algoritmo.evaluar_paciente(p, fc, rubrica.ClienteFalso(lambda _t: next(ciclo)))
-    assert reg["requiere_revision"] and any(m["motivo"] == "inestable" for m in reg["controles"])
+    assert reg["respaldo_reglas"] and any(m["motivo"] == "inestable" for m in reg["controles"])
     assert reg["categoria_final"] == reg["categoria_reglas"]
 
 
 def test_bedrock_falla_usa_reglas_y_lo_registra():
     p = perfil("PAC-HLF-00002")
     reg = algoritmo.evaluar_paciente(p, CORTE, rubrica.ClienteFalso({}, fallar=True))
-    assert reg["requiere_revision"] and reg["controles"][0]["motivo"] == "fallo_llm"
+    assert reg["respaldo_reglas"] and not reg["requiere_revision"] and reg["controles"][0]["motivo"] == "fallo_llm"   # técnico: no molesta al médico
     assert reg["categoria_final"] == reg["categoria_reglas"] and all(l["meta"].get("error") for l in reg["lecturas"])
 
 
@@ -326,7 +328,7 @@ def test_a7_una_excepcion_en_la_formula_cae_a_las_reglas(monkeypatch):
     monkeypatch.setattr(decisor, "decidir", rompe)
     p = perfil("PAC-HLF-00002")
     reg = algoritmo.evaluar_paciente(p, CORTE, oraculo(p))
-    assert reg["categoria_final"] == puntaje.puntuar(p, CORTE)["categoria"] and reg["requiere_revision"]
+    assert reg["categoria_final"] == puntaje.puntuar(p, CORTE)["categoria"] and reg["respaldo_reglas"]
     assert any(m["motivo"] == "error_formula" for m in reg["controles"])
 
 
@@ -400,7 +402,7 @@ def test_r18_barrido_reintenta_las_fallidas():
     try:
         os.environ["ALGORITMO"] = "rubrica"
         app._llm["cliente"] = rubrica.ClienteFalso({}, fallar=True)
-        assert app.evaluar_y_guardar(pid, CORTE)["requiere_revision"]
+        assert app.evaluar_y_guardar(pid, CORTE)["respaldo_reglas"]
         app._llm["cliente"] = oraculo(pid)
         app.barrido(CORTE, limite=500)
         e = app.evaluaciones()[pid]

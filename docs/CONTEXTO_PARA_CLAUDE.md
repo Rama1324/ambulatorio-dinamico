@@ -305,6 +305,9 @@ GES como "verificar"; LACE experimental; equivalencias "a validar"; indicadores 
   a alguien o le quitaría la marca grave, > 1 nivel de diferencia, dato desconocido, falla del LLM o de la fórmula), el
   paciente **no se mueve solo**: queda con las reglas y para revisión humana. El código verifica cada cita en el registro
   (el LLM no decide qué es una descompensación). La lectura se guarda y la fórmula se reaplica a cada fecha de corte.
+- **Revisión humana solo para bajar:** si la IA no lee un dato, lo responde el registro; si la IA lee mal o falla, se usan
+  las reglas sin avisar a nadie (`respaldo_reglas`). Solo `bajaria` con lectura verificada pide al especialista
+  (`requiere_revision`): 2 de 409 pacientes en la evaluación con lecturas reales.
 - **Revisión adversaria:** `docs/algoritmo/REVISION_ADVERSARIA.md` (11 hallazgos, todos corregidos con test).
 - **Lector de informes con IA** (`lambda/lector_documento.py`, solo con `ALGORITMO=rubrica`): Claude lee el informe 3 veces
   y lista hallazgos de una lista cerrada (cáncer confirmado/sospecha/antecedente, UCI, hospitalización, descompensación,

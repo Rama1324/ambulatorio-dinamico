@@ -158,7 +158,7 @@ def razon_oncologica(o):
     e, (texto, prioridad, pag) = o["evento"], o["fila"]
     cita = (e.get("detalle") or "").replace("Informe (leído por IA): ", "")
     return {"factor": "oncologico", "valor": f'{e["subtipo"]} ({e["fecha_evento"]}){": " + cita if cita else ""} → prioridad {prioridad}' +
-            (" · equivalencia a validar: la especialidad no tiene fila oncológica propia" if o["a_validar"] else ""),
+            (" · la especialidad no tiene fila oncológica propia: se aplica el criterio de la tabla para todo cáncer" if o["a_validar"] else ""),
             "fuente": f'{FUENTE_TABLA}, pág. {pag}: "{texto}"'}
 
 
@@ -239,7 +239,7 @@ def puntuar(perfil, corte):
         razones.append({"factor": "evento", "valor": f'{ult_desc["tipo_evento"].replace("_", " ")}: {ult_desc["subtipo"]} '
                                                     f'({ult_desc["severidad"]}, {ult_desc["fecha_evento"]})',
                         "fuente": "Registro clínico posterior a la SIC"})
-    validar = f' · equivalencia a validar: {EQUIVALENCIA_A_VALIDAR[cie]}' if cie in EQUIVALENCIA_A_VALIDAR else ""
+    validar = f' · equivalencia usada: {EQUIVALENCIA_A_VALIDAR[cie]}' if cie in EQUIVALENCIA_A_VALIDAR else ""
     if estado == "descompensado":
         if fila and ORDEN_CAT[fila[1]] > ORDEN_CAT[inicial]:
             categoria = fila[1]

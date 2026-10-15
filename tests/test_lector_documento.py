@@ -106,7 +106,7 @@ def test_cancer_en_especialidad_sin_fila_propia_sube_y_queda_a_validar():
                                   "subtipo": "sospecha de cáncer", "severidad": "grave", "detalle": "lesión sospechosa de malignidad"})
     r = puntaje.puntuar(p, CORTE)
     onc = next(x for x in r["razones"] if x["factor"] == "oncologico")
-    assert r["categoria"] == "alta" and "a validar" in onc["valor"] and "88, 94, 95, 111" in onc["fuente"]
+    assert r["categoria"] == "alta" and "todo cáncer" in onc["valor"] and "88, 94, 95, 111" in onc["fuente"]
     assert r["estado_clinico"] == sin["estado_clinico"] and r["riesgo_vital"] == sin["riesgo_vital"]   # no es una descompensación
 
 

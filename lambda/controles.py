@@ -1,9 +1,11 @@
 """Controles antes de mover a un paciente. Si alguno falla, el paciente NO cambia de lugar solo: conserva la categoría
-de las reglas actuales (puntaje.py) y queda 'requiere_revision' con el motivo."""
+de las reglas actuales (puntaje.py). Solo 'bajaria' es una decisión clínica (pide revisión del especialista); los demás son
+técnicos (la IA leyó mal o falló): se usan las reglas y queda registrado, sin pedirle nada a nadie."""
 from decisor import ORDEN_CAT
 
 BLOQUEANTES = ("fallo_llm", "cita_invalida", "inestable", "bajaria", "discrepancia", "dato_desconocido",
                "cita_no_respalda", "contradice_registro", "error_formula")
+CLINICOS = ("bajaria",)
 
 
 def evaluar(lecturas, resultados, reglas):

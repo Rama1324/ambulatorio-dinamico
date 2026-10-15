@@ -204,7 +204,8 @@ def main():
                  "E0": comparar(e0_A, e0_cats) if e0_cats else None},
         "kappa_EF_vs_R": kappa_ponderado(r_cats, EF),
         "estabilidad_3_corridas": {"estables": estables, "pct": round(100 * estables / len(ef), 1)},
-        "controles": {"pacientes_con_control_bloqueante": pacientes_con_control, "motivos": motivos},
+        "controles": {"pacientes_con_control_bloqueante": pacientes_con_control, "motivos": motivos,
+                      "revision_clinica": sum(bool(x["requiere_revision"]) for x in ef)},
         "movidos_por_rubrica": sum(x["movido_por_rubrica"] for x in ef),
         "lecturas": {"total": len(lecturas), "fallidas": fallidas, "envoltorio_corregido": envueltas},
         "acuerdo_llm_vs_lector_codigo": {q: round(100 * acuerdo[q] / total_q[q], 1) for q in total_q},
@@ -284,8 +285,10 @@ def escribir_md(r, ejemplos):
         f"- Pacientes que la rúbrica movió sola (todo cuadró): **{r['movidos_por_rubrica']}**.",
         f"- Estabilidad: **{r['estabilidad_3_corridas']['pct']} %** de los pacientes con las 3 lecturas iguales ({inestable_pct} % inestables).",
         f"- Lecturas: {r['lecturas']['total']} · fallidas: **{r['lecturas']['fallidas']}** · respuesta envuelta corregida: {r['lecturas']['envoltorio_corregido']}.", "",
-        "## Controles (pacientes que NO se mueven solos y quedan para revisión humana)", "",
-        f"Pacientes con un control bloqueante: **{r['controles']['pacientes_con_control_bloqueante']}**.", "",
+        "## Controles (pacientes que la IA no mueve solos: se usan las reglas)", "",
+        f"Pacientes con un control bloqueante: **{r['controles']['pacientes_con_control_bloqueante']}**. "
+        f"De ellos, piden revisión del especialista (el resultado los bajaría): **{r['controles']['revision_clinica']}**; "
+        "el resto usó las reglas por un motivo técnico, sin acción humana.", "",
         "| Motivo | Pacientes |", "|---|---|", *[f"| {k} | {n} |" for k, n in sorted(r["controles"]["motivos"].items(), key=lambda x: -x[1])], "",
         *(["Ejemplos de `bajaria` (la fórmula los habría bajado; el control lo impidió):", "",
            *[f"- {e['id']}: reglas {e['reglas']} → rúbrica {e['rubrica']} · {e['detalle']}" for e in ejemplos], ""] if ejemplos else []),
