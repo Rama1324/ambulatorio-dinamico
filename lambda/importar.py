@@ -383,15 +383,32 @@ def combinar(datos, existentes, catalogo):
                 sin += 1
                 continue
             item = nuevo(r, p)
-            if clave(item) not in {clave(x) for x in p[clave_lista]}:
+            if item is not None and clave(item) not in {clave(x) for x in p[clave_lista]}:
                 p[clave_lista].append(item); res[tabla if tabla != "eventos_clinicos" else "eventos"] += 1
         if sin:
             avisos.append(f"{TABLAS[tabla]['nombre']}: {sin} fila(s) de pacientes que no están en la lista ni en el archivo de pacientes")
 
-    agregar("eventos_clinicos", "eventos_clinicos", lambda e: (e["fecha_evento"], e["tipo_evento"], e["subtipo"]),
-            lambda r, p: {"id_evento": r.get("id_evento") or f'EV-IMP-{abs(hash((r["id_paciente"], r["fecha_evento"], r["tipo_evento"], r.get("subtipo")))) % 10**6:06d}',
-                          "fecha_evento": r["fecha_evento"], "tipo_evento": r["tipo_evento"], "subtipo": r.get("subtipo") or "",
-                          "severidad": r.get("severidad") or "", "detalle": r.get("detalle") or ""})
+    def nuevo_evento(r, p):
+        """Normaliza el subtipo al vocabulario del registro y toma la severidad que le corresponde (no la del archivo):
+        así una hospitalización importada sin severidad igual cuenta como descompensación."""
+        from informe import candidatos_por_reglas
+        from modelos import SUBTIPOS
+        tipo, sub = r["tipo_evento"], (r.get("subtipo") or "").strip()
+        vocab = SUBTIPOS[tipo]
+        if sub not in vocab:
+            sub = next((sk for sk in vocab if norm(sk) == norm(sub)), None) or next(
+                (c["subtipo"] for c in candidatos_por_reglas(f'{sub}. {r.get("detalle") or ""}') if c["tipo_evento"] == tipo), None)
+        if sub is None:
+            sub = {"hospitalizacion": "ingreso hospitalario", "control_aps": "control"}.get(tipo)
+        if sub is None:
+            avisos.append(f'{r["id_paciente"]} {r["fecha_evento"]}: no se reconoció el subtipo "{r.get("subtipo")}" de {tipo}; '
+                          f'use uno de: {", ".join(vocab)}')
+            return None
+        return {"id_evento": r.get("id_evento") or f'EV-IMP-{r["id_paciente"]}-{r["fecha_evento"]}-{tipo}-{sub}',
+                "fecha_evento": r["fecha_evento"], "tipo_evento": tipo, "subtipo": sub, "severidad": vocab[sub],
+                "detalle": r.get("detalle") or ""}
+
+    agregar("eventos_clinicos", "eventos_clinicos", lambda e: (e["fecha_evento"], e["tipo_evento"], e["subtipo"]), nuevo_evento)
 
     def nueva_medicion(r, p):
         tipo = TIPO_MEDICION.get(norm(r["tipo_medicion"]), r["tipo_medicion"])

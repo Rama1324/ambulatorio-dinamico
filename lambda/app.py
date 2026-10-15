@@ -24,7 +24,7 @@ import puntaje
 import explicar
 import importar
 import informe
-from modelos import Lectura, normalizar
+from modelos import SUBTIPOS, Lectura, normalizar
 
 LOCAL = os.environ.get("LOCAL") == "1"
 # Fecha de referencia del dataset (2026-10-13). En la clínica: FECHA_REFERENCIA=hoy → se usa la fecha del día.
@@ -143,6 +143,26 @@ def perfiles_combinados():
 def _fecha(qs):
     f = (qs or {}).get("fecha_corte")
     return date.fromisoformat(f) if f else FECHA_REFERENCIA
+
+
+def _fecha_valida(valor, corte, campo="fecha"):
+    """Fecha ISO real, no posterior a la fecha de corte ni anterior al año 2000. Devuelve (fecha_iso, error)."""
+    try:
+        f = date.fromisoformat(str(valor))
+    except (TypeError, ValueError):
+        return None, f"{campo} inválida: '{valor}' (formato AAAA-MM-DD)"
+    if f > corte:
+        return None, f"{campo} {f} es posterior a la fecha de hoy ({corte})"
+    if f.year < 2000:
+        return None, f"{campo} {f} no es plausible"
+    return f.isoformat(), None
+
+
+def _hora_valida(valor):
+    try:
+        return datetime.strptime(str(valor), "%H:%M").strftime("%H:%M")
+    except (TypeError, ValueError):
+        return None
 
 
 def _posterior(s, desde_corte, desde_ts):
@@ -284,15 +304,22 @@ def post_evento(body):
     if body.get("tipo_evento") not in TIPOS_EVENTO:
         return 400, {"error": f"tipo_evento debe ser uno de {sorted(TIPOS_EVENTO)}"}
     corte = date.fromisoformat(body.get("fecha_corte") or FECHA_REFERENCIA.isoformat())
+    # El subtipo debe existir en el vocabulario del registro y la severidad es la que le corresponde (no la que venga)
+    subtipos = SUBTIPOS[body["tipo_evento"]]
+    if body.get("subtipo") not in subtipos:
+        return 400, {"error": f"subtipo debe ser uno de {sorted(subtipos)} para {body['tipo_evento']}"}
+    fecha_ev, err = _fecha_valida(body.get("fecha_evento") or corte.isoformat(), corte, "fecha del evento")
+    if err:
+        return 400, {"error": err}
     especialidad = perfs[pid]["lista_espera"]["especialidad"]
     antes = lista(corte)
     pos_antes = next((p["posicion"] for p in antes["pacientes"] if p["id_paciente"] == pid), None)
     ev = {
         "id_evento": "EV-DEMO-" + uuid.uuid4().hex[:6].upper(),
-        "fecha_evento": body.get("fecha_evento") or corte.isoformat(),
+        "fecha_evento": fecha_ev,
         "tipo_evento": body["tipo_evento"],
-        "subtipo": body.get("subtipo", ""),
-        "severidad": body.get("severidad", "moderada"),
+        "subtipo": body["subtipo"],
+        "severidad": subtipos[body["subtipo"]],
         "detalle": body.get("detalle") or f'{body.get("subtipo", body["tipo_evento"])} ({especialidad})',
         "registrado": datetime.now(timezone.utc).isoformat(timespec="microseconds"),
         "usuario": body.get("usuario", "equipo clínico"),
@@ -329,7 +356,11 @@ def post_novedad(pid, body):
         return 404, {"error": "paciente no existe"}
     tipo = body.get("tipo")
     corte = date.fromisoformat(body.get("fecha_corte") or FECHA_REFERENCIA.isoformat())
-    fecha = body.get("fecha") or corte.isoformat()
+    fecha, err = _fecha_valida(body.get("fecha") or corte.isoformat(), corte)
+    if err:
+        return 400, {"error": err}
+    if tipo in ("fallecimiento", "atendido") and fecha < perfs[pid]["lista_espera"]["fecha_ingreso_lista"]:
+        return 400, {"error": f"la fecha {fecha} es anterior al ingreso a la lista ({perfs[pid]['lista_espera']['fecha_ingreso_lista']})"}
     p = copy.deepcopy(perfs[pid])
     cat = {d["diagnostico_cie10"]: d for d in catalogo()["diagnosticos"]}
     if tipo == "comorbilidad":
@@ -464,6 +495,8 @@ def post_contacto(pid, body):
     c = {"resultado": body["resultado"], "texto": RESULTADOS_CONTACTO[body["resultado"]], "nota": body.get("nota", ""),
          "fecha_corte": corte.isoformat(), "usuario": body.get("usuario", "equipo clínico"),
          "fecha": datetime.now(timezone.utc).isoformat(timespec="microseconds")}
+    if body.get("hora") and not _hora_valida(body["hora"]) or body.get("hora_fin") and not _hora_valida(body["hora_fin"]):
+        return 400, {"error": "hora inválida (formato HH:MM)"}
     if body["resultado"] == "citado" and body.get("hora"):
         # reserva la hora: ningún otro paciente puede recibir la misma hora en el mismo box ese día
         ocupada = next((pid2 for pid2, x in citados_hoy(corte).items() if pid2 != pid and x.get("id_box") == body.get("id_box")
@@ -586,10 +619,12 @@ def _motivo(p):
     tabla = rz.get("tabla_oficial", {}).get("valor", "")
     if p["estado_clinico"] == "descompensado" and tabla.startswith('"') and "no supera" not in tabla:
         return f'{rz["evento"]["valor"]} → {tabla} ({rz["tabla_oficial"]["fuente"]})'
-    extra = " y lleva más de 1 año en lista" if p["antiguedad_mayor_1_anio"] else ""
+    extra = "; lleva más de 1 año en lista" if p["antiguedad_mayor_1_anio"] else ""
     if p["estado_clinico"] == "descompensado":
         extra += f'; evento reciente para revisión clínica ({rz["evento"]["valor"]})'
-    return f'prioridad {p["categoria"]}{extra}'
+    if p["lace"]["total"]:
+        extra += f'; {p["lace"]["total"]} puntos LACE'
+    return f'prioridad {p["categoria"]} asignada por el especialista al revisar la interconsulta (no es una urgencia nueva){extra}'
 
 
 def _diferencia(a, b):
@@ -680,7 +715,11 @@ def boxes(corte, especialidad=None):
     del_dia = {x["id_box"]: x for x in agenda.get(dia, [])}
     asignados = {a["id_box"]: len(a["pacientes"]) for e in out for a in e["asignaciones"]}
     todos = sorted({x["id_box"] for filas in agenda.values() for x in filas})
-    mapa = [{"id_box": i, **({**del_dia[i], "libres": del_dia[i]["capacidad"] - del_dia[i]["usados"],
+    reservadas = {}
+    for c in citados.values():
+        reservadas[c.get("id_box")] = reservadas.get(c.get("id_box"), 0) + 1
+    mapa = [{"id_box": i, **({**del_dia[i], "citadas": reservadas.get(i, 0),
+                              "libres": max(0, del_dia[i]["capacidad"] - del_dia[i]["usados"] - reservadas.get(i, 0)),
                               "pacientes_asignados": asignados.get(i, 0)} if i in del_dia else {"especialidad": None})}
             for i in todos]
     return {"fecha_corte": corte.isoformat(), "dia_agenda": dia, "resumen": b.get("resumen", {}), "especialidades": out,
@@ -703,6 +742,12 @@ def disponible(corte, especialidad, cupos=None, desde=None, hasta=None):
         return 400, {"error": "indique la especialidad"}
     dur, n_citas = duracion_consulta(especialidad)
     inicio = None
+    if (desde or hasta) and not (_hora_valida(desde) and _hora_valida(hasta)):
+        return 400, {"error": "indique 'desde' y 'hasta' en formato HH:MM"}
+    try:
+        cupos = int(cupos) if cupos not in (None, "") else None
+    except ValueError:
+        return 400, {"error": "'cupos' debe ser un número"}
     if desde and hasta:
         h1, h2 = datetime.strptime(desde, "%H:%M"), datetime.strptime(hasta, "%H:%M")
         minutos = int((h2 - h1).total_seconds() // 60)

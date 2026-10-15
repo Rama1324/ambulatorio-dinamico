@@ -161,7 +161,7 @@ export default function App() {
           <Indicador n={gesVenc} t="Garantías GES vencidas" />
         </div>
 
-        {vista === "hoy" && <Hoy vitales={vitales} fecha={fecha} esp={esp} setEsp={setEsp} onVer={abrir} esApi={esApi} onCambio={cargar} onAviso={mostrarAviso} />}
+        {vista === "hoy" && <Hoy vitales={vitales} todosPacientes={data.pacientes} fecha={fecha} esp={esp} setEsp={setEsp} onVer={abrir} esApi={esApi} onCambio={cargar} onAviso={mostrarAviso} />}
         {vista === "criterios" && <Criterios />}
         {vista === "medico" && <MedicoDisponible fecha={fecha} esApi={esApi} espInicial={esp} onVer={abrir} onCambio={cargar} onAviso={mostrarAviso} />}
         {vista === "indicadores" && <Indicadores fecha={fecha} esApi={esApi} data={data} />}
@@ -1165,7 +1165,7 @@ function Informe({ p, fecha, cargando, onConfirmar, onAviso }) {
 
 // Pantalla "Hoy": lista de tareas del día en dos pasos, con una sola forma de decir cada cosa ("hora libre").
 //   Paso 1: a quién llamar hoy (riesgo vital) y qué ofrecerle.  Paso 2: cómo llenar las horas libres de cada box.
-function Hoy({ vitales, fecha, esp, setEsp, onVer, esApi, onCambio, onAviso }) {
+function Hoy({ vitales, todosPacientes, fecha, esp, setEsp, onVer, esApi, onCambio, onAviso }) {
   const [b, setB] = useState(null);
   const [err, setErr] = useState(null);
   const [enviando, setEnviando] = useState(null);
@@ -1177,6 +1177,10 @@ function Hoy({ vitales, fecha, esp, setEsp, onVer, esApi, onCambio, onAviso }) {
 
   const todos = vitales.filter((p) => esp === "Todas" || p.especialidad === esp);
   const pendientes = todos.filter((p) => p.contactar_hoy);
+  // Se descompensaron pero su diagnóstico no tiene fila de "descompensado" en la tabla HLF: no suben solos,
+  // pero no pueden quedar invisibles → avisar al especialista para que los revise.
+  const aRevisar = (todosPacientes || []).filter((p) => (esp === "Todas" || p.especialidad === esp) && !p.riesgo_vital &&
+    p.estado_clinico === "descompensado" && p.estado_revision !== "confirmado" && p.estado_revision !== "ajustado");
   const listos = todos.filter((p) => !p.contactar_hoy);
   const hora = b?.cupo_por_paciente || {};
   const box = Object.fromEntries((b?.mapa || []).map((x) => [x.id_box, x]));
@@ -1241,13 +1245,32 @@ function Hoy({ vitales, fecha, esp, setEsp, onVer, esApi, onCambio, onAviso }) {
               </ul>
             </details>
           )}
+
+          <div className="mt-4 pt-3 border-t border-outline-variant">
+            <h3 className="text-[15px] font-semibold text-ambar flex items-center gap-1"><Icono n="rate_review" className="text-[18px]" />Avisar al especialista ({aRevisar.length})</h3>
+            <p className="text-[13px] text-on-surface-variant mb-2">Se descompensaron después de la interconsulta, pero la tabla del HLF no define cuánto sube su prioridad. No se les cambia solo: el especialista debe revisarlos y confirmar o cambiar su prioridad.</p>
+            {aRevisar.length === 0 && <p className="text-[13px] text-on-surface-variant">Nadie pendiente de revisión{esp !== "Todas" && ` en ${esp}`}.</p>}
+            <ul className="divide-y divide-outline-variant/60">
+              {aRevisar.map((p) => {
+                const ev = p.razones.find((r) => r.factor === "evento");
+                return (
+                  <li key={p.id_paciente} className="py-2 text-[14px]">
+                    <button onClick={() => onVer(p.id_paciente)} className="text-left hover:underline">
+                      <b>{p.nombre_fantasia}</b> <span className="text-on-surface-variant text-[13px]">· {p.especialidad} · {p.diagnostico_texto} · prioridad {p.categoria}</span>
+                    </button>
+                    {ev && <div className="text-[13px] text-ambar">{ev.valor}</div>}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         </Caja>
 
         <div className="lg:col-span-7 flex flex-col gap-4">
           <div className="flex items-center justify-between gap-2">
             <div>
               <h2 className="text-[17px] font-semibold">Paso 2 · Llenar las horas libres de hoy</h2>
-              <p className="text-[13px] text-on-surface-variant">Cada hora libre se propone al siguiente paciente de la lista de su especialidad. Es una propuesta: se confirma al llamar.</p>
+              <p className="text-[13px] text-on-surface-variant">Cada hora libre se propone al siguiente paciente de la lista de su especialidad, en su turno. "Alta / Media / Baja" es la prioridad clínica de la lista, no una urgencia de hoy: las urgencias de hoy están en el Paso 1. Es una propuesta: se confirma al llamar.</p>
             </div>
             <select value={esp} onChange={(e) => setEsp(e.target.value)} className="h-9 px-2 border border-outline-variant rounded bg-white text-[14px]">{ESPECIALIDADES.map((e) => <option key={e}>{e}</option>)}</select>
           </div>
@@ -1413,7 +1436,7 @@ function MapaBox({ mapa, dia, esp, setEsp }) {
               <div className="text-[12px]">Sin agenda hoy</div>
             </div>
           );
-          const pct = Math.round((x.usados / x.capacidad) * 100);
+          const pct = Math.round(((x.usados + (x.citadas || 0)) / x.capacidad) * 100);
           const sel = esp === x.especialidad;
           return (
             <button key={x.id_box} onClick={() => setEsp(sel ? "Todas" : x.especialidad)} title={`${x.especialidad} · ${x.bloque} · ${x.usados}/${x.capacidad} cupos usados · sobretiempo ${x.sobretiempo_min} min`}
@@ -1427,7 +1450,7 @@ function MapaBox({ mapa, dia, esp, setEsp }) {
                 <div className="h-full bg-primary" style={{ width: `${pct}%` }} />
               </div>
               <div className="flex justify-between text-[11px] text-on-surface-variant mt-1">
-                <span>{x.usados} de {x.capacidad} ocupadas</span>
+                <span>{x.usados + (x.citadas || 0)} de {x.capacidad} ocupadas{x.citadas ? ` (${x.citadas} citada${x.citadas > 1 ? "s" : ""} hoy)` : ""}</span>
                 {x.sobretiempo_min > 0 && <span title="Sobretiempo del bloque">+{x.sobretiempo_min} min</span>}
               </div>
             </button>

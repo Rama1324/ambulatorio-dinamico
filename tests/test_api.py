@@ -362,6 +362,30 @@ def test_medico_con_horas_libres():
     assert len(d["pacientes"]) == 5 and d["reservas"] and d["reservas"][0]["por_que_despues"]
     assert call("GET", "/disponible", {})[0] == 400
 
+def test_validaciones_de_entrada():
+    pid = "PAC-HLF-00003"
+    s, d = call("POST", "/eventos", body={"id_paciente": pid, "tipo_evento": "hospitalizacion", "subtipo": "ingreso UCI", "severidad": "leve"})
+    assert s == 200 and d["evento"]["severidad"] == "grave"          # la severidad la define el vocabulario, no el cliente
+    assert call("POST", "/eventos", body={"id_paciente": pid, "tipo_evento": "hospitalizacion", "subtipo": "cirugía"})[0] == 400
+    assert call("POST", "/eventos", body={"id_paciente": pid, "tipo_evento": "visita_urgencia", "subtipo": "triage ESI 2",
+                                          "fecha_evento": "2030-01-01", "fecha_corte": "2026-10-13"})[0] == 400
+    assert call("POST", f"/pacientes/{pid}/novedad", body={"tipo": "fallecimiento", "fecha": "2031-01-01"})[0] == 400
+    assert call("POST", f"/pacientes/{pid}/novedad", body={"tipo": "fallecimiento", "fecha": "13/10/2026"})[0] == 400
+    assert call("POST", f"/pacientes/{pid}/contacto", body={"resultado": "citado", "hora": "25:99"})[0] == 400
+    assert call("GET", "/disponible", {"especialidad": "Cardiología", "desde": "14", "hasta": "x"})[0] == 400
+    assert call("GET", "/disponible", {"especialidad": "Cardiología", "cupos": "muchos"})[0] == 400
+
+def test_importar_hospitalizacion_sin_severidad_cuenta():
+    import base64
+    _, l = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
+    pid = next(p["id_paciente"] for p in l["pacientes"] if p["id_paciente"].startswith("PAC-HLF") and p["estado_clinico"] == "sin_cambios"
+               and p["fecha_ingreso_lista"] < "2026-10-01")
+    csv_ev = base64.b64encode(f"rut;fecha;tipo;subtipo\n{pid};2026-10-01;Hospitalización;\n".encode()).decode()
+    s, d = call("POST", "/importar", body={"archivos": [{"nombre": "ev.csv", "contenido_base64": csv_ev}], "confirmar": True})
+    assert s == 200 and d["resumen"]["eventos"] == 1
+    _, l = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
+    assert fila(l, pid)["estado_clinico"] == "descompensado"
+
 def test_plantilla():
     r = app.handler({"requestContext": {"http": {"method": "GET"}}, "rawPath": "/plantillas/lista_espera"})
     assert r["statusCode"] == 200 and "diagnostico_cie10" in r["body"]
