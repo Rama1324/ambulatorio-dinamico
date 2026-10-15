@@ -223,7 +223,7 @@ def _posterior(s, desde_corte, desde_ts):
     return s["fecha"] > desde_corte or bool(s.get("registrado") and s["registrado"] > desde_ts)
 
 
-def _enriquecer(r, perfil, revision, pos_ant, corte=None, contacto=None, decision=None):
+def _enriquecer(r, perfil, revision, pos_ant, corte=None, contacto=None, decision=None, ajuste=None):
     pac, le = perfil["paciente"], perfil["lista_espera"]
     corte_iso = (corte or hoy()).isoformat()
     out = {
@@ -232,6 +232,7 @@ def _enriquecer(r, perfil, revision, pos_ant, corte=None, contacto=None, decisio
         "edad": pac["edad"],
         "sexo": pac["sexo"],
         "comuna": pac["comuna"],
+        "prevision": pac.get("prevision"),
         "comorbilidades": pac.get("comorbilidades", []),
         "especialidad": le["especialidad"],
         "diagnostico_cie10": le["diagnostico_cie10"],
@@ -278,8 +279,9 @@ def _enriquecer(r, perfil, revision, pos_ant, corte=None, contacto=None, decisio
                 out["categoria"] = revision["categoria_ajustada"]  # el equipo clínico decide
     else:
         out["revision_sugerida"] = senales
-    # Descompensación grave: la alerta se cierra SOLO con una decisión clínica, una revisión del especialista,
-    # una cita reservada o una derivación a urgencia registradas después del evento. Llamar no basta.
+    # Descompensación grave (KPI del hospital: reevaluación < 72 h tras un evento): la PRIORIDAD debe revisarse.
+    # La alerta se cierra solo con una revisión del especialista: decisión clínica, confirmar/ajustar la prioridad
+    # o un ajuste manual de la posición, registrados después del evento. Llamar o citar no la cierran.
     def posterior(x):
         return bool(x) and x.get("fecha_corte", "0000") <= corte_iso and \
             x["fecha_corte"] >= (r.get("fecha_descompensacion") or "") and x["fecha"] >= (r.get("registro_descompensacion") or "")
@@ -294,14 +296,106 @@ def _enriquecer(r, perfil, revision, pos_ant, corte=None, contacto=None, decisio
         elif posterior(revision):
             cierre = {"por": "revision", "texto": "prioridad revisada por el especialista", "responsable": revision.get("usuario"),
                       "fecha": revision["fecha"]}
-        elif posterior(contacto) and contacto["resultado"] in ("citado", "derivado_urgencia"):
-            cierre = {"por": "contacto", "texto": contacto["texto"], "responsable": contacto.get("usuario"), "fecha": contacto["fecha"]}
+        elif posterior(ajuste):
+            cierre = {"por": "ajuste_manual", "texto": f'posición ajustada a mano: {ajuste["motivo_texto"]}', "responsable": ajuste.get("usuario"),
+                      "fecha": ajuste["fecha"]}
         dias = r.get("dias_desde_descompensacion") or 0
-        out["evaluacion"] = {"estado": "evaluada" if cierre else ("atrasada" if dias > puntaje.DIAS_EVALUACION else "pendiente"),
-                             "dias_desde_evento": dias, "fecha_evento": r.get("fecha_descompensacion"), "plazo_dias": puntaje.DIAS_EVALUACION,
-                             "cierre": cierre}
+        # El plazo de 72 h corre desde que el evento LLEGA al sistema (antes nadie podía reaccionar): fecha de registro
+        # en la app o, para el registro cargado, la fecha de los datos. En simulación histórica, desde el evento.
+        llegada = (r.get("registro_descompensacion") or "")[:10] or (
+            REGISTRO_AL if corte_iso >= REGISTRO_AL else r.get("fecha_descompensacion"))
+        llegada = max(llegada, r.get("fecha_descompensacion") or llegada)
+        en_revision = max(0, (date.fromisoformat(corte_iso) - date.fromisoformat(llegada)).days)
+        out["evaluacion"] = {"estado": "evaluada" if cierre else ("atrasada" if en_revision > puntaje.DIAS_EVALUACION else "pendiente"),
+                             "dias_desde_evento": dias, "fecha_evento": r.get("fecha_descompensacion"), "llego_al_sistema": llegada,
+                             "dias_en_revision": en_revision, "plazo_dias": puntaje.DIAS_EVALUACION, "cierre": cierre}
         out["contactar_hoy"] = not cierre
     return out
+
+
+# Fecha en que se extrajo el registro del hospital que se cargó (el dataset sintético es al 2026-10-13)
+REGISTRO_AL = os.environ.get("REGISTRO_AL", "2026-10-13")
+
+
+def datos_hasta():
+    """Fecha del último dato del registro cargado (eventos, mediciones o citas): hasta dónde llega la información."""
+    if "datos_hasta" not in _cache:
+        fechas = [x.get(k) for p in perfiles().values() for lista_, k in (("eventos_clinicos", "fecha_evento"),
+                  ("mediciones", "fecha_medicion"), ("citaciones", "fecha_cita")) for x in p.get(lista_, [])]
+        fechas = [f for f in fechas if f]
+        _cache["datos_hasta"] = max(fechas) if fechas else hoy().isoformat()
+    return _cache["datos_hasta"]
+
+
+# ---------- gestión de cada paciente: qué falta, quién se encarga y cuándo se sigue ----------
+ESTADOS_GESTION = {
+    "pendiente_revision": ("Pendiente de revisión", "Revisar la prioridad (especialista)"),
+    "pendiente_contacto": ("Pendiente de contacto", "Volver a llamar"),
+    "pendiente_cita": ("Pendiente de cita", "Buscar cupo y citar"),
+    "cita_reservada": ("Cita reservada", "Confirmar asistencia"),
+    "atendido": ("Atendido: registrar egreso", "Registrar la atención (egreso)"),
+}
+MOTIVOS_PENDIENTE = {"falta_cupo": "Falta de cupo", "contacto": "No se ha podido contactar", "antecedentes": "Faltan antecedentes o exámenes",
+                     "revision": "Espera revisión del especialista", "paciente": "Decisión o disponibilidad del paciente", "otro": "Otro (documentado)"}
+
+
+def gestiones():
+    return _ultimo_por_paciente("gestion#", "gestion")
+
+
+def _gestion(p, g, reserva, corte):
+    """Estado de gestión calculado con lo registrado + responsable, próxima acción y seguimiento asignados por el equipo."""
+    c = p.get("contacto") or {}
+    if reserva and reserva["estado_cita"] == "atendida":
+        estado = "atendido"
+    elif reserva and reserva["estado_cita"] in ("reservada", "confirmada") or (c.get("resultado") == "citado" and not reserva):
+        estado = "cita_reservada"
+    elif p.get("contactar_hoy") or p["estado_revision"] == "requiere_revision" or p.get("ajuste_manual_vencido") or (
+            p["estado_revision"] == "pendiente" and (p.get("revision_sugerida") or p["categoria_sistema"] != p["prioridad_inicial"])):
+        estado = "pendiente_revision"
+    elif c.get("resultado") == "no_contesta" or (reserva and reserva["estado_cita"] == "no_asistio"):
+        estado = "pendiente_contacto"
+    else:
+        estado = "pendiente_cita"
+    g = g if g and g.get("fecha_corte", "0000") <= corte.isoformat() else {}
+    seguimiento = g.get("seguimiento")
+    return {"estado": estado, "texto": ESTADOS_GESTION[estado][0],
+            "proxima_accion": g.get("proxima_accion") or ESTADOS_GESTION[estado][1], "accion_asignada": bool(g.get("proxima_accion")),
+            "responsable": g.get("responsable"), "seguimiento": seguimiento,
+            "seguimiento_vencido": bool(seguimiento and seguimiento < corte.isoformat()),
+            "motivo_pendiente": g.get("motivo_pendiente"), "motivo_texto": MOTIVOS_PENDIENTE.get(g.get("motivo_pendiente")),
+            "nota": g.get("nota"), "actualizado_por": g.get("usuario"), "actualizado": g.get("fecha"),
+            "reserva": {k: reserva[k] for k in ("hora", "hora_fin", "id_box", "estado_cita") if k in reserva} if reserva else None}
+
+
+def post_gestion(pid, body):
+    """Asigna responsable, próxima acción, fecha de seguimiento y motivo del pendiente (con trazabilidad)."""
+    perfs, _ = perfiles_combinados()
+    if pid not in perfs:
+        return 404, {"error": "paciente no existe"}
+    usuario = (body.get("usuario") or "").strip()
+    if not usuario:
+        return 400, {"error": "indique su nombre y cargo: la gestión queda registrada a su nombre"}
+    corte = date.fromisoformat(body.get("fecha_corte") or hoy().isoformat())
+    motivo = body.get("motivo_pendiente") or None
+    if motivo and motivo not in MOTIVOS_PENDIENTE:
+        return 400, {"error": f"motivo_pendiente debe ser uno de {sorted(MOTIVOS_PENDIENTE)}"}
+    if motivo == "otro" and len((body.get("nota") or "").strip()) < MIN_EXPLICACION:
+        return 400, {"error": f"si el motivo es 'otro', documéntelo en la nota (mínimo {MIN_EXPLICACION} caracteres)"}
+    seguimiento = body.get("seguimiento") or None
+    if seguimiento:
+        try:
+            if date.fromisoformat(seguimiento) < corte:
+                return 400, {"error": "la fecha de seguimiento no puede ser anterior a hoy"}
+        except ValueError:
+            return 400, {"error": "seguimiento inválido (formato AAAA-MM-DD)"}
+    g = {"responsable": (body.get("responsable") or "").strip() or None, "proxima_accion": (body.get("proxima_accion") or "").strip() or None,
+         "seguimiento": seguimiento, "motivo_pendiente": motivo, "nota": (body.get("nota") or "").strip(), "usuario": usuario,
+         "fecha_corte": corte.isoformat(), "fecha": datetime.now(timezone.utc).isoformat(timespec="microseconds")}
+    guardar({"id_paciente": pid, "sk": f"gestion#{g['fecha']}", "gestion": json.dumps(g, ensure_ascii=False)})
+    esp = perfs[pid]["lista_espera"]["especialidad"]
+    fila = next((p for p in lista(corte, esp)["pacientes"] if p["id_paciente"] == pid), None)
+    return 200, {"id_paciente": pid, "gestion": g, "paciente": fila}
 
 
 def ajustes_orden():
@@ -341,14 +435,17 @@ def lista(corte, especialidad=None, perfs=None, revs=None):
     activos, excluidos = puntaje.priorizar(vals, corte, especialidad)
     ant, _ = puntaje.priorizar(vals, corte - timedelta(days=14), especialidad)
     pos_ant = {r["id_paciente"]: r["posicion"] for r in ant}
-    cont, dec = contactos(), decisiones()
+    cont, dec, aj = contactos(), decisiones(), ajustes_orden()
     pacientes = [_enriquecer(r, perfs[r["id_paciente"]], revs.get(r["id_paciente"]), pos_ant.get(r["id_paciente"]), corte,
-                             cont.get(r["id_paciente"]), dec.get(r["id_paciente"])) for r in activos]
+                             cont.get(r["id_paciente"]), dec.get(r["id_paciente"]), aj.get(r["id_paciente"])) for r in activos]
     # el equipo clínico decide: si ajustó la categoría, esa manda en el orden (mismos criterios MINSAL)
     pacientes.sort(key=puntaje.clave_orden)
     for i, p in enumerate(pacientes, 1):
         p["posicion_sistema"] = i
     _aplicar_ajustes(pacientes, {r["id_paciente"]: r.get("senales", []) for r in activos}, corte)
+    reservas, gest = citados_hoy(corte, incluir_canceladas=True), gestiones()
+    for p in pacientes:
+        p["gestion"] = _gestion(p, gest.get(p["id_paciente"]), reservas.get(p["id_paciente"]), corte)
     por_esp = {}
     for i, p in enumerate(pacientes, 1):
         p["posicion"] = i
@@ -455,6 +552,7 @@ def catalogo():
             "acg": [{"nivel": k, "texto": v} for k, v in puntaje.ACG_NIVELES.items()],
             "resultados_contacto": [{"valor": k, "texto": v} for k, v in RESULTADOS_CONTACTO.items()],
             "decisiones": [{"valor": k, "texto": v} for k, v in DECISIONES.items()],
+            "motivos_pendiente": [{"valor": k, "texto": v} for k, v in MOTIVOS_PENDIENTE.items()],
             "motivos_ajuste": [{"valor": k, "texto": v} for k, v in AJUSTE_MANUAL.items()], "min_explicacion": MIN_EXPLICACION,
             "estados_cita": [{"valor": k, "texto": v} for k, v in ESTADOS_CITA.items()]}
 
@@ -726,8 +824,8 @@ def kpis(corte):
     # Tiempo desde que se registra un evento grave hasta la primera evaluación clínica (decisión o revisión) del paciente
     cierres = {}
     for r in regs:
-        if r["sk"].startswith(("decision#", "revision#")):
-            cierres.setdefault(r["id_paciente"], []).append(json.loads(r.get("decision") or r["revision"])["fecha"])
+        if r["sk"].startswith(("decision#", "revision#", "orden#")):
+            cierres.setdefault(r["id_paciente"], []).append(json.loads(r.get("decision") or r.get("revision") or r["orden"])["fecha"])
     horas, sin_evaluar = [], 0
     for r in regs:
         if not r["sk"].startswith("evento#"):
@@ -771,6 +869,13 @@ def kpis(corte):
         "concordancia": {"revisiones": len(pares), "acuerdos": acuerdos,
                          "acuerdo_pct": round(100 * acuerdos / len(pares)) if pares else None, "kappa": _kappa(pares),
                          "meta": 0.70, "n_recomendado": N_KAPPA_RECOMENDADO, "suficiente": len(pares) >= N_KAPPA_RECOMENDADO},
+        "trabajo_pendiente": {"sin_responsable": sum(not p["gestion"]["responsable"] for p in data["pacientes"]),
+                              "seguimiento_vencido": sum(p["gestion"]["seguimiento_vencido"] for p in data["pacientes"]),
+                              "por_estado": {k: sum(p["gestion"]["estado"] == k for p in data["pacientes"]) for k in ESTADOS_GESTION}},
+        "espera": {"mediana_dias": _mediana([p["dias_espera"] for p in data["pacientes"]]),
+                   "mas_de_1_anio": sum(p["dias_espera"] > 365 for p in data["pacientes"]),
+                   "mas_de_500_dias": sum(p["dias_espera"] > 500 for p in data["pacientes"]),
+                   "maxima_dias": max((p["dias_espera"] for p in data["pacientes"]), default=0)},
         "ajustes_manuales": {"vigentes": sum(bool(p.get("ajuste_manual")) for p in data["pacientes"]),
                              "sin_efecto_por_evento": sum(bool(p.get("ajuste_manual_vencido")) for p in data["pacientes"]),
                              "registrados": sum(r["sk"].startswith("orden#") for r in regs)},
@@ -852,7 +957,7 @@ def _motivo(p):
     if p["categoria"] != p["categoria_sistema"]:
         return f'prioridad {p["categoria"]} ajustada por el equipo clínico: {p["revision"].get("motivo")}'
     if p["riesgo_vital"]:
-        return f'Descompensación grave: requiere evaluación — {rz["evento"]["valor"]}'
+        return f'Descompensación grave: revisar su prioridad — {rz["evento"]["valor"]}'
     tabla = rz.get("tabla_oficial", {}).get("valor", "")
     if p["estado_clinico"] == "descompensado" and tabla.startswith('"') and "no supera" not in tabla:
         return f'{rz["evento"]["valor"]} → {tabla} ({rz["tabla_oficial"]["fuente"]})'
@@ -888,7 +993,7 @@ def _fila_box(p):
             "categoria": p["categoria"], "diagnostico_texto": p["diagnostico_texto"], "dias_espera": p["dias_espera"],
             "riesgo_inasistencia": p["riesgo_inasistencia"], "riesgo_vital": p["riesgo_vital"], "motivo": _motivo(p),
             "contactar_hoy": p["contactar_hoy"], "contacto": p["contacto"], "evaluacion": p.get("evaluacion"),
-            "accion": "contactar hoy y pedir evaluación médica (plazo 72 h)" if p["contactar_hoy"]
+            "accion": "pedir revisión de su prioridad al especialista (plazo 72 h)" if p["contactar_hoy"]
             else (p["evaluacion"]["cierre"]["texto"] if p.get("evaluacion") and p["evaluacion"]["cierre"] else None)
             or ("confirmar asistencia por teléfono (2 inasistencias seguidas)" if p["riesgo_inasistencia"] else "citar")}
 
@@ -1074,6 +1179,8 @@ def handler(event, context=None):
             return _resp(*post_contacto(partes[1], body))
         if method == "POST" and len(partes) == 3 and partes[0] == "pacientes" and partes[2] == "decision":
             return _resp(*post_decision(partes[1], body))
+        if method == "POST" and len(partes) == 3 and partes[0] == "pacientes" and partes[2] == "gestion":
+            return _resp(*post_gestion(partes[1], body))
         if method == "POST" and len(partes) == 3 and partes[0] == "pacientes" and partes[2] == "orden":
             return _resp(*post_orden(partes[1], body))
         if method == "POST" and len(partes) == 3 and partes[0] == "pacientes" and partes[2] == "cita":
@@ -1092,7 +1199,8 @@ def handler(event, context=None):
             return _resp(200, boxes(_fecha(qs), qs.get("especialidad") or None))
         if method == "GET" and partes in ([], ["health"]):
             return _resp(200, {"ok": True, "pacientes": len(perfiles()), "fecha_hoy": hoy().isoformat(),
-                               "modo": "tiempo_real" if TIEMPO_REAL else "simulacion", "datos": "sinteticos"})
+                               "modo": "tiempo_real" if TIEMPO_REAL else "simulacion", "datos": "sinteticos",
+                               "datos_hasta": datos_hasta(), "registro_al": REGISTRO_AL})
         return _resp(404, {"error": f"ruta no encontrada: {method} {path}"})
     except Exception as e:  # nunca devolver 502 sin CORS: el front no podría leer el error
         return _resp(500, {"error": str(e)})

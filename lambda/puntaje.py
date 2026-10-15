@@ -226,8 +226,8 @@ def puntuar(perfil, corte):
                             "fuente": FUENTE_TABLA})
     if riesgo_vital:
         razones.insert(0, {"factor": "riesgo_vital",
-                           "valor": f'Descompensación grave ({fila[0]}) sin estabilización posterior: requiere evaluación '
-                                    f'clínica dentro de 72 h; el médico decide si es riesgo vital y si deriva a urgencia',
+                           "valor": f'Descompensación grave ({fila[0]}) sin registro posterior de estabilización: su prioridad '
+                                    f'debe revisarse dentro de 72 h desde que el evento llega al sistema; el especialista decide',
                            "fuente": "MINSAL: criticidad / riesgo vital (SSMSO 2025, pág. 4) · " f"{FUENTE_TABLA}, pág. {fila[2]}"})
     elif estado == "estabilizado":
         razones.append({"factor": "evento", "valor": f'{ult_estab["subtipo"]} ({ult_estab["fecha_evento"]}): '

@@ -52,6 +52,9 @@ Sin `fecha_corte`, la API usa `FECHA_REFERENCIA` (variable de entorno): `hoy` = 
 - `estado_revision`: `pendiente | confirmado | ajustado | requiere_revision`.
 - `evaluacion` (solo si `riesgo_vital`): `{"estado", "dias_desde_evento", "fecha_evento", "plazo_dias": 3, "cierre": null | {"por", "texto", "responsable", "fecha"}}`.
 - `decision`: última decisión clínica o `null`. `contacto`: última llamada o `null` (con `intentos_sin_respuesta`).
+- `gestion`: `{estado (pendiente_revision · pendiente_contacto · pendiente_cita · cita_reservada · atendido), texto, proxima_accion, responsable, seguimiento, seguimiento_vencido, motivo_pendiente, motivo_texto, nota, actualizado_por, actualizado, reserva}`. El estado se calcula con lo registrado.
+- `evaluacion` (descompensación grave): el plazo de 72 h es para **revisar la prioridad** y corre desde `llego_al_sistema` (registro en la app o `REGISTRO_AL` del registro cargado); `dias_en_revision`. Se cierra con decisión clínica, revisión o ajuste manual (llamar o citar no la cierran).
+- `prevision` del paciente.
 - `posicion_sistema` (orden de las reglas), `posicion` y `posicion_especialidad` (con ajustes manuales), `ajuste_manual` y `ajuste_manual_vencido`.
 - `lace`: `{"total", "partes", "experimental": true, "datos_faltantes": [...], "uso"}`.
 
@@ -67,6 +70,7 @@ Sin `fecha_corte`, la API usa `FECHA_REFERENCIA` (variable de entorno): `hoy` = 
 | GET | `/pacientes/{id}/historia?fecha_corte=` | Posición y categoría cada 14 días (gráfico de evolución) |
 | POST | `/pacientes/{id}/contacto` | Llamada: `resultado` citado · derivado_urgencia · contactado · no_contesta (+ `nota`). `citado` con `hora`, `hora_fin`, `id_box` reserva la hora (409 si ya está reservada). Solo citado y derivado_urgencia cierran la alerta. **Cambio:** `se_mantiene` pasó a `/decision` (`mantener`) |
 | POST | `/pacientes/{id}/decision` | Decisión clínica: `decision` citar_prioritario · derivar_urgencia · adelantar_control · mantener; `responsable` (obligatorio), `nota`, `seguimiento` (AAAA-MM-DD). Cierra la alerta |
+| POST | `/pacientes/{id}/gestion` | Gestión del caso: `responsable`, `proxima_accion`, `seguimiento` (AAAA-MM-DD, no anterior a hoy), `motivo_pendiente` (falta_cupo · contacto · antecedentes · revision · paciente · otro; "otro" exige `nota` de 20+ caracteres) y `usuario` obligatorio |
 | POST | `/pacientes/{id}/orden` | Ajuste manual de la posición: `posicion` (en la lista de su especialidad), `motivo` (criterio_clinico · informacion_no_registrada · comite · error_registro · otro), `explicacion` (mín. 20 caracteres) y `usuario` obligatorios. `{quitar: true, explicacion, usuario}` lo deshace. Un evento posterior lo deja sin efecto (`ajuste_manual_vencido`) |
 | POST | `/pacientes/{id}/cita` | Estado de la cita reservada hoy: `estado` confirmada · atendida · no_asistio · cancelada (libera la hora). 404 si no hay reserva |
 | GET | `/disponible?especialidad=X&desde=HH:MM&hasta=HH:MM` (o `&cupos=N`) | Médico con horas libres: a quiénes atender, en el orden de la lista, con hora sugerida (duración promedio de la especialidad), sin repetir a quienes ya tienen cita reservada; los que solo están propuestos en un box vienen con `propuesto_en_box`; + 3 reservas |
@@ -77,7 +81,7 @@ Sin `fecha_corte`, la API usa `FECHA_REFERENCIA` (variable de entorno): `hoy` = 
 | POST | `/pacientes/{id}/revision` | `{"accion":"confirmar"}` o `{"accion":"ajustar","categoria_ajustada":"alta|media|baja","motivo":"..."}` |
 | POST | `/pacientes/{id}/explicar` | Bedrock redacta `explicacion_ia` desde `razones` |
 | GET | `/boxes?fecha_corte=AAAA-MM-DD` | Ocupación de box por especialidad + pacientes sugeridos para horas libres. Cada fila trae `estado_cita` (propuesta · reservada · confirmada · atendida · no_asistio); por especialidad `conteo_citas` y `descompensados`. `agenda_referencia: true` si la fecha no tiene agenda propia y se usa la última del registro (`dia_agenda`) |
-| GET | `/health` | `{ok, pacientes, fecha_hoy, modo, datos: "sinteticos"}` para verificar el deploy |
+| GET | `/health` | `{ok, pacientes, fecha_hoy, modo, datos: "sinteticos", datos_hasta, registro_al}` para verificar el deploy |
 
 ## Respuesta POST /pacientes/{id}/informe
 ```json

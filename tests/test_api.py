@@ -273,7 +273,37 @@ def test_bug_contacto_apaga_alerta():
     s, r = call("POST", f"/pacientes/{p['id_paciente']}/contacto", body={"resultado": "contactado", "fecha_corte": "2026-10-13"})
     assert s == 200 and r["paciente"]["contactar_hoy"]          # llamar no es decidir: sigue pendiente la evaluación médica
     s, r = call("POST", f"/pacientes/{p['id_paciente']}/contacto", body={"resultado": "citado", "fecha_corte": "2026-10-13"})
-    assert not r["paciente"]["contactar_hoy"] and r["paciente"]["riesgo_vital"]   # reconocida, sigue priorizado
+    assert r["paciente"]["contactar_hoy"] and r["paciente"]["gestion"]["estado"] == "cita_reservada"   # citar no es revisar la prioridad
+    s, r = call("POST", f"/pacientes/{p['id_paciente']}/revision", body={"accion": "confirmar", "fecha_corte": "2026-10-13"})
+    _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
+    assert not fila(d, p["id_paciente"])["contactar_hoy"] and fila(d, p["id_paciente"])["riesgo_vital"]   # revisada, sigue priorizada
+
+def test_plazo_72h_corre_desde_que_el_evento_llega():
+    _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-14"})
+    v = [p for p in d["pacientes"] if p["riesgo_vital"] and p["evaluacion"]["estado"] != "evaluada" and p["id_paciente"].startswith("PAC-HLF")
+         and not p["evaluacion"]["llego_al_sistema"] > "2026-10-13"]
+    assert v and all(p["evaluacion"]["llego_al_sistema"] == "2026-10-13" and p["evaluacion"]["dias_en_revision"] == 1
+                     and p["evaluacion"]["estado"] == "pendiente" for p in v)   # el registro se cargó el 13-10: aún en plazo
+    _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-20"})
+    assert all(p["evaluacion"]["estado"] == "atrasada" for p in d["pacientes"] if p["id_paciente"] in {x["id_paciente"] for x in v}
+               and p["evaluacion"]["estado"] != "evaluada")
+
+def test_gestion_responsable_y_seguimiento():
+    _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
+    pid = next(x["id_paciente"] for x in d["pacientes"] if x["id_paciente"].startswith("PAC-HLF") and not x["gestion"]["responsable"])
+    assert fila(d, pid)["gestion"]["estado"] in ("pendiente_revision", "pendiente_cita", "pendiente_contacto", "cita_reservada")
+    assert call("POST", f"/pacientes/{pid}/gestion", body={"responsable": "Enf. Rojas", "fecha_corte": "2026-10-13"})[0] == 400   # sin usuario
+    assert call("POST", f"/pacientes/{pid}/gestion", body={"usuario": "Enf. Rojas", "motivo_pendiente": "otro", "nota": "corto", "fecha_corte": "2026-10-13"})[0] == 400
+    assert call("POST", f"/pacientes/{pid}/gestion", body={"usuario": "Enf. Rojas", "seguimiento": "2026-01-01", "fecha_corte": "2026-10-13"})[0] == 400
+    s, r = call("POST", f"/pacientes/{pid}/gestion", body={"usuario": "Enf. Rojas", "responsable": "Enf. Rojas", "proxima_accion": "Pedir ecografía a APS",
+                                                          "seguimiento": "2026-10-15", "motivo_pendiente": "antecedentes", "fecha_corte": "2026-10-13"})
+    g = r["paciente"]["gestion"]
+    assert s == 200 and g["responsable"] == "Enf. Rojas" and g["proxima_accion"] == "Pedir ecografía a APS" and not g["seguimiento_vencido"]
+    assert g["motivo_texto"] == "Faltan antecedentes o exámenes"
+    _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-20"})
+    assert fila(d, pid)["gestion"]["seguimiento_vencido"]
+    _, k = call("GET", "/kpis", {"fecha_corte": "2026-10-20"})
+    assert k["trabajo_pendiente"]["seguimiento_vencido"] >= 1 and k["espera"]["mas_de_1_anio"] >= 1
 
 def test_bug_atendido_respeta_fecha_de_corte():
     import json as _j

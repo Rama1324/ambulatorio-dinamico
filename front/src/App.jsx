@@ -23,6 +23,22 @@ const FACTOR = {
 };
 const TIPO_EVENTO = { visita_urgencia: "Urgencia", hospitalizacion: "Hospitalización", examen_alterado: "Examen alterado", cambio_farmaco: "Cambio de fármaco", control_aps: "Control APS" };
 const POR_PAGINA = 25;
+const FILTRO_CAT = { todas: "Todas", alta: "Alta", media: "Media", baja: "Baja", vital: "Descompensación grave: revisar", ges: "GES: verificar plazo" };
+const FILTRO_GESTION = { todos: "Todos", pendiente_revision: "Pendiente de revisión", pendiente_contacto: "Pendiente de contacto",
+  pendiente_cita: "Pendiente de cita", cita_reservada: "Cita reservada", atendido: "Atendido: registrar egreso",
+  sin_responsable: "Sin responsable", seguimiento_vencido: "Seguimiento vencido" };
+const ESTILO_GESTION = { pendiente_revision: "text-ambar", pendiente_contacto: "text-ambar", pendiente_cita: "text-on-surface",
+  cita_reservada: "text-hlf", atendido: "text-hlf" };
+// Prioridad propuesta por el sistema vs. confirmada por el equipo (quién y cuándo)
+function EstadoPrioridad({ p }) {
+  const r = p.revision;
+  if (p.estado_revision === "confirmado") return <div className="text-[11px] text-verde mt-0.5 whitespace-nowrap" title={r && `${r.usuario} · ${fmt(r.fecha)}`}>✓ confirmada</div>;
+  if (p.estado_revision === "ajustado") return <div className="text-[11px] text-verde mt-0.5 whitespace-nowrap" title={r && `${r.usuario} · ${fmt(r.fecha)}: ${r.motivo}`}>✓ ajustada</div>;
+  if (p.estado_revision === "requiere_revision") return <div className="text-[11px] text-ambar mt-0.5 whitespace-nowrap">revisar de nuevo</div>;
+  return p.categoria_sistema !== p.prioridad_inicial
+    ? <div className="text-[11px] text-ambar mt-0.5 whitespace-nowrap" title={`La SIC tenía prioridad ${p.prioridad_inicial}`}>propuesta del sistema</div>
+    : <div className="text-[11px] text-on-surface-variant mt-0.5 whitespace-nowrap">asignada en la SIC</div>;
+}
 
 const fmt = (iso) => (iso ? iso.slice(0, 10).split("-").reverse().join("-") : "");
 const Icono = ({ n, className = "" }) => <span className={`material-symbols-outlined align-middle ${className}`}>{n}</span>;
@@ -61,7 +77,7 @@ export default function App() {
   const [iFechaSel, setIFecha] = useState(null);
   const iFecha = iFechaSel ?? fechas.length - 1;
   const [esp, setEsp] = useState("Todas");
-  const [vista, setVista] = useState("lista")  // la lista de espera es la página principal;
+  const [vista, setVista] = useState("simple");  // página principal: la lista de espera simple, como una planilla
   const [data, setData] = useState(null);
   const [sel, setSel] = useState(null);
   const [detalle, setDetalle] = useState(null);
@@ -70,7 +86,10 @@ export default function App() {
   const [error, setError] = useState(null);
   const [busca, setBusca] = useState("");
   const [filtroCat, setFiltroCat] = useState("todas");
-  const [soloPend, setSoloPend] = useState(false);
+  const [filtroGestion, setFiltroGestion] = useState("todos");
+  const [esperaLarga, setEsperaLarga] = useState(false);
+  const [diasEspera, setDiasEspera] = useState(365);
+  const [actualizando, setActualizando] = useState(false);
   const [pagina, setPagina] = useState(0);
   const [nuevo, setNuevo] = useState(false);
   const [usuario, setUsuarioLocal] = useState(api.getUsuario());
@@ -78,15 +97,16 @@ export default function App() {
 
   const cargar = useCallback(async () => {
     if (!info) return;
+    setActualizando(true);
     try { setError(null); setData(await api.getPacientes(fecha, esp === "Todas" ? null : esp)); }
-    catch (e) { setError(e.message); }
+    catch (e) { setError(e.message); } finally { setActualizando(false); }
   }, [fecha, esp, info]);
   useEffect(() => { cargar(); }, [cargar]);
   useEffect(() => {
     if (!sel) return setDetalle(null);
     api.getPaciente(sel, fecha).then(setDetalle).catch(() => setDetalle(null));
   }, [sel, fecha, data]);
-  useEffect(() => setPagina(0), [busca, filtroCat, soloPend, esp]);
+  useEffect(() => setPagina(0), [busca, filtroCat, filtroGestion, esperaLarga, diasEspera, esp]);
   // al seleccionar (p. ej. un paciente recién ingresado) saltar a la página donde está
   useEffect(() => {
     const i = filtrados.findIndex((p) => p.id_paciente === sel);
@@ -96,11 +116,17 @@ export default function App() {
   const filtrados = useMemo(() => {
     if (!data) return [];
     const q = busca.trim().toLowerCase();
+    const g = (p) => p.gestion || {};
     return data.pacientes.filter((p) =>
-      (filtroCat === "todas" || (filtroCat === "vital" ? p.contactar_hoy : filtroCat === "revisar" ? p.revision_sugerida?.length > 0 : p.categoria === filtroCat)) &&
-      (!soloPend || p.estado_revision === "pendiente" || p.estado_revision === "requiere_revision") &&
+      (filtroCat === "todas" || (filtroCat === "vital" ? p.contactar_hoy : filtroCat === "ges" ? p.ges?.vencida : p.categoria === filtroCat)) &&
+      (filtroGestion === "todos" || (filtroGestion === "sin_responsable" ? !g(p).responsable
+        : filtroGestion === "seguimiento_vencido" ? g(p).seguimiento_vencido : g(p).estado === filtroGestion)) &&
+      (!esperaLarga || p.dias_espera >= (Number(diasEspera) || 0)) &&
       (!q || p.nombre_fantasia.toLowerCase().includes(q) || p.id_paciente.toLowerCase().includes(q) || p.diagnostico_texto.toLowerCase().includes(q)));
-  }, [data, busca, filtroCat, soloPend]);
+  }, [data, busca, filtroCat, filtroGestion, esperaLarga, diasEspera]);
+  const hayFiltros = busca || filtroCat !== "todas" || filtroGestion !== "todos" || esperaLarga || esp !== "Todas";
+  const limpiarFiltros = () => { setBusca(""); setFiltroCat("todas"); setFiltroGestion("todos"); setEsperaLarga(false); setEsp("Todas"); };
+  const verLista = (cambios) => { limpiarFiltros(); cambios?.(); setVista("lista"); };
 
   const mostrarAviso = (a) => { setAviso(a); setTimeout(() => setAviso(null), 6000); };
   const abrir = (id) => { setSel(id); setVista("lista"); };
@@ -113,7 +139,8 @@ export default function App() {
   const altas = data.pacientes.filter((p) => p.categoria === "alta").length;
   const gesVenc = data.pacientes.filter((p) => p.ges?.vencida).length;
   const tiempoReal = info?.modo === "tiempo_real" && !demo;
-  const pendientes = data.pacientes.filter((p) => p.revision_sugerida?.length > 0).length;
+  const pendientes = data.pacientes.filter((p) => p.gestion?.estado === "pendiente_revision").length;
+  const masDeUnAnio = data.pacientes.filter((p) => p.dias_espera > 365).length;
   const pag = filtrados.slice(pagina * POR_PAGINA, (pagina + 1) * POR_PAGINA);
   const paginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA));
 
@@ -141,12 +168,12 @@ export default function App() {
               className="w-9 h-9 flex items-center justify-center rounded border border-outline-variant text-on-surface-variant hover:text-on-surface">
               <Icono n={oscuro ? "light_mode" : "dark_mode"} className="text-[20px]" /></button>
             <label className="flex items-center gap-1.5 text-on-surface-variant cursor-pointer select-none border-l border-outline-variant pl-3">
-              <input type="checkbox" checked={demo} onChange={(e) => setDemo(e.target.checked)} className="accent-primary" />Modo demostración
+              <input type="checkbox" checked={demo} onChange={(e) => setDemo(e.target.checked)} className="accent-primary" />Explorar fechas anteriores
             </label>
           </div>
         </div>
         <nav className="max-w-[1400px] mx-auto px-6 flex gap-6 text-[14px]">
-          {[["lista", "Lista de espera", null], ["hoy", "Alertas de hoy", porContactar.length], ["indicadores", "Indicadores", null], ["cargar", "Cargar datos", null], ["criterios", "Criterios", null]].map(([k, t, n]) => (
+          {[["simple", "Lista de espera", null], ["lista", "Lista detallada", null], ["hoy", "Alertas pendientes", porContactar.length], ["indicadores", "Indicadores", null], ["cargar", "Cargar datos", null], ["criterios", "Criterios", null]].map(([k, t, n]) => (
             <button key={k} onClick={() => setVista(k)}
               className={`py-2.5 border-b-2 -mb-px ${vista === k ? "border-primary text-primary font-semibold" : "border-transparent text-on-surface-variant hover:text-on-surface"}`}>
               {t}{n ? <span className="ml-1.5 px-1.5 rounded-full bg-error text-on-error text-[12px] font-semibold">{n}</span> : null}
@@ -159,15 +186,16 @@ export default function App() {
         <div className="max-w-[1400px] mx-auto px-6 py-1.5 text-[13px] flex flex-wrap items-center gap-x-3 gap-y-1">
           <span className="font-semibold flex items-center gap-1"><Icono n="database" className="text-[16px]" />Datos sintéticos de demostración: no son pacientes reales</span>
           <span className="text-on-surface-variant">·</span>
-          <span>{tiempoReal ? <>Lista al <b>{fmt(fecha)}</b> (fecha de hoy en Chile). El registro sintético llega al 13-10-2026.</>
-            : <>Simulación: lista al <b>{fmt(fecha)}</b>, solo con registros hasta esa fecha.</>}</span>
+          <span>{tiempoReal ? <>Lista calculada al <b>{fmt(fecha)}</b> (hoy en Chile) · registro del hospital al <b>{fmt(info?.registro_al || "2026-10-13")}</b>
+            {info?.datos_hasta && <> (último dato clínico: {fmt(info.datos_hasta)})</>} + lo registrado en la herramienta</>
+            : <>Fecha anterior: lista calculada al <b>{fmt(fecha)}</b>, solo con registros hasta esa fecha.</>}</span>
         </div>
       </div>
 
       {demo && (
         <div className="bg-ambar-container/60 border-b border-ambar/30">
           <div className="max-w-[1400px] mx-auto px-6 py-2 flex flex-wrap items-center gap-4 text-[13px]">
-            <span className="font-semibold text-ambar flex items-center gap-1"><Icono n="science" className="text-[18px]" />Modo demostración{!esApi && " (datos precalculados, sin API)"}</span>
+            <span className="font-semibold text-ambar flex items-center gap-1"><Icono n="history" className="text-[18px]" />Explorando fechas anteriores{!esApi && " (datos precalculados, sin API)"}</span>
             <label className="flex items-center gap-2 flex-1 min-w-[280px]">
               Ver la lista como estaba el <b>{fmt(fechas[iFecha])}</b>
               <input type="range" min={0} max={fechas.length - 1} value={iFecha} onChange={(e) => setIFecha(+e.target.value)} className="flex-1 accent-ambar" />
@@ -190,13 +218,16 @@ export default function App() {
       <main className="flex-1 max-w-[1400px] w-full mx-auto px-6 py-5">
         {error && <div className="bg-error-container text-on-error-container p-3 mb-4 rounded">{error}</div>}
 
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
-          <Indicador n={data.total} t="Pacientes en espera" />
-          <Indicador n={porContactar.length} t={`Descompensación grave: evaluación pendiente${atrasadas ? ` (${atrasadas} con más de 72 h)` : ""}`} tono={porContactar.length ? "rojo" : null} onClick={() => setVista("hoy")} />
-          <Indicador n={altas} t="Prioridad alta" />
-          <Indicador n={pendientes} t="Requieren revisión del especialista" tono={pendientes ? "ambar" : null} onClick={() => { setVista("lista"); setFiltroCat("revisar"); setSoloPend(false); }} />
-          <Indicador n={gesVenc} t="GES: posible incumplimiento, verificar" />
-        </div>
+        {vista !== "simple" && <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-5">
+          <Indicador n={data.total} t="Pacientes en espera · ver todos" onClick={() => verLista()} />
+          <Indicador n={porContactar.length} t={`Descompensación grave: revisar prioridad${atrasadas ? ` (${atrasadas} con más de 72 h)` : ""}`} tono={porContactar.length ? "rojo" : null} onClick={() => setVista("hoy")} />
+          <Indicador n={altas} t="Prioridad alta" onClick={() => verLista(() => setFiltroCat("alta"))} />
+          <Indicador n={pendientes} t="Pendientes de revisión del especialista" tono={pendientes ? "ambar" : null} onClick={() => verLista(() => setFiltroGestion("pendiente_revision"))} />
+          <Indicador n={masDeUnAnio} t="Esperan más de 1 año" onClick={() => verLista(() => { setEsperaLarga(true); setDiasEspera(365); })} />
+          <Indicador n={gesVenc} t="GES: posible incumplimiento, verificar" onClick={() => verLista(() => setFiltroCat("ges"))} />
+        </div>}
+
+        {vista === "simple" && <ListaSimple data={data} fecha={fecha} esp={esp} setEsp={setEsp} actualizando={actualizando} onVer={abrir} />}
 
         {(vista === "hoy" || vista === "box") && <Hoy parte={vista} vitales={vitales} todosPacientes={data.pacientes} fecha={fecha} esp={esp} setEsp={setEsp} onVer={abrir} esApi={esApi} onCambio={cargar} onAviso={mostrarAviso} />}
         {vista === "criterios" && <Criterios />}
@@ -208,7 +239,7 @@ export default function App() {
         }} />}
         {vista === "lista" && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-            <div className="lg:col-span-7 xl:col-span-8 flex flex-col gap-4">
+            <div className={`${paciente ? "lg:col-span-7 xl:col-span-8" : "lg:col-span-12"} flex flex-col gap-4`}>
               <div className="bg-surface-container-lowest border border-outline-variant rounded p-3 flex flex-wrap items-end gap-3 text-[13px]">
                 <Filtro label="Especialidad">
                   <select value={esp} onChange={(e) => setEsp(e.target.value)} className="h-9 px-2 border border-outline-variant rounded bg-surface-container-lowest">{ESPECIALIDADES.map((e) => <option key={e}>{e}</option>)}</select>
@@ -218,28 +249,39 @@ export default function App() {
                 </Filtro>
                 <Filtro label="Prioridad">
                   <select value={filtroCat} onChange={(e) => setFiltroCat(e.target.value)} className="h-9 px-2 border border-outline-variant rounded bg-surface-container-lowest">
-                    <option value="todas">Todas</option><option value="vital">Evaluación pendiente</option><option value="revisar">Requieren revisión</option><option value="alta">Alta</option><option value="media">Media</option><option value="baja">Baja</option>
+                    {Object.entries(FILTRO_CAT).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                   </select>
                 </Filtro>
-                <label className="flex items-center gap-2 h-9 cursor-pointer select-none"><input type="checkbox" checked={soloPend} onChange={(e) => setSoloPend(e.target.checked)} className="w-4 h-4 accent-primary" />Solo pendientes de revisión</label>
+                <Filtro label="Estado de gestión">
+                  <select value={filtroGestion} onChange={(e) => setFiltroGestion(e.target.value)} className="h-9 px-2 border border-outline-variant rounded bg-surface-container-lowest">
+                    {Object.entries(FILTRO_GESTION).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                  </select>
+                </Filtro>
+                <label className="flex items-center gap-2 h-9 cursor-pointer select-none" title="Pacientes que llevan al menos esa cantidad de días en lista">
+                  <input type="checkbox" checked={esperaLarga} onChange={(e) => setEsperaLarga(e.target.checked)} className="w-4 h-4 accent-primary" />Espera de
+                  <input type="number" min={0} step={30} value={diasEspera} onChange={(e) => { setDiasEspera(e.target.value); setEsperaLarga(true); }} aria-label="Días mínimos de espera"
+                    className="h-8 w-20 px-2 border border-outline-variant rounded" />días o más</label>
+                {hayFiltros && <button onClick={limpiarFiltros} className="h-9 px-2 text-primary font-semibold flex items-center gap-1"><Icono n="filter_alt_off" className="text-[18px]" />Limpiar filtros</button>}
                 <button onClick={() => exportarExcel(filtrados, fecha, { excluidos: data.excluidos, filtros: [["Especialidad", esp], ["Búsqueda", busca || "(ninguna)"],
-                  ["Prioridad", { todas: "Todas", vital: "Evaluación pendiente", revisar: "Requieren revisión", alta: "Alta", media: "Media", baja: "Baja" }[filtroCat]],
-                  ["Solo pendientes de revisión", soloPend ? "Sí" : "No"]] })} className="ml-auto h-9 px-3 rounded border border-outline-variant bg-surface-container-lowest font-semibold flex items-center gap-1"><Icono n="download" className="text-[18px]" />Descargar Excel</button>
+                  ["Prioridad", FILTRO_CAT[filtroCat]], ["Estado de gestión", FILTRO_GESTION[filtroGestion]],
+                  ["Espera mínima", esperaLarga ? `${diasEspera} días` : "(sin filtro)"]] })} className="ml-auto h-9 px-3 rounded border border-outline-variant bg-surface-container-lowest font-semibold flex items-center gap-1"><Icono n="download" className="text-[18px]" />Exportar a Excel</button>
                 {esApi && <button onClick={() => setNuevo(true)} className="h-9 px-3 rounded bg-primary text-on-primary font-semibold flex items-center gap-1"><Icono n="person_add" className="text-[18px]" />Ingresar paciente</button>}
               </div>
               {nuevo && <NuevoPaciente fecha={fecha} onCerrar={() => setNuevo(false)} onListo={async (r) => {
-                setNuevo(false); setBusca(""); setFiltroCat("todas"); setSoloPend(false); await cargar(); setSel(r.id_paciente);
+                setNuevo(false); limpiarFiltros(); await cargar(); setSel(r.id_paciente);
                 mostrarAviso({ titulo: `${r.paciente?.nombre_fantasia} ingresado a la lista`, despues: r.paciente?.posicion, antes: "—", cat: r.paciente?.categoria });
               }} />}
 
-              <section className="bg-surface-container-lowest border border-outline-variant rounded overflow-hidden">
-                <table className="w-full text-left border-collapse text-[14px]">
-                  <thead>
+              <section className="bg-surface-container-lowest border border-outline-variant rounded relative" aria-busy={actualizando}>
+                {actualizando && <div className="absolute inset-x-0 top-0 z-20 flex justify-center pt-12 pointer-events-none">
+                  <span className="bg-on-surface text-background text-[13px] px-3 py-1.5 rounded shadow flex items-center gap-1"><Icono n="progress_activity" className="text-[16px] animate-spin" />Actualizando…</span></div>}
+                <table className={`w-full text-left border-collapse text-[14px] ${actualizando ? "opacity-40 pointer-events-none" : ""}`}>
+                  <thead className="sticky top-0 z-10">
                     <tr className="bg-surface-container-low text-[13px] text-on-surface-variant border-b border-outline-variant">
-                      <th className="py-2 px-3 font-semibold w-16">N°</th><th className="py-2 px-2 font-semibold">Prioridad</th>
-                      <th className="py-2 px-3 font-semibold">Paciente / diagnóstico</th><th className="py-2 px-2 font-semibold">Observaciones</th>
-                      <th className="py-2 px-2 font-semibold text-center" title="Índice LACE (van Walraven 2010). Experimental: solo desempata dentro de la misma prioridad y antigüedad">LACE*</th>
-                      <th className="py-2 px-3 font-semibold text-right">Espera</th><th className="py-2 px-3 font-semibold">Revisión</th>
+                      <th className="py-2 px-3 font-semibold w-14">N°</th><th className="py-2 px-2 font-semibold">Prioridad</th>
+                      <th className="py-2 px-3 font-semibold">Paciente / diagnóstico</th><th className="py-2 px-3 font-semibold text-right">Espera</th>
+                      <th className="py-2 px-3 font-semibold">Estado de gestión</th><th className="py-2 px-3 font-semibold">Próxima acción · responsable</th>
+                      <th className="py-2 px-2"><span className="sr-only">Detalle</span></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -247,29 +289,27 @@ export default function App() {
                       {pag.map((p) => {
                         const delta = p.posicion_anterior ? p.posicion_anterior - p.posicion : 0;
                         const activo = sel === p.id_paciente;
+                        const g = p.gestion || {};
                         return (
                           <motion.tr key={p.id_paciente} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                             transition={{ type: "spring", stiffness: 300, damping: 32 }} onClick={() => setSel(p.id_paciente)}
-                            className={`cursor-pointer border-b border-outline-variant/60 ${activo ? "bg-primary/10" : destacado === p.id_paciente ? "bg-ambar-container/60" : "hover:bg-surface-container-low"}`}>
-                            <td className={`py-2.5 px-3 align-top ${p.riesgo_vital ? "border-l-4 border-l-error" : "border-l-4 border-l-transparent"}`}>
+                            tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSel(p.id_paciente); } }}
+                            aria-selected={activo} aria-label={`${p.nombre_fantasia}, N° ${p.posicion}, ${p.dias_espera} días de espera`}
+                            className={`cursor-pointer border-b border-outline-variant/60 ${activo ? "bg-primary/10 outline outline-2 -outline-offset-2 outline-primary" : destacado === p.id_paciente ? "bg-ambar-container/60" : "hover:bg-surface-container-low"}`}>
+                            <td className={`py-2 px-3 align-top ${p.riesgo_vital ? "border-l-4 border-l-error" : "border-l-4 border-l-transparent"}`}>
                               <div className="font-semibold">{p.posicion}</div>
                               {p.ajuste_manual && p.posicion_sistema !== p.posicion && <div className="text-[11px] text-on-surface-variant whitespace-nowrap" title="Posición que le daban las reglas">sistema: {p.posicion_sistema}</div>}
                               {demo && delta !== 0 && <div className={`text-[12px] ${delta > 0 ? "text-error" : "text-on-surface-variant"}`}>{delta > 0 ? `▲ ${delta}` : `▼ ${-delta}`}</div>}
                             </td>
-                            <td className="py-2.5 px-2 align-top"><Prioridad cat={p.categoria} /></td>
-                            <td className="py-2.5 px-3 align-top">
-                              <div className="font-semibold">{p.nombre_fantasia} <span className="font-normal text-on-surface-variant text-[13px]">· {p.edad} años</span></div>
-                              <div className="text-[13px] text-on-surface-variant">{p.especialidad} · {p.diagnostico_cie10} {p.diagnostico_texto}</div>
-                            </td>
-                            <td className="py-2.5 px-2 align-top">
-                              <div className="flex flex-wrap gap-1">
-                                {p.contactar_hoy && <Marca tono="rojo" title={`Descompensación grave del ${fmt(p.evaluacion?.fecha_evento)}: requiere evaluación médica dentro de 72 h`}>
-                                  {p.evaluacion?.estado === "atrasada" ? `Evaluación atrasada · ${p.evaluacion.dias_desde_evento} d` : "Evaluar ≤ 72 h"}</Marca>}
-                                {p.contacto?.resultado === "citado" && p.contacto?.hora && p.contacto.fecha_corte === fecha
-                                  ? <Marca tono="azul" title={p.contacto.texto}>Cita {p.contacto.hora}</Marca>
-                                  : p.riesgo_vital && !p.contactar_hoy && <Marca tono="azul" title={p.evaluacion?.cierre?.texto}>Evaluada</Marca>}
+                            <td className="py-2 px-2 align-top"><Prioridad cat={p.categoria} /><EstadoPrioridad p={p} /></td>
+                            <td className="py-2 px-3 align-top">
+                              <div className="font-semibold">{p.nombre_fantasia} <span className="font-normal text-on-surface-variant text-[13px]">· {p.edad} años · {p.especialidad}</span></div>
+                              <div className="text-[13px] text-on-surface-variant">{p.diagnostico_cie10} {p.diagnostico_texto}</div>
+                              <div className="flex flex-wrap gap-1 mt-0.5">
+                                {p.contactar_hoy && <Marca tono="rojo" title={`Descompensación grave del ${fmt(p.evaluacion?.fecha_evento)}: su prioridad debe revisarse dentro de 72 h desde que el evento llegó al sistema`}>
+                                  {p.evaluacion?.estado === "atrasada" ? `Revisión atrasada · ${p.evaluacion.dias_en_revision} d` : "Revisar prioridad ≤ 72 h"}</Marca>}
+                                {p.riesgo_vital && !p.contactar_hoy && <Marca tono="azul" title={p.evaluacion?.cierre?.texto}>Prioridad revisada</Marca>}
                                 {!p.riesgo_vital && p.estado_clinico === "descompensado" && <Marca tono="rojo">Descompensado</Marca>}
-                                {p.revision_sugerida?.length > 0 && <Marca tono="ambar" title={[...new Set(p.revision_sugerida.map((s) => s.motivo))].join(" · ")}>Revisar</Marca>}
                                 {p.ajuste_manual && <Marca tono="azul" title={`${p.ajuste_manual.motivo_texto}: ${p.ajuste_manual.explicacion} (${p.ajuste_manual.usuario})`}>Ajuste manual</Marca>}
                                 {p.ajuste_manual_vencido && <Marca tono="ambar" title={`Evento nuevo: ${p.ajuste_manual_vencido.vencido_por}`}>Ajuste sin efecto: revisar</Marca>}
                                 {p.grupo_proteccion && <Marca tono="azul">{p.grupo_proteccion}</Marca>}
@@ -278,14 +318,21 @@ export default function App() {
                                 {p.riesgo_inasistencia && <Marca tono="ambar" title="2 inasistencias consecutivas (causal 8)">2 inasistencias</Marca>}
                               </div>
                             </td>
-                            <td className="py-2.5 px-2 align-top text-center">
-                              <span className={`inline-block min-w-[28px] px-1.5 py-px rounded font-semibold ${p.lace?.total ? "bg-primary/10 text-primary-container" : "text-on-surface-variant"}`}>{p.lace?.total ?? "—"}</span>
+                            <td className="py-2 px-3 align-top text-right whitespace-nowrap">
+                              <div className={`text-[17px] font-bold leading-tight ${p.dias_espera > 365 ? "text-error" : ""}`}>{p.dias_espera} días</div>
+                              <div className="text-[12px] text-on-surface-variant">desde {fmt(p.fecha_ingreso_lista)}</div>
                             </td>
-                            <td className="py-2.5 px-3 align-top text-right whitespace-nowrap">{p.dias_espera} días{p.antiguedad_mayor_1_anio && <div className="text-[12px] text-on-surface-variant">más de 1 año</div>}</td>
-                            <td className="py-2.5 px-3 align-top text-[13px] whitespace-nowrap">
-                              {p.estado_revision === "pendiente" ? <span className="text-on-surface-variant">Pendiente</span>
-                                : p.estado_revision === "requiere_revision" ? <span className="text-ambar font-semibold" title={p.revision_vencida_por}><Icono n="update" className="text-[16px]" /> Revisar de nuevo</span>
-                                : <span className="text-verde font-semibold"><Icono n="check" className="text-[16px]" /> {p.estado_revision === "ajustado" ? "Ajustada" : "Confirmada"}</span>}
+                            <td className="py-2 px-3 align-top text-[13px]">
+                              <div className={`font-semibold ${ESTILO_GESTION[g.estado] || ""}`}>{g.texto || "—"}</div>
+                              {g.motivo_texto && <div className="text-on-surface-variant">Motivo: {g.motivo_texto}</div>}
+                            </td>
+                            <td className="py-2 px-3 align-top text-[13px]">
+                              <div>{g.proxima_accion || "—"}</div>
+                              <div className={g.responsable ? "text-on-surface-variant" : "text-ambar"}>{g.responsable || "Sin responsable"}
+                                {g.seguimiento && <span className={g.seguimiento_vencido ? "text-error font-semibold" : ""}> · {g.seguimiento_vencido ? "seguimiento vencido" : "seguimiento"} {fmt(g.seguimiento)}</span>}</div>
+                            </td>
+                            <td className="py-2 px-2 align-top text-right">
+                              <button onClick={(e) => { e.stopPropagation(); setSel(p.id_paciente); }} className="text-[13px] text-primary font-semibold whitespace-nowrap hover:underline">Ver detalle</button>
                             </td>
                           </motion.tr>
                         );
@@ -295,7 +342,7 @@ export default function App() {
                 </table>
                 {filtrados.length === 0 && <p className="p-6 text-on-surface-variant">No hay pacientes con esos filtros.</p>}
                 <div className="px-3 py-2 flex items-center justify-between text-[13px] text-on-surface-variant bg-surface-container-low">
-                  <span>{filtrados.length} pacientes · orden: prioridad, descompensación grave, grupo de protección, más de 1 año en espera, LACE* (desempate experimental), fecha de ingreso</span>
+                  <span>{actualizando ? "Actualizando…" : `${filtrados.length} pacientes`} · orden: prioridad, descompensación grave, grupo de protección, más de 1 año en espera, LACE (desempate experimental), fecha de ingreso, ajustes manuales</span>
                   <div className="flex items-center gap-2">
                     <button disabled={pagina === 0} onClick={() => setPagina(pagina - 1)} className="px-2 py-1 border border-outline-variant rounded bg-surface-container-lowest disabled:opacity-40">Anterior</button>
                     <span>{pagina + 1} / {paginas}</span>
@@ -321,12 +368,11 @@ export default function App() {
               )}
             </div>
 
-            <aside className="lg:col-span-5 xl:col-span-4 lg:sticky lg:top-4 flex flex-col gap-3 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
-              {!paciente ? <Caja><p className="text-on-surface-variant">Seleccione un paciente para ver el detalle.</p></Caja> : (
-                <Ficha key={paciente.id_paciente} p={paciente} total={data.total} detalle={detalle} fecha={fecha} esApi={esApi} demo={demo} onCambio={cargar} onAviso={mostrarAviso}
-                  onDestacar={(id) => { setDestacado(id); setTimeout(() => setDestacado(null), 3000); }} />
-              )}
-            </aside>
+            {paciente && <aside className="lg:col-span-5 xl:col-span-4 lg:sticky lg:top-4 flex flex-col gap-3 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto lg:overflow-x-hidden" aria-label="Detalle del paciente">
+              <button onClick={() => setSel(null)} className="self-end text-[13px] text-on-surface-variant hover:text-on-surface flex items-center gap-1"><Icono n="close" className="text-[18px]" />Cerrar detalle</button>
+              <Ficha key={paciente.id_paciente} p={paciente} total={data.total} detalle={detalle} fecha={fecha} esApi={esApi} demo={demo} onCambio={cargar} onAviso={mostrarAviso}
+                onDestacar={(id) => { setDestacado(id); setTimeout(() => setDestacado(null), 3000); }} />
+            </aside>}
           </div>
         )}
       </main>
@@ -681,10 +727,10 @@ function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso, onDes
           <Prioridad cat={p.categoria} />
         </div>
         {p.contactar_hoy && <div className="mt-3 p-2.5 rounded bg-error-container text-on-error-container text-[14px] flex gap-2"><Icono n="call" className="text-[20px]" /><span>
-          <b>Descompensación grave: requiere evaluación médica.</b> Evento del {fmt(p.evaluacion?.fecha_evento)}{p.evaluacion && ` (hace ${p.evaluacion.dias_desde_evento} día${p.evaluacion.dias_desde_evento !== 1 ? "s" : ""})`}.
-          {p.evaluacion?.estado === "atrasada" ? <b> Atrasada: pasaron más de 72 h sin evaluación.</b> : " Plazo: 72 h."} El médico decide si es riesgo vital y si deriva a urgencia.</span></div>}
+          <b>Descompensación grave: revisar su prioridad.</b> Evento del {fmt(p.evaluacion?.fecha_evento)}, en el sistema desde el {fmt(p.evaluacion?.llego_al_sistema)}.
+          {p.evaluacion?.estado === "atrasada" ? <b> Atrasada: pasaron más de 72 h sin revisión.</b> : " Plazo: 72 h."} No hay registro posterior de estabilización ni de evaluación; el especialista decide.</span></div>}
         {p.riesgo_vital && !p.contactar_hoy && p.evaluacion?.cierre && <div className="mt-3 p-2.5 rounded bg-hlf-claro text-hlf text-[14px] flex gap-2"><Icono n="task_alt" className="text-[20px]" /><span>
-          <b>Evaluada: {p.evaluacion.cierre.texto}</b>{p.evaluacion.cierre.responsable && ` · ${p.evaluacion.cierre.responsable}`}{p.decision?.seguimiento && ` · seguimiento ${fmt(p.decision.seguimiento)}`}</span></div>}
+          <b>Prioridad revisada: {p.evaluacion.cierre.texto}</b>{p.evaluacion.cierre.responsable && ` · ${p.evaluacion.cierre.responsable}`}{p.decision?.seguimiento && ` · seguimiento ${fmt(p.decision.seguimiento)}`}</span></div>}
         {p.estado_revision === "requiere_revision" && <div className="mt-2 p-2.5 rounded bg-ambar-container text-ambar text-[14px] flex gap-2"><Icono n="rate_review" className="text-[20px]" /><span><b>Requiere nueva revisión:</b> {p.revision_vencida_por} después de la última revisión.</span></div>}
         {p.estado_revision === "pendiente" && p.revision_sugerida?.length > 0 && <div className="mt-2 p-2.5 rounded bg-ambar-container/60 text-ambar text-[14px] flex gap-2"><Icono n="rate_review" className="text-[20px]" /><span><b>Revisión sugerida:</b> {[...new Set(p.revision_sugerida.map((s) => s.motivo))].join(" · ")}</span></div>}
         <dl className="mt-3 grid grid-cols-[130px_1fr] gap-y-1 text-[14px]">
@@ -693,7 +739,10 @@ function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso, onDes
           <dt className="text-on-surface-variant">Ingreso a lista</dt><dd>{fmt(p.fecha_ingreso_lista)} ({p.dias_espera} días)</dd>
           <dt className="text-on-surface-variant">Prioridad inicial</dt><dd className="capitalize">{p.prioridad_inicial}</dd>
           <dt className="text-on-surface-variant">N° en la lista</dt><dd>{p.posicion} de {total}</dd>
-          <dt className="text-on-surface-variant">Revisión</dt><dd><EstadoRevision p={p} /></dd>
+          <dt className="text-on-surface-variant">Prioridad</dt><dd><EstadoRevision p={p} /></dd>
+          {p.gestion && <><dt className="text-on-surface-variant">Gestión</dt><dd><b className={ESTILO_GESTION[p.gestion.estado]}>{p.gestion.texto}</b>{p.gestion.motivo_texto && ` · ${p.gestion.motivo_texto}`}</dd>
+            <dt className="text-on-surface-variant">Próxima acción</dt><dd>{p.gestion.proxima_accion}{p.gestion.seguimiento && <span className={p.gestion.seguimiento_vencido ? "text-error font-semibold" : ""}> · seguimiento {fmt(p.gestion.seguimiento)}{p.gestion.seguimiento_vencido && " (vencido)"}</span>}</dd>
+            <dt className="text-on-surface-variant">Responsable</dt><dd className={p.gestion.responsable ? "" : "text-ambar"}>{p.gestion.responsable || "Sin responsable asignado"}</dd></>}
           {(p.grupo_proteccion || p.acg) && <><dt className="text-on-surface-variant">Riesgo social</dt><dd>{[p.grupo_proteccion && `Grupo ${p.grupo_proteccion}`, p.acg && `ACG ${p.acg}`].filter(Boolean).join(" · ")}</dd></>}
           {p.comorbilidades?.length > 0 && <><dt className="text-on-surface-variant">Comorbilidades</dt><dd>{p.comorbilidades.map((c) => c.nombre).join(", ")}</dd></>}
         </dl>
@@ -701,7 +750,7 @@ function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso, onDes
       </Caja>
 
       <div className="flex border-b border-outline-variant bg-surface-container-lowest rounded-t text-[14px] sticky top-0 z-10">
-        {[["resumen", "Resumen"], ["puntaje", "Puntaje"], ["registrar", "Registrar"], ["historia", "Historia"]].map(([k, t]) => (
+        {[["resumen", "Resumen"], ["gestion", "Gestión"], ["registrar", "Registrar"], ["puntaje", "Fundamento"], ["historia", "Historia"]].map(([k, t]) => (
           <button key={k} onClick={() => setTab(k)} className={`flex-1 py-2 border-b-2 -mb-px ${tab === k ? "border-primary text-primary font-semibold" : "border-transparent text-on-surface-variant"}`}>{t}</button>
         ))}
       </div>
@@ -710,21 +759,20 @@ function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso, onDes
       <Caja titulo="Cómo se decidió su lugar en la lista">
         <Camino p={p} total={total} />
       </Caja>
-      {esApi && p.riesgo_vital && <>
-        <DecisionClinica p={p} fecha={fecha} onListo={async (r) => { await onCambio(); onAviso({ titulo: `${p.nombre_fantasia}: ${r.decision.texto} (${r.decision.responsable})` }); }} onAviso={onAviso} />
+      </>}
+
+      {tab === "gestion" && (esApi ? <>
+        <GestionCaso p={p} fecha={fecha} onListo={async () => { await onCambio(); onDestacar(p.id_paciente); onAviso({ titulo: `${p.nombre_fantasia}: gestión actualizada` }); }} onAviso={onAviso} />
+        {p.riesgo_vital && <DecisionClinica p={p} fecha={fecha} onListo={async (r) => { await onCambio(); onAviso({ titulo: `${p.nombre_fantasia}: ${r.decision.texto} (${r.decision.responsable})` }); }} onAviso={onAviso} />}
         <Contacto p={p} fecha={fecha} onListo={async (r) => { await onCambio(); onAviso({ titulo: `${p.nombre_fantasia}: ${r.contacto.texto}` }); }} onAviso={onAviso} />
-      </>}
-      </>}
+        <AjusteManual p={p} fecha={fecha} onListo={async (r, quitar) => {
+          await onCambio(); onDestacar(p.id_paciente);
+          onAviso(quitar ? { titulo: `${p.nombre_fantasia}: ajuste manual deshecho, vuelve al orden del sistema` }
+            : { titulo: `${p.nombre_fantasia} movido a mano`, antes: r.ajuste.posicion_anterior, despues: r.paciente?.posicion_especialidad });
+        }} onAviso={onAviso} />
+      </> : <Caja><p className="text-on-surface-variant text-[13px]">Gestionar pacientes requiere conexión al servidor.</p></Caja>)}
 
       {tab === "puntaje" && <>
-      <Caja titulo="Puntaje LACE (experimental, solo desempate)">
-        <BoletaLace lace={p.lace} />
-      </Caja>
-
-      <Caja titulo="Evolución en la lista">
-        {historia ? <GraficoPosicion h={historia} /> : <p className="text-[13px] text-on-surface-variant">Cargando…</p>}
-      </Caja>
-
       <Caja titulo={`Fundamento de la prioridad ${ETIQUETA[p.categoria].toLowerCase()}`}>
         <ul className="space-y-2.5 text-[14px]">
           {p.razones.map((r, i) => (
@@ -735,6 +783,9 @@ function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso, onDes
             </li>
           ))}
         </ul>
+      </Caja>
+      <Caja titulo="Puntaje LACE (experimental, solo desempate)">
+        <BoletaLace lace={p.lace} />
       </Caja>
       </>}
 
@@ -756,12 +807,6 @@ function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso, onDes
               </div>
             )}
           </Caja>
-
-          <AjusteManual p={p} fecha={fecha} onListo={async (r, quitar) => {
-            await onCambio(); onDestacar(p.id_paciente);
-            onAviso(quitar ? { titulo: `${p.nombre_fantasia}: ajuste manual deshecho, vuelve al orden del sistema` }
-              : { titulo: `${p.nombre_fantasia} movido a mano`, antes: r.ajuste.posicion_anterior, despues: r.paciente?.posicion_especialidad });
-          }} onAviso={onAviso} />
 
           <Caja titulo="Resumen para el equipo" accion={<button onClick={pedirResumen} disabled={cargando} className="text-[13px] text-primary font-semibold disabled:opacity-50">{cargando === "ia" ? "Redactando…" : resumen ? "Actualizar" : "Generar"}</button>}>
             {resumen ? <>
@@ -795,6 +840,9 @@ function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso, onDes
         </>
       ) : <Caja><p className="text-on-surface-variant text-[13px]">Registrar informes y novedades requiere conexión al servidor.</p></Caja>)}
 
+      {tab === "historia" && <Caja titulo="Evolución en la lista">
+        {historia ? <GraficoPosicion h={historia} /> : <p className="text-[13px] text-on-surface-variant">Cargando…</p>}
+      </Caja>}
       {tab === "historia" && <Caja titulo="Historia mientras espera">
         <ol className="text-[14px]">
           {timeline.map((x, i) => (
@@ -838,7 +886,7 @@ function Indicadores({ fecha, esApi, data }) {
   const pendientesEval = re.evaluacion_pendiente + re.evaluacion_atrasada;
   const exportar = () => descargarExcel(`indicadores_HLF_${k.fecha_corte}.xlsx`, [{ nombre: "Indicadores", filas: [["Grupo", "Indicador", "Valor", "Meta"],
     ["Cobertura", "Pacientes ordenados con criterio común", `${k.cobertura.evaluados} de ${k.cobertura.en_espera} (${k.cobertura.pct}%)`, "100%"],
-    ["Reevaluación", "Mediana de horas evento → evaluación clínica", re.mediana_horas ?? "", "< 72 h"],
+    ["Reevaluación", "Mediana de horas evento → revisión de la prioridad", re.mediana_horas ?? "", "< 72 h"],
     ["Reevaluación", "Eventos graves evaluados en menos de 72 h", `${re.evaluados_menos_72h} de ${re.evaluados}`, ""],
     ["Reevaluación", "Eventos graves sin evaluar", re.sin_evaluar, ""],
     ["Descompensaciones", "En la lista", re.descompensados_en_lista, ""], ["Descompensaciones", "Evaluadas", re.evaluacion_hecha, ""],
@@ -854,20 +902,32 @@ function Indicadores({ fecha, esApi, data }) {
     <div className="flex flex-col gap-5">
       <div className="flex justify-end"><button onClick={exportar} className="h-9 px-3 rounded border border-outline-variant bg-surface-container-lowest font-semibold flex items-center gap-1 text-[14px]"><Icono n="download" className="text-[18px]" />Exportar a Excel</button></div>
       <div className="grid gap-4 md:grid-cols-3">
-        <Kpi titulo="Tiempo del evento a la evaluación clínica" valor={re.evaluados ? `${num(re.mediana_horas)} h` : "—"} meta="< 72 horas"
-          estado={!re.evaluados ? null : re.evaluados_menos_72h === re.evaluados && !re.evaluacion_atrasada ? "ok" : "mal"}
-          detalle={<>Mediana sobre {re.evaluados} evento{re.evaluados !== 1 ? "s" : ""} grave{re.evaluados !== 1 ? "s" : ""} registrado{re.evaluados !== 1 ? "s" : ""} y evaluado{re.evaluados !== 1 ? "s" : ""}: {re.evaluados_menos_72h} en menos de 72 h; {re.sin_evaluar} aún sin evaluar.
-            En la lista hay {re.descompensados_en_lista} descompensaciones graves: {re.evaluacion_hecha} evaluadas, {re.evaluacion_pendiente} dentro del plazo y <b className={re.evaluacion_atrasada ? "text-error" : ""}>{re.evaluacion_atrasada} atrasadas</b>. El recálculo de la lista es {re.recalculo}.</>} />
+        <Kpi titulo="Reevaluación tras un evento grave" valor={re.evaluados ? `${num(re.mediana_horas)} h` : "—"} meta="< 72 horas"
+          estado={!re.evaluados ? null : re.evaluados_menos_72h === re.evaluados ? "ok" : "mal"}
+          detalle={<>Solo eventos registrados en la herramienta: {re.eventos_graves_registrados} en total; {re.evaluados} con la prioridad revisada ({re.evaluados_menos_72h} en menos de 72 h) y {re.sin_evaluar} todavía sin revisar. El valor es la mediana de horas entre el registro y la revisión.</>} />
         <Kpi titulo="Concordancia con el especialista" valor={cc.revisiones ? `${cc.acuerdo_pct}% de acuerdo` : "—"} meta={`kappa ≥ 0,70 (con n ≥ ${cc.n_recomendado})`}
           estado={!cc.suficiente ? null : kap >= cc.meta ? "ok" : "mal"}
           detalle={<>{cc.acuerdos} acuerdos en n = {cc.revisiones} revisiones (confirmar = acuerdo; cambiar prioridad = desacuerdo). Kappa de Cohen: <b>{kap == null ? "—" : num(kap, 2)}</b>.
             {!cc.suficiente && ` Con menos de ${cc.n_recomendado} revisiones el kappa es solo orientativo.`}</>} />
-        <Kpi titulo="Horas recuperadas hoy" valor={ci.horas_recuperadas} meta="no definida (indicador de gestión)" estado="info"
-          detalle={<>Horas libres que se llenaron con una cita reservada. Quedan {ci.propuestas_sin_reservar} propuesta{ci.propuestas_sin_reservar !== 1 ? "s" : ""} sin reservar (una propuesta no es una cita).</>} />
+        <Kpi titulo="Espera prolongada" valor={`${k.espera?.mas_de_1_anio ?? "—"}`} meta="no definida (indicador de gestión)" estado="info"
+          detalle={<>Pacientes que siguen esperando más de 1 año ({k.espera?.mas_de_500_dias} con más de 500 días; máxima {k.espera?.maxima_dias} días). Mediana de espera: {k.espera?.mediana_dias} días.</>} />
       </div>
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-3">
+        <Caja titulo="Trabajo pendiente">
+          <div className="text-[14px] space-y-1">
+            {k.trabajo_pendiente && <>
+            <Fila t="Pendientes de revisión" v={k.trabajo_pendiente.por_estado.pendiente_revision} c="text-ambar" />
+            <Fila t="Pendientes de contacto" v={k.trabajo_pendiente.por_estado.pendiente_contacto} />
+            <Fila t="Pendientes de cita" v={k.trabajo_pendiente.por_estado.pendiente_cita} />
+            <Fila t="Con cita reservada" v={k.trabajo_pendiente.por_estado.cita_reservada} c="text-hlf" />
+            <Fila t="Sin responsable" v={k.trabajo_pendiente.sin_responsable} c="text-ambar" />
+            <Fila t="Seguimiento vencido" v={k.trabajo_pendiente.seguimiento_vencido} c={k.trabajo_pendiente.seguimiento_vencido ? "text-error" : ""} />
+            </>}
+          </div>
+        </Caja>
         <Caja titulo="Citas de hoy por estado">
           <div className="text-[14px] space-y-1">
+            <Fila t="Cupos reservados (aún no prueban atención)" v={ci.horas_recuperadas} />
             <Fila t="Propuestas (sin llamar)" v={ci.propuestas_sin_reservar} />
             <Fila t="Reservadas" v={ci.reservada} />
             <Fila t="Confirmadas por el paciente" v={ci.confirmada} c="text-hlf" />
@@ -886,10 +946,10 @@ function Indicadores({ fecha, esApi, data }) {
         <Caja titulo="Descompensaciones graves">
           <div className="text-[14px] space-y-1">
             <Fila t="En la lista" v={re.descompensados_en_lista} />
-            <Fila t="Evaluadas" v={re.evaluacion_hecha} c="text-hlf" />
-            <Fila t="Pendientes (≤ 72 h)" v={re.evaluacion_pendiente} />
+            <Fila t="Prioridad revisada" v={re.evaluacion_hecha} c="text-hlf" />
+            <Fila t="Nuevas, en plazo (≤ 72 h)" v={re.evaluacion_pendiente} />
             <Fila t="Atrasadas (> 72 h)" v={re.evaluacion_atrasada} c={re.evaluacion_atrasada ? "text-error" : ""} />
-            <p className="text-[12px] text-on-surface-variant">{pendientesEval} sin decisión médica registrada.</p>
+            <p className="text-[12px] text-on-surface-variant">{pendientesEval} sin revisión del especialista. El plazo cuenta desde que el evento llegó al sistema.</p>
           </div>
         </Caja>
         <Caja titulo="Revisión del especialista">
@@ -909,7 +969,7 @@ function Indicadores({ fecha, esApi, data }) {
           </div>
         </Caja>
       </div>
-      <p className="text-[12px] text-on-surface-variant">Cobertura: {k.cobertura.evaluados} de {k.cobertura.en_espera} pacientes ordenados con el mismo criterio ({k.cobertura.criterio}). Kappa de Cohen entre la prioridad que propone el sistema y la decisión del especialista (Alta / Media / Baja). Indicadores al {fmt(k.fecha_corte)}, medidos sobre lo registrado en la herramienta.</p>
+      <p className="text-[12px] text-on-surface-variant">Cobertura: {k.cobertura.evaluados} de {k.cobertura.en_espera} pacientes ordenados con el mismo criterio ({k.cobertura.criterio}). Kappa de Cohen entre la prioridad que propone el sistema y la decisión del especialista (Alta / Media / Baja). Indicadores al {fmt(k.fecha_corte)} · todo el hospital (todas las especialidades) · medidos sobre lo registrado en la herramienta.</p>
     </div>
   );
 }
@@ -938,12 +998,125 @@ function Contacto({ p, fecha, onListo, onAviso }) {
       <div className="grid grid-cols-2 gap-2 text-[13px]">
         {ops.map(([k, t, c]) => <button key={k} disabled={enviando} onClick={() => enviar(k)} className={`py-2 rounded font-semibold disabled:opacity-50 ${c}`}>{enviando === k ? "…" : t}</button>)}
       </div>
-      <p className="text-[12px] text-on-surface-variant mt-2">La llamada no reemplaza la evaluación médica: la alerta se cierra con una cita, una derivación a urgencia o una decisión clínica registrada.</p>
+      <p className="text-[12px] text-on-surface-variant mt-2">Llamar, citar o derivar quedan registrados por separado. La alerta de descompensación se cierra solo cuando el especialista revisa la prioridad (decisión, confirmar o ajustar).</p>
     </Caja>
   );
 }
 
 // Decisión clínica ante una descompensación grave: la registra un profesional identificado, con seguimiento.
+// Lista de espera simple: como una planilla, sin términos técnicos. Un clic abre todo el detalle en "Lista detallada".
+const POR_PAGINA_SIMPLE = 50;
+function ListaSimple({ data, fecha, esp, setEsp, actualizando, onVer }) {
+  const [busca, setBusca] = useState("");
+  const [prioridad, setPrioridad] = useState("todas");
+  const [pagina, setPagina] = useState(0);
+  useEffect(() => setPagina(0), [busca, prioridad, esp]);
+  const q = busca.trim().toLowerCase();
+  const filas = data.pacientes.filter((p) => (prioridad === "todas" || p.categoria === prioridad) &&
+    (!q || [p.nombre_fantasia, p.id_paciente, p.diagnostico_texto, p.comuna].some((x) => (x || "").toLowerCase().includes(q))));
+  const pag = filas.slice(pagina * POR_PAGINA_SIMPLE, (pagina + 1) * POR_PAGINA_SIMPLE);
+  const paginas = Math.max(1, Math.ceil(filas.length / POR_PAGINA_SIMPLE));
+  const SEXO = { F: "Femenino", M: "Masculino" };
+  const columnas = ["N°", "Nombre", "RUT / ID", "Edad", "Sexo", "Comuna", "Previsión", "Especialidad", "Diagnóstico", "Prioridad", "Ingreso a la lista", "Días de espera"];
+  const exportar = () => descargarExcel(`lista_espera_HLF_${fecha}.xlsx`, [{ nombre: "Lista de espera", filas: [columnas,
+    ...filas.map((p) => [p.posicion, p.nombre_fantasia, p.id_paciente, p.edad, SEXO[p.sexo] || p.sexo, p.comuna, p.prevision || "", p.especialidad,
+      `${p.diagnostico_cie10} ${p.diagnostico_texto}`, ETIQUETA[p.categoria], fmt(p.fecha_ingreso_lista), p.dias_espera])] }]);
+  const campo = "h-10 px-3 border border-outline-variant rounded bg-surface-container-lowest text-[15px]";
+  return (
+    <div className="flex flex-col gap-4">
+      <div>
+        <h1 className="text-[22px] font-bold">Lista de espera</h1>
+        <p className="text-[15px] text-on-surface-variant">Ordenada desde quien debe atenderse primero. Haga clic en un paciente para ver todo su detalle.</p>
+      </div>
+      <div className="flex flex-wrap items-end gap-3 text-[14px]">
+        <Filtro label="Buscar"><input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Nombre, RUT o diagnóstico" className={`${campo} w-64`} /></Filtro>
+        <Filtro label="Especialidad"><select value={esp} onChange={(e) => setEsp(e.target.value)} className={campo}>{ESPECIALIDADES.map((e) => <option key={e}>{e}</option>)}</select></Filtro>
+        <Filtro label="Prioridad"><select value={prioridad} onChange={(e) => setPrioridad(e.target.value)} className={campo}>
+          <option value="todas">Todas</option><option value="alta">Alta</option><option value="media">Media</option><option value="baja">Baja</option></select></Filtro>
+        <button onClick={exportar} className="ml-auto h-10 px-4 rounded bg-primary text-on-primary font-semibold flex items-center gap-1"><Icono n="download" className="text-[18px]" />Descargar en Excel</button>
+      </div>
+      <section className="bg-surface-container-lowest border border-outline-variant rounded overflow-x-auto relative" aria-busy={actualizando}>
+        <table className={`w-full text-left border-collapse text-[14px] ${actualizando ? "opacity-40" : ""}`}>
+          <thead><tr className="bg-surface-container-low text-on-surface-variant border-b border-outline-variant">
+            {columnas.map((c) => <th key={c} className={`py-2 px-3 font-semibold whitespace-nowrap ${["N°", "Edad", "Días de espera"].includes(c) ? "text-right" : ""}`}>{c}</th>)}
+          </tr></thead>
+          <tbody>
+            {pag.map((p) => (
+              <tr key={p.id_paciente} onClick={() => onVer(p.id_paciente)} tabIndex={0} title="Ver todo el detalle"
+                onKeyDown={(e) => { if (e.key === "Enter") onVer(p.id_paciente); }}
+                className="cursor-pointer border-b border-outline-variant/60 hover:bg-primary/5 focus:bg-primary/10">
+                <td className="py-2 px-3 text-right font-semibold">{p.posicion}</td>
+                <td className="py-2 px-3 font-semibold text-primary whitespace-nowrap">{p.nombre_fantasia}</td>
+                <td className="py-2 px-3 whitespace-nowrap">{p.id_paciente}</td>
+                <td className="py-2 px-3 text-right">{p.edad}</td>
+                <td className="py-2 px-3">{SEXO[p.sexo] || p.sexo}</td>
+                <td className="py-2 px-3 whitespace-nowrap">{p.comuna}</td>
+                <td className="py-2 px-3 whitespace-nowrap">{p.prevision}</td>
+                <td className="py-2 px-3 whitespace-nowrap">{p.especialidad}</td>
+                <td className="py-2 px-3">{p.diagnostico_texto}</td>
+                <td className="py-2 px-3"><Prioridad cat={p.categoria} /></td>
+                <td className="py-2 px-3 whitespace-nowrap">{fmt(p.fecha_ingreso_lista)}</td>
+                <td className="py-2 px-3 text-right font-semibold whitespace-nowrap">{p.dias_espera}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {filas.length === 0 && <p className="p-6 text-on-surface-variant">No hay pacientes con esa búsqueda.</p>}
+      </section>
+      <div className="flex flex-wrap items-center justify-between gap-2 text-[14px] text-on-surface-variant">
+        <span>{actualizando ? "Actualizando…" : `${filas.length} pacientes`} · lista al {fmt(fecha)}</span>
+        <div className="flex items-center gap-2">
+          <button disabled={pagina === 0} onClick={() => setPagina(pagina - 1)} className="px-3 py-1.5 border border-outline-variant rounded bg-surface-container-lowest disabled:opacity-40">Anterior</button>
+          <span>Página {pagina + 1} de {paginas}</span>
+          <button disabled={pagina >= paginas - 1} onClick={() => setPagina(pagina + 1)} className="px-3 py-1.5 border border-outline-variant rounded bg-surface-container-lowest disabled:opacity-40">Siguiente</button>
+        </div>
+      </div>
+      <p className="text-[12px] text-on-surface-variant">Datos sintéticos: el registro de prueba no trae RUT, por eso se muestra el ID del paciente. Con las planillas del hospital, esta columna muestra el RUT.</p>
+    </div>
+  );
+}
+
+// Gestión del caso: qué falta (estado calculado), quién se encarga, qué se hace y cuándo se vuelve a mirar.
+const MOTIVOS_PENDIENTE = [["falta_cupo", "Falta de cupo"], ["contacto", "No se ha podido contactar"], ["antecedentes", "Faltan antecedentes o exámenes"],
+  ["revision", "Espera revisión del especialista"], ["paciente", "Decisión o disponibilidad del paciente"], ["otro", "Otro (documentado)"]];
+function GestionCaso({ p, fecha, onListo, onAviso }) {
+  const g = p.gestion || {};
+  const [f, setF] = useState({ responsable: g.responsable || api.getUsuario(), proxima_accion: g.accion_asignada ? g.proxima_accion : "",
+    seguimiento: g.seguimiento || "", motivo_pendiente: g.motivo_pendiente || "", nota: g.nota || "" });
+  const [enviando, setEnviando] = useState(false);
+  const usuario = api.getUsuario();
+  const notaCorta = f.motivo_pendiente === "otro" && f.nota.trim().length < MIN_EXPLICACION;
+  const guardar = async () => {
+    setEnviando(true);
+    try { await api.postGestion(p.id_paciente, { ...f, fecha_corte: fecha }); onListo(); }
+    catch (e) { onAviso({ titulo: "No se pudo guardar: " + e.message }); } finally { setEnviando(false); }
+  };
+  const campo = "h-9 px-2 border border-outline-variant rounded bg-surface-container-lowest text-[14px] w-full";
+  return (
+    <Caja titulo="Gestión del caso">
+      <div className="text-[14px] mb-2">Estado: <b className={ESTILO_GESTION[g.estado]}>{g.texto}</b>
+        <span className="text-[12px] text-on-surface-variant"> (se calcula con lo registrado: revisión, llamadas y citas)</span></div>
+      {g.actualizado_por && <p className="text-[12px] text-on-surface-variant mb-2">Última actualización: {g.actualizado_por} · {fmt(g.actualizado)}</p>}
+      <div className="grid grid-cols-2 gap-2 text-[13px]">
+        <Filtro label="Responsable"><input value={f.responsable} onChange={(e) => setF({ ...f, responsable: e.target.value })} placeholder="Nombre y cargo" className={campo} /></Filtro>
+        <Filtro label="Fecha de seguimiento"><input type="date" min={fecha} value={f.seguimiento} onChange={(e) => setF({ ...f, seguimiento: e.target.value })} className={campo} /></Filtro>
+        <div className="col-span-2"><Filtro label={`Próxima acción (si se deja vacía: "${ESTADO_ACCION[g.estado] || g.proxima_accion}")`}>
+          <input value={f.proxima_accion} onChange={(e) => setF({ ...f, proxima_accion: e.target.value })} placeholder="Ej.: pedir ecografía a APS antes de citar" className={campo} /></Filtro></div>
+        <div className="col-span-2"><Filtro label="Motivo del pendiente (qué bloquea la atención)">
+          <select value={f.motivo_pendiente} onChange={(e) => setF({ ...f, motivo_pendiente: e.target.value })} className={campo}>
+            <option value="">Sin motivo registrado</option>{MOTIVOS_PENDIENTE.map(([k, t]) => <option key={k} value={k}>{t}</option>)}
+          </select></Filtro></div>
+        <div className="col-span-2"><Filtro label={f.motivo_pendiente === "otro" ? `Nota (obligatoria, mínimo ${MIN_EXPLICACION} caracteres)` : "Nota (opcional)"}>
+          <input value={f.nota} onChange={(e) => setF({ ...f, nota: e.target.value })} className={campo} /></Filtro></div>
+      </div>
+      {!usuario && <p className="text-[12px] text-ambar font-semibold mt-2">Escriba su nombre y cargo arriba a la derecha: la gestión queda registrada a su nombre.</p>}
+      <button disabled={enviando || !usuario || notaCorta} onClick={guardar} className="mt-2 w-full py-2 rounded bg-primary text-on-primary font-semibold disabled:opacity-40">{enviando ? "Guardando…" : "Guardar gestión"}</button>
+    </Caja>
+  );
+}
+const ESTADO_ACCION = { pendiente_revision: "Revisar la prioridad (especialista)", pendiente_contacto: "Volver a llamar", pendiente_cita: "Buscar cupo y citar",
+  cita_reservada: "Confirmar asistencia", atendido: "Registrar la atención (egreso)" };
+
 // Ajuste manual de la posición en la lista: siempre con un motivo previo, explicado y a nombre de quien lo hace.
 const MOTIVOS_AJUSTE = [["criterio_clinico", "Criterio clínico del especialista"], ["informacion_no_registrada", "Información clínica que no está en el registro"],
   ["comite", "Decisión de comité o jefatura"], ["error_registro", "Corrección de un error de registro"], ["otro", "Otro motivo (explicado)"]];
@@ -1011,7 +1184,7 @@ function DecisionClinica({ p, fecha, onListo, onAviso }) {
   };
   const campo = "h-9 px-2 border border-outline-variant rounded bg-surface-container-lowest text-[14px]";
   return (
-    <Caja titulo="Decisión médica ante la descompensación" className={p.contactar_hoy ? "border-l-4 border-l-error" : ""}>
+    <Caja titulo="Decisión del especialista ante la descompensación" className={p.contactar_hoy ? "border-l-4 border-l-error" : ""}>
       {p.decision && <p className="text-[13px] mb-2">Última: <b>{p.decision.texto}</b> · {p.decision.responsable}{p.decision.nota && ` · ${p.decision.nota}`}</p>}
       <div className="grid grid-cols-2 gap-2">
         <select value={f.decision} onChange={(e) => setF({ ...f, decision: e.target.value })} className={`${campo} col-span-2`}>
@@ -1390,9 +1563,7 @@ function Hoy({ parte, vitales, todosPacientes, fecha, esp, setEsp, onVer, esApi,
     p.estado_clinico === "descompensado" && p.estado_revision !== "confirmado" && p.estado_revision !== "ajustado");
   const listos = todos.filter((p) => !p.contactar_hoy);
   const hora = b?.cupo_por_paciente || {};
-  const box = Object.fromEntries((b?.mapa || []).map((x) => [x.id_box, x]));
   const horasLibres = (b?.especialidades || []).reduce((s, e) => s + e.cupos_libres_hoy, 0);
-  const conHora = todos.filter((p) => hora[p.id_paciente]).length;
   const nombreBox = (id) => id?.replace("BOX-", "Box ");
 
   const registrar = async (p, resultado) => {
@@ -1415,11 +1586,9 @@ function Hoy({ parte, vitales, todosPacientes, fecha, esp, setEsp, onVer, esApi,
 
   const Evaluacion = ({ p }) => p.evaluacion && (
     <div className={`text-[12px] font-semibold ${p.evaluacion.estado === "atrasada" ? "text-error" : "text-on-surface-variant"}`}>
-      Evento grave del {fmt(p.evaluacion.fecha_evento)} · hace {p.evaluacion.dias_desde_evento} día{p.evaluacion.dias_desde_evento !== 1 ? "s" : ""}
-      {p.evaluacion.estado === "atrasada" ? " · EVALUACIÓN ATRASADA (> 72 h)" : " · dentro del plazo de 72 h"}</div>
+      Evento grave del {fmt(p.evaluacion.fecha_evento)} · en el sistema desde el {fmt(p.evaluacion.llego_al_sistema)} ({p.evaluacion.dias_en_revision} día{p.evaluacion.dias_en_revision !== 1 ? "s" : ""})
+      {p.evaluacion.estado === "atrasada" ? " · REVISIÓN ATRASADA (> 72 h)" : " · nueva, dentro del plazo de 72 h"}</div>
   );
-  // Capacidad por especialidad (no global): dónde faltan horas para las descompensaciones graves
-  const faltan = (b?.especialidades || []).filter((e) => e.vitales_sin_cupo.length > 0);
   const conteo = (b?.especialidades || []).reduce((s, e) => {
     Object.entries(e.conteo_citas || {}).forEach(([k, v]) => { s[k] = (s[k] || 0) + v; }); return s;
   }, {});
@@ -1452,9 +1621,9 @@ function Hoy({ parte, vitales, todosPacientes, fecha, esp, setEsp, onVer, esApi,
         <section className="rounded border border-primary/30 bg-primary/5 p-4 text-[15px] leading-relaxed">
           <b>Resumen del {fmt(fecha)}{esp !== "Todas" ? ` · ${esp}` : ""}:</b>{" "}
           {parte === "hoy"
-            ? <>{todos.length ? <>Hay <b>{todos.length} pacientes con descompensación grave</b>: <b className="text-hlf">{todos.length - pendientes.length} ya evaluados</b>
-                {pendientes.length > 0 && <>, <b className="text-error">{pendientes.length} esperan evaluación médica</b>{todos.filter((p) => p.evaluacion?.estado === "atrasada").length > 0 && <> ({todos.filter((p) => p.evaluacion?.estado === "atrasada").length} con más de 72 h)</>}</>}.
-                </> : "No hay pacientes con descompensación grave por evaluar."}</>
+            ? <>{todos.length ? <>Hay <b>{todos.length} pacientes con descompensación grave</b>: <b className="text-hlf">{todos.length - pendientes.length} con la prioridad ya revisada</b>
+                {pendientes.length > 0 && <>, <b className="text-error">{pendientes.length} esperan revisión de su prioridad</b>{todos.filter((p) => p.evaluacion?.estado === "atrasada").length > 0 && <> ({todos.filter((p) => p.evaluacion?.estado === "atrasada").length} con más de 72 h)</>}</>}.
+                </> : "No hay descompensaciones graves pendientes de revisión."}</>
             : <>quedan <b>{horasLibres} horas libres</b> en los box. <b>{conteo.propuesta || 0} propuestas</b> (aún no son citas) · <b className="text-hlf">{citasHechas} citas reservadas</b>
                 {conteo.confirmada ? <> ({conteo.confirmada} confirmadas)</> : null}{conteo.no_asistio ? <> · {conteo.no_asistio} no asistieron</> : null}.</>}
           {parte === "box" && b.agenda_referencia && <div className="mt-1 text-[13px] text-on-surface-variant">Agenda de box: el registro sintético trae agenda hasta el {fmt(b.dia_agenda)}; se usa esa como agenda de referencia para hoy.</div>}
@@ -1465,14 +1634,14 @@ function Hoy({ parte, vitales, todosPacientes, fecha, esp, setEsp, onVer, esApi,
 
       <div className="grid gap-5 lg:grid-cols-12 items-start">
         {parte === "hoy" && <>
-        <Caja titulo={`Descompensaciones graves: evaluación médica pendiente (${pendientes.length})`} className="lg:col-span-7 border-l-4 border-l-error">
-          <p className="text-[13px] text-on-surface-variant mb-3">Se descompensaron de forma grave después de la interconsulta y no se han estabilizado. Requieren evaluación médica dentro de 72 h: el médico decide si es riesgo vital, si se cita o si se deriva. Llamar no basta para cerrar la alerta.</p>
+        <Caja titulo={`Descompensaciones graves: revisar prioridad (${pendientes.length}: ${pendientes.filter((p) => p.evaluacion?.estado !== "atrasada").length} nuevas · ${pendientes.filter((p) => p.evaluacion?.estado === "atrasada").length} atrasadas)`} className="lg:col-span-7 border-l-4 border-l-error">
+          <p className="text-[13px] text-on-surface-variant mb-3">Tuvieron un evento grave después de la interconsulta y no hay registro posterior de estabilización ni de evaluación. Su prioridad debe revisarla el especialista dentro de 72 h desde que el evento llegó al sistema (KPI del hospital). Llamar o citar no cierra la alerta.</p>
           {todos.length === 0 && <p className="text-on-surface-variant">Nadie pendiente{esp !== "Todas" && ` en ${esp}`}.</p>}
           {agrupar(pendientes).map(([nombreEsp, grupo]) => {
             return (
           <div key={nombreEsp} className="mb-3">
             <div className="flex flex-wrap items-baseline justify-between gap-2 bg-surface-container-low rounded px-2 py-1.5 text-[14px]">
-              <b>{nombreEsp} · {grupo.length} por evaluar</b>
+              <b>{nombreEsp} · {grupo.length} por revisar</b>
             </div>
           <ul className="divide-y divide-outline-variant/60">
             {grupo.map((p) => (
@@ -1502,7 +1671,7 @@ function Hoy({ parte, vitales, todosPacientes, fecha, esp, setEsp, onVer, esApi,
           })}
           {listos.length > 0 && (
             <details className="mt-2 text-[13px]">
-              <summary className="cursor-pointer text-on-surface-variant">Ya evaluados ({listos.length})</summary>
+              <summary className="cursor-pointer text-on-surface-variant">Prioridad ya revisada ({listos.length})</summary>
               <ul className="mt-1 space-y-1">
                 {listos.map((p) => <li key={p.id_paciente}><button onClick={() => onVer(p.id_paciente)} className="hover:underline">{p.nombre_fantasia}</button> · <span className="text-hlf">{p.evaluacion?.cierre?.texto}{p.evaluacion?.cierre?.responsable && ` · ${p.evaluacion.cierre.responsable}`}</span></li>)}
               </ul>

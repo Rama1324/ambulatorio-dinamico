@@ -44,7 +44,8 @@ Pacientes de demo: 00002 (salta del puesto 312 al 18 tras urgencia + hospitaliza
 
 ## Estado actual — publicado en AWS
 - 47 tests (`python -m pytest -q tests`). Página: https://main.d2jvqnf67i4lks.amplifyapp.com
-- Front (pedido del hospital, 15-10: el objetivo es la lista de espera, no la gestión de box): Lista de espera (página principal, ficha en pestañas), Alertas de hoy (descompensaciones por especialidad + avisar al especialista), Indicadores, Cargar datos, Criterios. Las pantallas de box quedan en el código pero fuera del menú. El nombre del usuario (arriba a la derecha) queda en cada registro.
+- Front (pedidos del hospital, 15-10: el objetivo es la lista de espera, sin IA predictiva ni gestión de box): "Lista de espera" (página principal, simple como planilla: N°, nombre, RUT/ID, edad, especialidad, diagnóstico, prioridad, días de espera) y "Lista detallada" (estado de gestión, responsable, próxima acción, seguimiento, ajuste manual con motivo, ficha con Resumen/Gestión/Registrar/Fundamento/Historia), Alertas pendientes, Indicadores, Cargar datos, Criterios. Todo se exporta a Excel (.xlsx).
+- KPI 72 h = revisar la PRIORIDAD tras un evento grave, contado desde que el evento llega al sistema (confirmar con el hospital).
 - Limpiar la demo publicada antes del pitch: `python scripts/limpiar_demo.py --borrar`.
 
 ## Pendiente
