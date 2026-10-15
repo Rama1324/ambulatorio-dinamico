@@ -477,6 +477,46 @@ def detalle(pid, corte):
     }
 
 
+INICIO_SERIE = date(2026, 4, 1)  # mismas quincenas que el control "Explorar fechas anteriores" del front
+
+
+def estadisticas(corte, especialidad=None):
+    """Evolución de la lista (una sola llamada): composición por prioridad cada 14 días hasta el corte, y para los
+    pacientes que se descompensaron o subieron 10+ puestos, el evento clínico grave que lo explica (tipo exacto)."""
+    perfs, _ = perfiles_combinados()
+    vals = list(perfs.values())
+    fechas, f = [], INICIO_SERIE
+    while f < corte:
+        fechas.append(f); f += timedelta(days=14)
+    fechas.append(corte)
+    serie = []
+    for fc in fechas:
+        activos, excluidos = puntaje.priorizar(vals, fc, especialidad)
+        cat = {c: sum(r["categoria"] == c for r in activos) for c in puntaje.ORDEN_CAT}
+        serie.append({"fecha": fc.isoformat(), "total": len(activos), **cat,
+                      "graves": sum(r["riesgo_vital"] for r in activos),
+                      "descompensados": sum(r["estado_clinico"] == "descompensado" for r in activos),
+                      "fallecidos": sum(e["motivo"] == "fallecido" for e in excluidos),
+                      "atendidos": sum(e["motivo"] == "atendido" for e in excluidos), "egresos": len(excluidos)})
+    # Causas: evento grave más reciente (≤ corte) de quienes están descompensados o subieron 10+ puestos en 14 días
+    data = lista(corte, especialidad, *perfiles_combinados())
+    causas, eventos = {}, {}
+    for p in data["pacientes"]:
+        salto = (p["posicion_anterior"] - p["posicion"]) if p.get("posicion_anterior") else 0
+        if p["estado_clinico"] != "descompensado" and salto < 10:
+            continue
+        evs = sorted((e for e in perfs[p["id_paciente"]].get("eventos_clinicos", [])
+                      if e["fecha_evento"] <= corte.isoformat() and puntaje.descompensa(e)), key=lambda e: e["fecha_evento"])
+        ev = evs[-1] if evs else None
+        tipo = ev["tipo_evento"] if ev else "sin_evento"
+        causas[tipo] = causas.get(tipo, 0) + 1
+        if ev:
+            eventos[p["id_paciente"]] = {k: ev.get(k) for k in ("tipo_evento", "subtipo", "severidad", "fecha_evento")}
+    return {"fecha_corte": corte.isoformat(), "especialidad": especialidad, "serie": serie,
+            "causas": [{"tipo_evento": k, "pacientes": v} for k, v in sorted(causas.items(), key=lambda x: -x[1])],
+            "evento_causa": eventos}
+
+
 def historia(pid, corte):
     """Posición y categoría del paciente cada 14 días hasta la fecha de corte (mismas reglas que la lista)."""
     perfs, _ = perfiles_combinados()
@@ -1213,6 +1253,8 @@ def handler(event, context=None):
             return _resp(*post_cita(partes[1], body))
         if method == "GET" and partes == ["disponible"]:
             return _resp(*disponible(_fecha(qs), qs.get("especialidad"), qs.get("cupos"), qs.get("desde"), qs.get("hasta")))
+        if method == "GET" and partes == ["estadisticas"]:
+            return _resp(200, estadisticas(_fecha(qs), qs.get("especialidad") or None))
         if method == "GET" and partes == ["kpis"]:
             return _resp(200, kpis(_fecha(qs)))
         if method == "POST" and len(partes) == 3 and partes[0] == "pacientes" and partes[2] == "novedad":

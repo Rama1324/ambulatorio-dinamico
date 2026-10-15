@@ -103,3 +103,55 @@ export const postInforme = (id, body) => req("POST", `/pacientes/${id}/informe`,
 export const postExplicar = (id, fechaCorte) => req("POST", `/pacientes/${id}/explicar`, { fecha_corte: fechaCorte });
 export const getBoxes = (fechaCorte, especialidad) =>
   req("GET", `/boxes?${new URLSearchParams({ fecha_corte: fechaCorte, ...(especialidad ? { especialidad } : {}) })}`);
+
+// ── Estadísticas (aporte de Diego) ──────────────────────────────────────────
+// Devuelve la serie temporal de la lista (composición por prioridad, descompensaciones graves y total)
+// más el análisis de por qué cambió cada paciente entre el corte anterior y el actual.
+// Funciona con mock.json (todos los cortes precalculados) o con la API (una llamada /pacientes por fecha).
+const SEVERIDAD_GRAVE = (e) => e.severidad === "grave" || (e.subtipo || "").toLowerCase().includes("descompensaci");
+
+function resumenCorte(fecha, pacientes, excluidos) {
+  const r = { fecha, total: pacientes.length, alta: 0, media: 0, baja: 0, graves: 0, revisar: 0,
+    excluidos: (excluidos || []).length,
+    fallecidos: (excluidos || []).filter((e) => e.motivo === "fallecido").length,
+    atendidos: (excluidos || []).filter((e) => e.motivo === "atendido").length };
+  for (const p of pacientes) {
+    r[p.categoria] = (r[p.categoria] || 0) + 1;
+    if (p.riesgo_vital) r.graves++;
+    if (p.revision_sugerida?.length > 0) r.revisar++;
+  }
+  return r;
+}
+
+// Para un corte, agrupa el evento clínico más reciente (anterior o igual al corte) que explica el cambio de cada paciente.
+function eventoQueExplica(timeline, idPaciente, fechaCorte) {
+  const evs = (timeline?.[idPaciente]?.eventos || [])
+    .filter((e) => e.fecha_evento <= fechaCorte && SEVERIDAD_GRAVE(e))
+    .sort((a, b) => b.fecha_evento.localeCompare(a.fecha_evento));
+  return evs[0] || null;
+}
+
+export async function getEstadisticas(fechaCorte, especialidad) {
+  if (MODO === "mock") {
+    const m = await mock();
+    const fechas = m.fechas.filter((f) => f <= fechaCorte);
+    const serie = fechas.map((f) => {
+      const c = m.cortes[f];
+      let pac = c.pacientes.map((r) => ({ ...m.pacientes[r.id_paciente], ...r }));
+      if (especialidad) pac = pac.filter((p) => p.especialidad === especialidad);
+      return resumenCorte(f, pac, c.excluidos);
+    });
+    const fL = fechas[fechas.length - 1];
+    const fPrev = fechas[fechas.length - 2];
+    const cL = m.cortes[fL];
+    const posPrev = fPrev ? Object.fromEntries(m.cortes[fPrev].pacientes.map((r) => [r.id_paciente, r.posicion])) : {};
+    const evento_causa = Object.fromEntries(cL.pacientes.map((r) => [r.id_paciente, eventoQueExplica(m.timeline, r.id_paciente, fL)])
+      .filter(([, e]) => e));
+    void posPrev;
+    return { fecha_corte: fL, serie, evento_causa, modo: "mock" };
+  }
+  // API: una sola llamada; el servidor calcula la serie y el evento exacto de cada cambio
+  const q = new URLSearchParams({ fecha_corte: fechaCorte });
+  if (especialidad) q.set("especialidad", especialidad);
+  return { ...(await req("GET", `/estadisticas?${q}`)), modo: "api" };
+}

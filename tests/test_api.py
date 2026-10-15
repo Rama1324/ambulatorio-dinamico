@@ -539,6 +539,16 @@ def test_rut_valida_digito_verificador():
     assert s == 200 and r["paciente"]["rut"] == "12.345.678-5"
     assert call("POST", "/pacientes", body={**base, "rut": "12.345.678-5"})[0] == 409          # misma interconsulta repetida
 
+def test_estadisticas_en_una_llamada():
+    s, e = call("GET", "/estadisticas", {"fecha_corte": "2026-10-13"})
+    assert s == 200 and e["serie"][0]["fecha"] == "2026-04-01" and e["serie"][-1]["fecha"] == "2026-10-13"
+    assert all(x["total"] == x["alta"] + x["media"] + x["baja"] for x in e["serie"])
+    _, l = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
+    assert e["serie"][-1]["total"] == l["total"]                                       # coincide con la lista
+    assert all(v["severidad"] == "grave" or "descompensaci" in v["subtipo"] for v in e["evento_causa"].values())
+    s, c = call("GET", "/estadisticas", {"fecha_corte": "2026-10-13", "especialidad": "Cardiología"})
+    assert c["serie"][-1]["total"] < e["serie"][-1]["total"]
+
 def test_health_informa_fecha_y_modo():
     s, h = call("GET", "/health")
     assert s == 200 and h["datos"] == "sinteticos" and h["modo"] in ("simulacion", "tiempo_real") and h["fecha_hoy"]
