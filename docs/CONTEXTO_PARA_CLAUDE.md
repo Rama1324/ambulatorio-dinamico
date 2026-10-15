@@ -298,6 +298,20 @@ GES como "verificar"; LACE experimental; equivalencias "a validar"; indicadores 
 - Dos pestañas: "Lista de espera" (simple) y "Lista detallada" (todo).
 - RUT con dígito verificador al ingresar pacientes y vista en celular.
 
+## 11b. Algoritmo decisor con IA (rama `feat/algoritmo-decisor`, NO está en `main` ni publicado)
+- **Idea:** el LLM (Bedrock, `us.anthropic.claude-sonnet-5`) **lee** el historial y contesta una rúbrica cerrada con citas
+  exactas; una **fórmula fija** (`lambda/decisor.py`) calcula la categoría con la Tabla SSMSO 2025 del HLF y ordena con el
+  Ord. 536 **sin LACE**. Si algo no cuadra (cita inexistente, 3 lecturas distintas, bajaría a alguien, > 1 nivel de
+  diferencia, dato desconocido, falla del LLM), el paciente **no se mueve solo**: queda con las reglas y para revisión humana.
+- **Interruptor:** `ALGORITMO=reglas` (por defecto; la API responde idéntico a `main`) o `rubrica`.
+- **Archivos:** `lambda/rubrica.py`, `decisor.py`, `controles.py`, `algoritmo.py`, `lambda/conocimiento/*.json`
+  (tabla verificada página por página, PMID verificados en NCBI, umbrales de guías, 13 pendientes para médicos).
+- **Docs:** `docs/algoritmo/` (INVESTIGACION, VIABILIDAD, requirements EARS, design, tasks, EVALUACION).
+- **Evaluación:** `scripts/evaluar_algoritmo.py` (brazos A, R, E+F, E0). Claude decidiendo solo (E0) coincide con la tabla
+  oficial en κ 0,09; con rúbrica + fórmula + controles, el resultado final es idéntico al de leer los datos con código.
+- **AWS:** Bedrock (tool use forzado + Pydantic), DynamoDB (`sk = evaluacion#`), EventBridge Scheduler para el barrido
+  nocturno (`BarridoFunction`, apagado por defecto).
+
 ## 12. Pendiente
 1. **Confirmar con el hospital** si las 72 h son para revisar la prioridad (como quedó) o para que un médico evalúe al paciente.
 2. **Guion de la demo** de punta a punta: paciente con 500+ días → se ve qué lo bloquea → se asigna responsable y próxima

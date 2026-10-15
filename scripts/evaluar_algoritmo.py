@@ -243,8 +243,77 @@ def main():
     os.makedirs(os.path.join(RAIZ, "data", "evaluacion"), exist_ok=True)
     with open(os.path.join(RAIZ, "data", "evaluacion", "resultados.json"), "w", encoding="utf-8") as f:
         json.dump({"resumen": res, "evaluaciones": ef}, f, ensure_ascii=False, indent=1, default=dict)
+    ejemplos = [{"id": x["id_paciente"], "reglas": x["categoria_reglas"], "rubrica": x["categoria_rubrica"],
+                 "controles": [m["motivo"] for m in x["controles"]], "detalle": (x["controles"] or [{}])[0].get("detalle", "")}
+                for x in ef if any(m["motivo"] == "bajaria" for m in x["controles"])][:5]
+    escribir_md(res, ejemplos)
     print(json.dumps(res, ensure_ascii=False, indent=1, default=dict))
     return res
+
+
+def escribir_md(r, ejemplos):
+    """docs/algoritmo/EVALUACION.md a partir de los resultados medidos."""
+    d, v = r["distribucion"], r["vs_A"]
+
+    def dist(k):
+        x = d.get(k) or {}
+        return f'{x.get("alta", 0)} / {x.get("media", 0)} / {x.get("baja", 0)}'
+
+    def fila(nombre, k):
+        c = v.get(k)
+        return (f"| {nombre} | {dist(k)} | {c['iguales']} | {c['suben']} | {c['bajan']} | {c['kappa_vs_A']} |" if c else f"| {nombre} | — | — | — | — | — |")
+    et = r.get("etiquetas_medicas")
+    costo = r.get("costo_usd") or {}
+    inestable_pct = round(100 - r["estabilidad_3_corridas"]["pct"], 1)
+    lineas = [
+        "# Evaluación offline del algoritmo decisor", "",
+        f"Generado por `scripts/evaluar_algoritmo.py` · fecha de corte {r['corte']} · modelo `{r['modelo']}` · "
+        f"{r['pacientes']} pacientes en lista · {r['corridas']} corridas por paciente · duración {r['duracion_s']} s.", "",
+        "## Brazos", "",
+        "- **A:** reglas actuales (`puntaje.py`).",
+        "- **R:** la misma rúbrica respondida por **código** (lector determinista) + fórmula + controles. Mide si el LLM aporta.",
+        "- **E+F:** rúbrica respondida por **Bedrock** (3 lecturas) + fórmula fija + controles. Es lo que se propone activar.",
+        "- **E+F sin controles:** lo que la fórmula habría hecho si no existieran los controles (para ver qué frenan).",
+        "- **E0:** Claude con un prompt genérico que asigna la prioridad directamente (control, sin rúbrica ni tabla).", "",
+        "## Resultados frente a las reglas actuales (A)", "",
+        "| Brazo | Alta / Media / Baja | Iguales a A | Suben | Bajan | κ ponderado vs A |", "|---|---|---|---|---|---|",
+        f"| A (reglas) | {dist('A')} | — | — | — | — |",
+        fila("R (rúbrica por código)", "R"), fila("**E+F (rúbrica por LLM + fórmula + controles)**", "E+F"),
+        fila("E+F sin controles", "E+F_propuesta_sin_controles"), fila("E0 (LLM decide solo)", "E0"), "",
+        f"- κ entre E+F y R: **{r['kappa_EF_vs_R']}**.",
+        f"- Pacientes que la rúbrica movió sola (todo cuadró): **{r['movidos_por_rubrica']}**.",
+        f"- Estabilidad: **{r['estabilidad_3_corridas']['pct']} %** de los pacientes con las 3 lecturas iguales ({inestable_pct} % inestables).",
+        f"- Lecturas: {r['lecturas']['total']} · fallidas: **{r['lecturas']['fallidas']}** · respuesta envuelta corregida: {r['lecturas']['envoltorio_corregido']}.", "",
+        "## Controles (pacientes que NO se mueven solos y quedan para revisión humana)", "",
+        f"Pacientes con un control bloqueante: **{r['controles']['pacientes_con_control_bloqueante']}**.", "",
+        "| Motivo | Pacientes |", "|---|---|", *[f"| {k} | {n} |" for k, n in sorted(r["controles"]["motivos"].items(), key=lambda x: -x[1])], "",
+        *(["Ejemplos de `bajaria` (la fórmula los habría bajado; el control lo impidió):", "",
+           *[f"- {e['id']}: reglas {e['reglas']} → rúbrica {e['rubrica']} · {e['detalle']}" for e in ejemplos], ""] if ejemplos else []),
+        "## Lectura del LLM frente al lector por código (% de acuerdo por pregunta)", "",
+        "| Pregunta | Acuerdo |", "|---|---|", *[f"| {q} | {p} % |" for q, p in r["acuerdo_llm_vs_lector_codigo"].items()], "",
+        "## Costo y latencia (medidos)", "",
+        f"- Tokens por evaluación (3 lecturas): {r['tokens']['por_evaluacion_EF']['entrada']} de entrada y {r['tokens']['por_evaluacion_EF']['salida']} de salida.",
+        *( [f"- Costo por evaluación: USD {costo['por_evaluacion_3_corridas']} · esta corrida: USD {costo['esta_corrida_EF']} · "
+            f"barrido de 26.356 pacientes: USD {costo['barrido_26356_on_demand']} on-demand (el lote no existe para Sonnet 5; ver VIABILIDAD.md)."] if costo else []),
+        "- Latencia por lectura (de la corrida con llamadas reales): ver VIABILIDAD.md (mediana 3,5 s, p95 5,5 s; las 3 lecturas van en paralelo).", "",
+        "## Concordancia con médicos (30 casos etiquetados)", "",
+        *( [f"| {k} | n = {x['n']} | κ = {x['kappa']} | IC95 {x.get('ic95')} | subtriage {x.get('subtriage', '—')} | sobretriage {x.get('sobretriage', '—')} | errores graves {x.get('errores_graves', '—')} |"
+            for k, x in et.items()] if et else
+           ["**Pendiente:** no hay etiquetas médicas (`data/etiquetado_30.csv`). El script queda listo: calcula κ ponderado cuadrático "
+            "contra cada médico y el consenso con IC95 por bootstrap, κ médico–médico, sobretriage, subtriage y errores graves. "
+            "Con n = 30 el IC95 del κ es de ±0,22–0,24; para ±0,10 se necesitan 110–200 casos."]), "",
+        "## Regla de decisión", "",
+        "Volver a `reglas` si E+F: (1) no supera a A por ≥ 0,10 de κ contra médicos; (2) es inestable en más del 10 % de los casos; "
+        "o (3) produce algún subtriage grave.", "",
+        f"- (1) **No evaluable sin etiquetas médicas.**",
+        f"- (2) Inestabilidad: {inestable_pct} % → {'cumple' if inestable_pct <= 10 else 'NO cumple'}.",
+        f"- (3) Subtriage frente a A: {v['E+F']['bajan']} pacientes bajan → {'cumple' if v['E+F']['bajan'] == 0 else 'NO cumple'} "
+        "(los controles impiden bajar sin un humano).", "",
+        "**Recomendación:** mantener `ALGORITMO=reglas` en la demo publicada hasta tener las etiquetas de los 30 casos. "
+        "E+F queda implementado, probado y medido, listo para activarse cuando el equipo lo decida.", "",
+    ]
+    with open(os.path.join(RAIZ, "docs", "algoritmo", "EVALUACION.md"), "w", encoding="utf-8", newline="\n") as f:
+        f.write("\n".join(lineas))
 
 
 if __name__ == "__main__":
