@@ -161,7 +161,7 @@ export default function App() {
           <Indicador n={gesVenc} t="Garantías GES vencidas" />
         </div>
 
-        {vista === "hoy" && <Hoy vitales={vitales} fecha={fecha} esp={esp} setEsp={setEsp} onVer={abrir} esApi={esApi} />}
+        {vista === "hoy" && <Hoy vitales={vitales} fecha={fecha} esp={esp} setEsp={setEsp} onVer={abrir} esApi={esApi} onCambio={cargar} onAviso={mostrarAviso} />}
         {vista === "criterios" && <Criterios />}
         {vista === "indicadores" && <Indicadores fecha={fecha} esApi={esApi} data={data} />}
         {vista === "cargar" && <CargarDatos esApi={esApi} onListo={async (r) => {
@@ -1160,110 +1160,132 @@ function Informe({ p, fecha, cargando, onConfirmar, onAviso }) {
   );
 }
 
-function Hoy({ vitales, fecha, esp, setEsp, onVer, esApi }) {
+// Pantalla "Hoy": lista de tareas del día en dos pasos, con una sola forma de decir cada cosa ("hora libre").
+//   Paso 1: a quién llamar hoy (riesgo vital) y qué ofrecerle.  Paso 2: cómo llenar las horas libres de cada box.
+function Hoy({ vitales, fecha, esp, setEsp, onVer, esApi, onCambio, onAviso }) {
   const [b, setB] = useState(null);
   const [err, setErr] = useState(null);
+  const [enviando, setEnviando] = useState(null);
   useEffect(() => {
     if (!esApi) return setErr("La agenda de box requiere conexión al servidor.");
     setB(null);
     api.getBoxes(fecha, esp === "Todas" ? null : esp).then(setB).catch((e) => setErr(e.message));
-  }, [fecha, esp, esApi]);
+  }, [fecha, esp, esApi, vitales]);
 
   const todos = vitales.filter((p) => esp === "Todas" || p.especialidad === esp);
-  const lista = [...todos.filter((p) => p.contactar_hoy), ...todos.filter((p) => !p.contactar_hoy)];
-  const pendientes = todos.filter((p) => p.contactar_hoy).length;
-  const cupo = b?.cupo_por_paciente || {};
-  const conCupo = lista.filter((p) => cupo[p.id_paciente]).length;
+  const pendientes = todos.filter((p) => p.contactar_hoy);
+  const listos = todos.filter((p) => !p.contactar_hoy);
+  const hora = b?.cupo_por_paciente || {};
+  const box = Object.fromEntries((b?.mapa || []).map((x) => [x.id_box, x]));
+  const horasLibres = (b?.especialidades || []).reduce((s, e) => s + e.cupos_libres_hoy, 0);
+  const conHora = todos.filter((p) => hora[p.id_paciente]).length;
+  const nombreBox = (id) => id?.replace("BOX-", "Box ");
+
+  const registrar = async (p, resultado) => {
+    setEnviando(p.id_paciente + resultado);
+    try {
+      const r = await api.postContacto(p.id_paciente, { resultado, fecha_corte: fecha });
+      await onCambio(); onAviso({ titulo: `${p.nombre_fantasia}: ${r.contacto.texto}` });
+    } catch (e) { onAviso({ titulo: "No se pudo registrar: " + e.message }); } finally { setEnviando(null); }
+  };
+
+  const Ofrecer = ({ p }) => hora[p.id_paciente]
+    ? <span className="text-hlf font-semibold">Ofrecer hora hoy: {nombreBox(hora[p.id_paciente])}, {box[hora[p.id_paciente]]?.bloque}</span>
+    : <span className="text-error font-semibold">No queda hora hoy en {p.especialidad}: evaluar sobrecupo o derivación a urgencia</span>;
+
   return (
     <div className="flex flex-col gap-5">
-    {b?.mapa && <MapaBox mapa={b.mapa} dia={b.dia_agenda} esp={esp} setEsp={setEsp} />}
-    <div className="grid gap-5 lg:grid-cols-12 items-start">
-      <Caja titulo={`Contactar hoy (${pendientes} pendiente${pendientes !== 1 ? "s" : ""} de ${todos.length})`} className="lg:col-span-4 border-l-4 border-l-error">
-        <p className="text-[13px] text-on-surface-variant mb-2">Descompensación grave después de la interconsulta, sin estabilización posterior, en un diagnóstico de prioridad alta según la tabla del HLF. Llamar hoy a todos, tengan o no cupo de box; abra el paciente para registrar el contacto.</p>
-        {b && lista.length > 0 && (
-          <div className="flex gap-2 mb-3 text-[13px]">
-            <span className="flex-1 rounded bg-hlf-claro text-hlf px-2 py-1"><b>{conCupo}</b> con cupo de box hoy</span>
-            <span className={`flex-1 rounded px-2 py-1 ${lista.length - conCupo ? "bg-error-container text-on-error-container" : "bg-surface-container-low"}`}><b>{lista.length - conCupo}</b> sin cupo hoy</span>
-          </div>
-        )}
-        {lista.length === 0 && <p className="text-on-surface-variant">Sin pacientes en esta condición{esp !== "Todas" && ` en ${esp}`}.</p>}
-        <ul className="divide-y divide-outline-variant/60">
-          {lista.map((p) => (
-            <li key={p.id_paciente} className={p.contactar_hoy ? "" : "opacity-70"}>
-              <button onClick={() => onVer(p.id_paciente)} className="w-full text-left py-2 hover:bg-surface-container-low">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="font-semibold">{p.nombre_fantasia} <span className="font-normal text-on-surface-variant text-[13px]">· {p.edad} años · N° {p.posicion}</span></div>
-                  {b && (cupo[p.id_paciente]
-                    ? <span className="shrink-0 text-[12px] rounded bg-hlf-claro text-hlf px-1.5 py-px font-semibold">Cupo hoy: {cupo[p.id_paciente]}</span>
-                    : <span className="shrink-0 text-[12px] rounded bg-error-container text-on-error-container px-1.5 py-px font-semibold">Sin cupo hoy</span>)}
-                </div>
-                <div className="text-[13px] text-on-surface-variant">{p.especialidad} · {p.diagnostico_texto}</div>
-                {p.contactar_hoy
-                  ? (b && !cupo[p.id_paciente] && <div className="text-[12px] text-error">Pendiente de contacto · evaluar sobrecupo o derivación a urgencia</div>)
-                  : <div className="text-[12px] text-hlf font-semibold flex items-center gap-1"><Icono n="task_alt" className="text-[14px]" />{p.contacto?.texto}</div>}
-              </button>
-            </li>
-          ))}
-        </ul>
-      </Caja>
+      {b && (
+        <section className="rounded border border-primary/30 bg-primary/5 p-4 text-[15px] leading-relaxed">
+          <b>Resumen del día ({fmt(b.dia_agenda)}{esp !== "Todas" ? ` · ${esp}` : ""}):</b> quedan <b>{horasLibres} horas libres</b> en los box.
+          {" "}{todos.length ? <>Hay <b>{todos.length} pacientes con riesgo vital</b>: <b className="text-hlf">{conHora} tienen hora hoy</b>
+            {todos.length - conHora > 0 && <> y <b className="text-error">{todos.length - conHora} no alcanzan hora</b></>}.
+            {" "}{pendientes.length ? <>Faltan <b>{pendientes.length} llamadas</b>.</> : <>Ya se llamó a todos.</>}</> : "No hay pacientes con riesgo vital."}
+        </section>
+      )}
+      {err && <Caja><p className="text-on-surface-variant">{err}</p></Caja>}
+      {!err && !b && <p className="text-on-surface-variant">Cargando el día…</p>}
 
-      <div className="lg:col-span-8 flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-[17px] font-semibold">Agenda de box{b?.dia_agenda && ` · ${fmt(b.dia_agenda)}`}</h2>
-          <select value={esp} onChange={(e) => setEsp(e.target.value)} className="h-9 px-2 border border-outline-variant rounded bg-white text-[14px]">{ESPECIALIDADES.map((e) => <option key={e}>{e}</option>)}</select>
-        </div>
-        {err && <Caja><p className="text-on-surface-variant">{err}</p></Caja>}
-        {!err && !b && <p className="text-on-surface-variant">Cargando agenda…</p>}
-        {b?.especialidades.map((e) => (
-          <Caja key={e.especialidad} titulo={e.especialidad} accion={<span className="text-[13px] text-on-surface-variant">Inasistencia histórica {e.inasistencia_pct ?? "—"}%</span>}>
-            <div className="flex flex-wrap gap-2 mb-3 text-[13px]">
-              <span className="rounded bg-surface-container-low px-2 py-1"><b>{e.cupos_libres_hoy}</b> cupo{e.cupos_libres_hoy !== 1 ? "s" : ""} libre{e.cupos_libres_hoy !== 1 ? "s" : ""} hoy</span>
-              {e.vitales_sin_cupo.length > 0 && <span className="rounded bg-error-container text-on-error-container px-2 py-1"><b>{e.vitales_sin_cupo.length}</b> con riesgo vital sin cupo</span>}
-            </div>
-            {e.asignaciones.length === 0 && <p className="text-on-surface-variant text-[14px]">Sin box asignado a esta especialidad.</p>}
-            {e.asignaciones.map((a) => (
-              <div key={a.id_box} className="mb-3">
-                <div className="text-[14px] font-semibold mb-1">{a.id_box} · {a.bloque} · {a.libres} cupo{a.libres !== 1 ? "s" : ""} disponible{a.libres !== 1 ? "s" : ""}</div>
-                <table className="w-full text-[14px]">
-                  <tbody>
-                    {a.pacientes.map((p, i) => (
-                      <tr key={p.id_paciente} onClick={() => onVer(p.id_paciente)} className={`cursor-pointer border-t border-outline-variant/60 hover:bg-surface-container-low ${p.riesgo_vital ? "bg-error-container/40" : ""}`}>
-                        <td className="py-2 pr-2 align-top w-6 text-on-surface-variant">{i + 1}</td>
-                        <td className="py-2 pr-2 align-top w-20"><Prioridad cat={p.categoria} /></td>
-                        <td className="py-2 align-top">
-                          <div className="font-semibold">{p.nombre_fantasia} <span className="font-normal text-[13px] text-on-surface-variant">· {p.diagnostico_texto} · {p.dias_espera} días</span></div>
-                          <div className="text-[13px]">{p.motivo}</div>
-                          <div className={`text-[13px] font-semibold ${p.riesgo_vital ? "text-error" : p.riesgo_inasistencia ? "text-ambar" : "text-primary"}`}>Acción: {p.accion}</div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ))}
-            {e.vitales_sin_cupo.length > 0 && (
-              <div className="mb-3 rounded border border-error/40 bg-error-container/40 p-2 text-[14px]">
-                <div className="font-semibold text-on-error-container">No alcanzan cupo hoy, pero tienen riesgo vital: contactar y evaluar sobrecupo o derivación a urgencia</div>
-                <ul className="mt-1">
-                  {e.vitales_sin_cupo.map((p) => (
-                    <li key={p.id_paciente} onClick={() => onVer(p.id_paciente)} className="cursor-pointer hover:underline">
-                      N° {p.posicion} · {p.nombre_fantasia} · {p.diagnostico_texto}
-                    </li>
+      <div className="grid gap-5 lg:grid-cols-12 items-start">
+        <Caja titulo={`Paso 1 · Llamar hoy (${pendientes.length} pendiente${pendientes.length !== 1 ? "s" : ""})`} className="lg:col-span-5 border-l-4 border-l-error">
+          <p className="text-[13px] text-on-surface-variant mb-3">Pacientes que se descompensaron de forma grave después de la interconsulta y no se han estabilizado. No esperan su turno: se llaman hoy y se les ofrece lo que indica cada uno.</p>
+          {todos.length === 0 && <p className="text-on-surface-variant">Nadie para llamar hoy{esp !== "Todas" && ` en ${esp}`}.</p>}
+          <ul className="divide-y divide-outline-variant/60">
+            {pendientes.map((p) => (
+              <li key={p.id_paciente} className="py-2.5 text-[14px]">
+                <button onClick={() => onVer(p.id_paciente)} className="text-left hover:underline">
+                  <b>{p.nombre_fantasia}</b> <span className="text-on-surface-variant text-[13px]">· {p.edad} años · {p.especialidad} · {p.diagnostico_texto}</span>
+                </button>
+                <div className="text-[13px] mt-0.5">{b ? <Ofrecer p={p} /> : null}</div>
+                <div className="flex flex-wrap gap-1 mt-1.5 text-[12px]">
+                  {[["citado", "Citado"], ["derivado_urgencia", "Derivado a urgencia"], ["se_mantiene", "Se mantiene"], ["no_contesta", "No contesta"]].map(([k, t]) => (
+                    <button key={k} disabled={enviando} onClick={() => registrar(p, k)}
+                      className={`px-2 py-1 rounded border font-semibold disabled:opacity-40 ${k === "derivado_urgencia" ? "border-error text-error" : k === "citado" ? "border-primary text-primary" : "border-outline-variant text-on-surface-variant"}`}>
+                      {enviando === p.id_paciente + k ? "…" : t}</button>
                   ))}
-                </ul>
-              </div>
-            )}
-            {e.alternativa && (
-              <div onClick={() => onVer(e.alternativa.id_paciente)} className="cursor-pointer border border-dashed border-outline rounded p-2 text-[14px] hover:bg-surface-container-low">
-                <div className="text-[13px] text-on-surface-variant">Siguiente en la lista, si un paciente no confirma:</div>
-                <div className="font-semibold">{e.alternativa.nombre_fantasia} <span className="font-normal text-[13px] text-on-surface-variant">· prioridad {e.alternativa.categoria} · N° {e.alternativa.posicion}</span></div>
-                <div className="text-[13px]">Va después porque: {e.alternativa.por_que_despues}</div>
-              </div>
-            )}
-          </Caja>
-        ))}
+                </div>
+              </li>
+            ))}
+          </ul>
+          {listos.length > 0 && (
+            <details className="mt-2 text-[13px]">
+              <summary className="cursor-pointer text-on-surface-variant">Ya llamados hoy ({listos.length})</summary>
+              <ul className="mt-1 space-y-1">
+                {listos.map((p) => <li key={p.id_paciente}><button onClick={() => onVer(p.id_paciente)} className="hover:underline">{p.nombre_fantasia}</button> · <span className="text-hlf">{p.contacto?.texto}</span></li>)}
+              </ul>
+            </details>
+          )}
+        </Caja>
+
+        <div className="lg:col-span-7 flex flex-col gap-4">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <h2 className="text-[17px] font-semibold">Paso 2 · Llenar las horas libres de hoy</h2>
+              <p className="text-[13px] text-on-surface-variant">Cada hora libre se propone al siguiente paciente de la lista de su especialidad. Es una propuesta: se confirma al llamar.</p>
+            </div>
+            <select value={esp} onChange={(e) => setEsp(e.target.value)} className="h-9 px-2 border border-outline-variant rounded bg-white text-[14px]">{ESPECIALIDADES.map((e) => <option key={e}>{e}</option>)}</select>
+          </div>
+          {b?.especialidades.filter((e) => e.asignaciones.length).map((e) => (
+            <Caja key={e.especialidad} titulo={e.especialidad} accion={<span className="text-[13px] text-on-surface-variant">{e.cupos_libres_hoy} hora{e.cupos_libres_hoy !== 1 ? "s" : ""} libre{e.cupos_libres_hoy !== 1 ? "s" : ""} hoy</span>}>
+              {e.asignaciones.map((a) => (
+                <div key={a.id_box} className="mb-3">
+                  <div className="text-[14px] font-semibold mb-1">
+                    {nombreBox(a.id_box)} · {a.bloque} · {a.libres === 0 ? "sin horas libres" : `${a.libres} hora${a.libres !== 1 ? "s" : ""} libre${a.libres !== 1 ? "s" : ""} → propuesta:`}
+                  </div>
+                  <ol className="text-[14px]">
+                    {a.pacientes.map((p, i) => (
+                      <li key={p.id_paciente} onClick={() => onVer(p.id_paciente)} className={`cursor-pointer border-t border-outline-variant/60 py-2 hover:bg-surface-container-low flex gap-2 ${p.riesgo_vital ? "bg-error-container/30" : ""}`}>
+                        <span className="shrink-0 w-16 text-on-surface-variant text-[13px]">Hora {i + 1}</span>
+                        <span className="shrink-0"><Prioridad cat={p.categoria} /></span>
+                        <span>
+                          <b>{p.nombre_fantasia}</b> <span className="text-[13px] text-on-surface-variant">· {p.diagnostico_texto} · {p.dias_espera} días esperando</span>
+                          <span className="block text-[13px]">Por qué: {p.motivo}</span>
+                          {p.riesgo_vital && <span className="block text-[13px] text-error font-semibold">{p.contactar_hoy ? "Está en el Paso 1: llamarlo hoy" : `Ya llamado: ${p.contacto?.texto}`}</span>}
+                          {!p.riesgo_vital && p.riesgo_inasistencia && <span className="block text-[13px] text-ambar font-semibold">Faltó 2 veces seguidas: confirmar asistencia por teléfono</span>}
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              ))}
+              {e.alternativa && (
+                <div onClick={() => onVer(e.alternativa.id_paciente)} className="cursor-pointer border border-dashed border-outline rounded p-2 text-[14px] hover:bg-surface-container-low">
+                  <span className="text-on-surface-variant text-[13px]">Si alguien no confirma, ofrecer la hora a:</span> <b>{e.alternativa.nombre_fantasia}</b>
+                  <span className="block text-[13px]">Va después porque {e.alternativa.por_que_despues}.</span>
+                </div>
+              )}
+            </Caja>
+          ))}
+          {b && b.especialidades.every((e) => !e.asignaciones.length) && <Caja><p className="text-on-surface-variant">No hay box con agenda hoy{esp !== "Todas" && ` para ${esp}`}.</p></Caja>}
+        </div>
       </div>
-    </div>
+
+      {b?.mapa && (
+        <details className="bg-surface-container-lowest border border-outline-variant rounded">
+          <summary className="px-4 py-2.5 cursor-pointer text-[14px] font-semibold">Ver ocupación de los 20 box hoy</summary>
+          <div className="p-2"><MapaBox mapa={b.mapa} dia={b.dia_agenda} esp={esp} setEsp={setEsp} /></div>
+        </details>
+      )}
     </div>
   );
 }
@@ -1275,7 +1297,7 @@ function MapaBox({ mapa, dia, esp, setEsp }) {
   const capacidad = activos.reduce((s, x) => s + x.capacidad, 0);
   return (
     <Caja titulo={`Box del día · ${fmt(dia)}`} accion={
-      <span className="text-[13px] text-on-surface-variant">{activos.length} de {mapa.length} box con agenda · <b className="text-hlf">{libres}</b> cupos libres de {capacidad}</span>}>
+      <span className="text-[13px] text-on-surface-variant">{activos.length} de {mapa.length} box con agenda · <b className="text-hlf">{libres}</b> horas libres de {capacidad}</span>}>
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-10 gap-2">
         {mapa.map((x) => {
           if (!x.especialidad) return (
@@ -1291,21 +1313,21 @@ function MapaBox({ mapa, dia, esp, setEsp }) {
               className={`text-left rounded border p-2 transition ${sel ? "border-primary ring-2 ring-primary/30 bg-primary/5" : "border-outline-variant hover:bg-surface-container-low"}`}>
               <div className="flex items-center justify-between">
                 <span className="font-semibold text-[14px]">{x.id_box.replace("BOX-", "Box ")}</span>
-                <span className={`text-[12px] font-bold ${x.libres ? "text-hlf" : "text-on-surface-variant"}`}>{x.libres ? `${x.libres} libres` : "lleno"}</span>
+                <span className={`text-[12px] font-bold ${x.libres ? "text-hlf" : "text-on-surface-variant"}`}>{x.libres ? `${x.libres} hora${x.libres !== 1 ? "s" : ""} libre${x.libres !== 1 ? "s" : ""}` : "completo"}</span>
               </div>
               <div className="text-[12px] text-on-surface-variant truncate">{x.especialidad}</div>
               <div className="h-1.5 rounded bg-hlf-claro overflow-hidden mt-1.5" aria-label={`${pct}% ocupado`}>
                 <div className="h-full bg-primary" style={{ width: `${pct}%` }} />
               </div>
               <div className="flex justify-between text-[11px] text-on-surface-variant mt-1">
-                <span>{x.usados}/{x.capacidad} usados</span>
+                <span>{x.usados} de {x.capacidad} ocupadas</span>
                 {x.sobretiempo_min > 0 && <span title="Sobretiempo del bloque">+{x.sobretiempo_min} min</span>}
               </div>
             </button>
           );
         })}
       </div>
-      <p className="text-[12px] text-on-surface-variant mt-2">Barra azul: cupos ya usados · verde: cupos libres que se asignan abajo según la lista. Haga clic en un box para ver su especialidad.</p>
+      <p className="text-[12px] text-on-surface-variant mt-2">Barra azul: horas ya ocupadas · verde: horas libres, que se proponen en el Paso 2. Haga clic en un box para ver solo su especialidad.</p>
     </Caja>
   );
 }
