@@ -39,7 +39,19 @@ const Caja = ({ titulo, accion, children, className = "" }) => (
   </section>
 );
 
+// Tema claro/oscuro (del PR #1): por defecto sigue al sistema; el botón lo fija y se recuerda en este navegador.
+function useTema() {
+  const [tema, setTema] = useState(() => { try { return localStorage.getItem("hlf-tema"); } catch { return null; } });
+  useEffect(() => {
+    if (tema) document.documentElement.dataset.theme = tema; else delete document.documentElement.dataset.theme;
+    try { if (tema) localStorage.setItem("hlf-tema", tema); else localStorage.removeItem("hlf-tema"); } catch { /* sin almacenamiento */ }
+  }, [tema]);
+  const oscuro = tema ? tema === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
+  return [oscuro, () => setTema(oscuro ? "light" : "dark")];
+}
+
 export default function App() {
+  const [oscuro, cambiarTema] = useTema();
   const [info, setInfo] = useState(null);
   useEffect(() => { api.cargarInfo().then(setInfo); }, []);
   const fechas = api.fechas();
@@ -124,8 +136,11 @@ export default function App() {
                 className={`h-8 w-44 px-2 border rounded text-on-surface ${usuario.trim() ? "border-outline-variant" : "border-ambar bg-ambar-container/40"}`} />
             </label>}
             <span className="text-on-surface-variant border-l border-outline-variant pl-3">Lista al <b className="text-on-surface">{fmt(fecha)}</b></span>
+            <button onClick={cambiarTema} aria-label={oscuro ? "Usar tema claro" : "Usar tema oscuro"} title={oscuro ? "Tema claro" : "Tema oscuro"}
+              className="w-9 h-9 flex items-center justify-center rounded border border-outline-variant text-on-surface-variant hover:text-on-surface">
+              <Icono n={oscuro ? "light_mode" : "dark_mode"} className="text-[20px]" /></button>
             <label className="flex items-center gap-1.5 text-on-surface-variant cursor-pointer select-none border-l border-outline-variant pl-3">
-              <input type="checkbox" checked={demo} onChange={(e) => setDemo(e.target.checked)} className="accent-[#0f69b4]" />Modo demostración
+              <input type="checkbox" checked={demo} onChange={(e) => setDemo(e.target.checked)} className="accent-primary" />Modo demostración
             </label>
           </div>
         </div>
@@ -154,7 +169,7 @@ export default function App() {
             <span className="font-semibold text-ambar flex items-center gap-1"><Icono n="science" className="text-[18px]" />Modo demostración{!esApi && " (datos precalculados, sin API)"}</span>
             <label className="flex items-center gap-2 flex-1 min-w-[280px]">
               Ver la lista como estaba el <b>{fmt(fechas[iFecha])}</b>
-              <input type="range" min={0} max={fechas.length - 1} value={iFecha} onChange={(e) => setIFecha(+e.target.value)} className="flex-1 accent-[#8a5100]" />
+              <input type="range" min={0} max={fechas.length - 1} value={iFecha} onChange={(e) => setIFecha(+e.target.value)} className="flex-1 accent-ambar" />
             </label>
             <span className="text-on-surface-variant">Solo se usan registros con fecha anterior o igual.</span>
           </div>
@@ -164,7 +179,7 @@ export default function App() {
       <AnimatePresence>
         {aviso && (
           <motion.div initial={{ y: -8, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-on-surface text-white px-4 py-2.5 rounded shadow-lg text-[14px] flex items-center gap-2">
+            className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-on-surface text-background px-4 py-2.5 rounded shadow-lg text-[14px] flex items-center gap-2">
             <Icono n="check_circle" className="text-[20px]" />{aviso.titulo}
             {aviso.antes != null && <span className="opacity-90">· posición {aviso.antes} → <b>{aviso.despues}</b>{aviso.cat && ` · prioridad ${ETIQUETA[aviso.cat]}`}</span>}
           </motion.div>
@@ -195,18 +210,18 @@ export default function App() {
             <div className="lg:col-span-7 xl:col-span-8 flex flex-col gap-4">
               <div className="bg-surface-container-lowest border border-outline-variant rounded p-3 flex flex-wrap items-end gap-3 text-[13px]">
                 <Filtro label="Especialidad">
-                  <select value={esp} onChange={(e) => setEsp(e.target.value)} className="h-9 px-2 border border-outline-variant rounded bg-white">{ESPECIALIDADES.map((e) => <option key={e}>{e}</option>)}</select>
+                  <select value={esp} onChange={(e) => setEsp(e.target.value)} className="h-9 px-2 border border-outline-variant rounded bg-surface-container-lowest">{ESPECIALIDADES.map((e) => <option key={e}>{e}</option>)}</select>
                 </Filtro>
                 <Filtro label="Buscar paciente">
                   <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Nombre, ID o diagnóstico" className="h-9 px-2 w-56 border border-outline-variant rounded" />
                 </Filtro>
                 <Filtro label="Prioridad">
-                  <select value={filtroCat} onChange={(e) => setFiltroCat(e.target.value)} className="h-9 px-2 border border-outline-variant rounded bg-white">
+                  <select value={filtroCat} onChange={(e) => setFiltroCat(e.target.value)} className="h-9 px-2 border border-outline-variant rounded bg-surface-container-lowest">
                     <option value="todas">Todas</option><option value="vital">Evaluación pendiente</option><option value="revisar">Requieren revisión</option><option value="alta">Alta</option><option value="media">Media</option><option value="baja">Baja</option>
                   </select>
                 </Filtro>
-                <label className="flex items-center gap-2 h-9 cursor-pointer select-none"><input type="checkbox" checked={soloPend} onChange={(e) => setSoloPend(e.target.checked)} className="w-4 h-4 accent-[#0f69b4]" />Solo pendientes de revisión</label>
-                <button onClick={() => exportarCsv(filtrados, fecha)} className="ml-auto h-9 px-3 rounded border border-outline-variant bg-white font-semibold flex items-center gap-1"><Icono n="download" className="text-[18px]" />Descargar Excel</button>
+                <label className="flex items-center gap-2 h-9 cursor-pointer select-none"><input type="checkbox" checked={soloPend} onChange={(e) => setSoloPend(e.target.checked)} className="w-4 h-4 accent-primary" />Solo pendientes de revisión</label>
+                <button onClick={() => exportarCsv(filtrados, fecha)} className="ml-auto h-9 px-3 rounded border border-outline-variant bg-surface-container-lowest font-semibold flex items-center gap-1"><Icono n="download" className="text-[18px]" />Descargar Excel</button>
                 {esApi && <button onClick={() => setNuevo(true)} className="h-9 px-3 rounded bg-primary text-on-primary font-semibold flex items-center gap-1"><Icono n="person_add" className="text-[18px]" />Ingresar paciente</button>}
               </div>
               {nuevo && <NuevoPaciente fecha={fecha} onCerrar={() => setNuevo(false)} onListo={async (r) => {
@@ -276,9 +291,9 @@ export default function App() {
                 <div className="px-3 py-2 flex items-center justify-between text-[13px] text-on-surface-variant bg-surface-container-low">
                   <span>{filtrados.length} pacientes · orden: prioridad, descompensación grave, grupo de protección, más de 1 año en espera, LACE* (desempate experimental), fecha de ingreso</span>
                   <div className="flex items-center gap-2">
-                    <button disabled={pagina === 0} onClick={() => setPagina(pagina - 1)} className="px-2 py-1 border border-outline-variant rounded bg-white disabled:opacity-40">Anterior</button>
+                    <button disabled={pagina === 0} onClick={() => setPagina(pagina - 1)} className="px-2 py-1 border border-outline-variant rounded bg-surface-container-lowest disabled:opacity-40">Anterior</button>
                     <span>{pagina + 1} / {paginas}</span>
-                    <button disabled={pagina >= paginas - 1} onClick={() => setPagina(pagina + 1)} className="px-2 py-1 border border-outline-variant rounded bg-white disabled:opacity-40">Siguiente</button>
+                    <button disabled={pagina >= paginas - 1} onClick={() => setPagina(pagina + 1)} className="px-2 py-1 border border-outline-variant rounded bg-surface-container-lowest disabled:opacity-40">Siguiente</button>
                   </div>
                 </div>
               </section>
@@ -349,7 +364,7 @@ function Novedad({ p, fecha, onListo, onAviso }) {
     } catch (e) { onAviso({ titulo: "No se pudo registrar: " + e.message }); } finally { setEnviando(false); }
   };
   const peso = cat?.charlson.find((c) => c.condicion === v.condicion)?.peso;
-  const campo = "h-9 px-2 border border-outline-variant rounded bg-white w-full";
+  const campo = "h-9 px-2 border border-outline-variant rounded bg-surface-container-lowest w-full";
   const btn = (t, icono, texto, rojo) => (
     <button onClick={() => abrir(t)} className={`flex-1 min-w-[120px] py-2 rounded border font-semibold text-[13px] flex items-center justify-center gap-1 ${tipo === t ? (rojo ? "bg-error text-on-error border-error" : "bg-primary text-on-primary border-primary") : "border-outline-variant hover:bg-surface-container-low"}`}>
       <Icono n={icono} className="text-[18px]" />{texto}
@@ -712,7 +727,7 @@ function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso, onDes
             </div>
             {ajuste && (
               <div className="mt-3 flex flex-col gap-2">
-                <select value={ajuste.categoria} onChange={(e) => setAjuste({ ...ajuste, categoria: e.target.value })} className="h-9 px-2 border border-outline-variant rounded bg-white">
+                <select value={ajuste.categoria} onChange={(e) => setAjuste({ ...ajuste, categoria: e.target.value })} className="h-9 px-2 border border-outline-variant rounded bg-surface-container-lowest">
                   {Object.entries(ETIQUETA).map(([k, v]) => <option key={k} value={k}>Prioridad {v.toLowerCase()}</option>)}
                 </select>
                 <input placeholder="Motivo clínico (obligatorio)" value={ajuste.motivo} onChange={(e) => setAjuste({ ...ajuste, motivo: e.target.value })} className="h-9 px-2 border border-outline-variant rounded" />
@@ -743,10 +758,10 @@ function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso, onDes
           {demo && (
             <Caja titulo="Simular evento (demostración)" className="border-ambar/50">
               <div className="flex gap-2">
-                <select value={tipoEv} onChange={(e) => setTipoEv(e.target.value)} className="flex-1 h-9 px-2 border border-outline-variant rounded bg-white">
+                <select value={tipoEv} onChange={(e) => setTipoEv(e.target.value)} className="flex-1 h-9 px-2 border border-outline-variant rounded bg-surface-container-lowest">
                   {Object.entries(EVENTOS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                 </select>
-                <button onClick={() => registrarEvento(EVENTOS[tipoEv], "Evento simulado")} disabled={cargando} className="px-4 rounded bg-ambar text-white font-semibold disabled:opacity-50">Simular</button>
+                <button onClick={() => registrarEvento(EVENTOS[tipoEv], "Evento simulado")} disabled={cargando} className="px-4 rounded bg-ambar text-background font-semibold disabled:opacity-50">Simular</button>
               </div>
             </Caja>
           )}
@@ -891,7 +906,7 @@ function DecisionClinica({ p, fecha, onListo, onAviso }) {
     try { onListo(await api.postDecision(p.id_paciente, { ...f, seguimiento: f.seguimiento || null, fecha_corte: fecha })); }
     catch (e) { onAviso({ titulo: "No se pudo registrar: " + e.message }); } finally { setEnviando(false); }
   };
-  const campo = "h-9 px-2 border border-outline-variant rounded bg-white text-[14px]";
+  const campo = "h-9 px-2 border border-outline-variant rounded bg-surface-container-lowest text-[14px]";
   return (
     <Caja titulo="Decisión médica ante la descompensación" className={p.contactar_hoy ? "border-l-4 border-l-error" : ""}>
       {p.decision && <p className="text-[13px] mb-2">Última: <b>{p.decision.texto}</b> · {p.decision.responsable}{p.decision.nota && ` · ${p.decision.nota}`}</p>}
@@ -910,7 +925,8 @@ function DecisionClinica({ p, fecha, onListo, onAviso }) {
   );
 }
 
-const COLOR_HEX = { alta: "#ba1a1a", media: "#8a5100", baja: "#1f6b35" };
+// Colores por variable CSS: siguen el tema claro/oscuro (también dentro del gráfico SVG)
+const COLOR_HEX = { alta: "rgb(var(--c-error))", media: "rgb(var(--c-ambar))", baja: "rgb(var(--c-verde))" };
 
 // Boleta del puntaje LACE: cada línea con sus puntos publicados (van Walraven et al., CMAJ 2010, Tabla 3).
 function BoletaLace({ lace }) {
@@ -999,32 +1015,32 @@ function GraficoPosicion({ h }) {
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label="Posición del paciente en la lista a lo largo del tiempo">
         {ticks.map((v) => (
           <g key={v}>
-            <line x1={m.l} x2={W - m.r} y1={Y(v)} y2={Y(v)} stroke="#dfe5eb" strokeWidth="1" />
-            <text x={m.l - 6} y={Y(v) + 4} textAnchor="end" fontSize="11" fill="#3d4650">N° {v}</text>
+            <line x1={m.l} x2={W - m.r} y1={Y(v)} y2={Y(v)} stroke="rgb(var(--c-divider))" strokeWidth="1" />
+            <text x={m.l - 6} y={Y(v) + 4} textAnchor="end" fontSize="11" fill="rgb(var(--c-muted))">N° {v}</text>
           </g>
         ))}
-        {meses.map((ym) => { const xx = X(`${ym}-01` < pts[0].fecha ? pts[0].fecha : `${ym}-01`); return <text key={ym} x={xx} y={H - 8} fontSize="11" fill="#3d4650" textAnchor="middle">{nombreMes(ym)}</text>; })}
+        {meses.map((ym) => { const xx = X(`${ym}-01` < pts[0].fecha ? pts[0].fecha : `${ym}-01`); return <text key={ym} x={xx} y={H - 8} fontSize="11" fill="rgb(var(--c-muted))" textAnchor="middle">{nombreMes(ym)}</text>; })}
         {evs.map((e, i) => {
           const xx = Math.min(Math.max(X(e.fecha_evento), m.l), W - m.r);
           const grave = e.severidad === "grave" || e.subtipo.includes("descompensaci");
           return (
             <g key={i}>
-              <line x1={xx} x2={xx} y1={m.t} y2={H - m.b} stroke={grave ? "#ba1a1a" : "#1f6b35"} strokeWidth="1" strokeDasharray="3 3" />
-              <circle cx={xx} cy={m.t} r="4" fill={grave ? "#ba1a1a" : "#1f6b35"}><title>{fmt(e.fecha_evento)}: {e.subtipo}</title></circle>
+              <line x1={xx} x2={xx} y1={m.t} y2={H - m.b} stroke={grave ? "rgb(var(--c-error))" : "rgb(var(--c-verde))"} strokeWidth="1" strokeDasharray="3 3" />
+              <circle cx={xx} cy={m.t} r="4" fill={grave ? "rgb(var(--c-error))" : "rgb(var(--c-verde))"}><title>{fmt(e.fecha_evento)}: {e.subtipo}</title></circle>
             </g>
           );
         })}
-        <path d={linea} fill="none" stroke="#0f69b4" strokeWidth="2" strokeLinejoin="round" />
+        <path d={linea} fill="none" stroke="rgb(var(--c-primary))" strokeWidth="2" strokeLinejoin="round" />
         {pts.map((p, i) => (
           <g key={p.fecha} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
             <circle cx={X(p.fecha)} cy={Y(p.posicion)} r="12" fill="transparent" />
-            <circle cx={X(p.fecha)} cy={Y(p.posicion)} r={hover === i ? 6 : 4.5} fill={COLOR_HEX[p.categoria]} stroke="#fff" strokeWidth="2" />
+            <circle cx={X(p.fecha)} cy={Y(p.posicion)} r={hover === i ? 6 : 4.5} fill={COLOR_HEX[p.categoria]} stroke="rgb(var(--c-raised))" strokeWidth="2" />
           </g>
         ))}
-        {(() => { const u = pts[pts.length - 1]; return <text x={X(u.fecha) - 8} y={Y(u.posicion) + (Y(u.posicion) < 30 ? 16 : -8)} textAnchor="end" fontSize="12" fontWeight="600" fill="#1a1f24">N° {u.posicion}</text>; })()}
+        {(() => { const u = pts[pts.length - 1]; return <text x={X(u.fecha) - 8} y={Y(u.posicion) + (Y(u.posicion) < 30 ? 16 : -8)} textAnchor="end" fontSize="12" fontWeight="600" fill="rgb(var(--c-text))">N° {u.posicion}</text>; })()}
       </svg>
       {hp && (
-        <div className="absolute pointer-events-none bg-on-surface text-white text-[12px] rounded px-2 py-1 shadow"
+        <div className="absolute pointer-events-none bg-on-surface text-background text-[12px] rounded px-2 py-1 shadow"
           style={{ left: `${(X(hp.fecha) / W) * 100}%`, top: `${(Y(hp.posicion) / H) * 100}%`, transform: "translate(-50%, -120%)" }}>
           {fmt(hp.fecha)} · N° {hp.posicion} de {hp.total} · {ETIQUETA[hp.categoria]}{hp.riesgo_vital ? " · contactar hoy" : ""}
         </div>
@@ -1125,7 +1141,7 @@ function NuevoPaciente({ fecha, onCerrar, onListo }) {
     try { onListo(await api.postPaciente({ ...f, edad: Number(f.edad), fecha_corte: fecha })); }
     catch (e) { setError(e.message); setEnviando(false); }
   };
-  const campo = "h-9 px-2 border border-outline-variant rounded bg-white w-full";
+  const campo = "h-9 px-2 border border-outline-variant rounded bg-surface-container-lowest w-full";
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onCerrar}>
       <div className="bg-surface-container-lowest rounded max-w-xl w-full" onClick={(e) => e.stopPropagation()}>
@@ -1316,7 +1332,7 @@ function Hoy({ parte, vitales, todosPacientes, fecha, esp, setEsp, onVer, esApi,
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center gap-2 text-[14px]">
         <span className="text-on-surface-variant">Especialidad:</span>
-        <select value={esp} onChange={(e) => setEsp(e.target.value)} className="h-9 px-2 border border-outline-variant rounded bg-white">{ESPECIALIDADES.map((e) => <option key={e}>{e}</option>)}</select>
+        <select value={esp} onChange={(e) => setEsp(e.target.value)} className="h-9 px-2 border border-outline-variant rounded bg-surface-container-lowest">{ESPECIALIDADES.map((e) => <option key={e}>{e}</option>)}</select>
         <span className="text-[13px] text-on-surface-variant">{esp === "Todas" ? "Vista de coordinación: todo el hospital, agrupado por especialidad." : `Solo ${esp}.`}</span>
       </div>
       {b && (
@@ -1500,7 +1516,7 @@ function MedicoDisponible({ fecha, esApi, espInicial, onVer, onCambio, onAviso }
     } catch (e) { onAviso({ titulo: "No se pudo registrar: " + e.message }); }
   };
   if (!esApi) return <Caja><p className="text-on-surface-variant">Esta función requiere conexión al servidor.</p></Caja>;
-  const campo = "h-9 px-2 border border-outline-variant rounded bg-white";
+  const campo = "h-9 px-2 border border-outline-variant rounded bg-surface-container-lowest";
   return (
     <div className="grid gap-5 lg:grid-cols-12 items-start">
       <Caja titulo="¿Tiene horas libres hoy?" className="lg:col-span-4">
