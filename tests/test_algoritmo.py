@@ -152,6 +152,28 @@ def test_propiedad_ninguna_respuesta_baja_a_alguien_sin_humano():
             assert not reg["requiere_revision"] and reg["movido_por_rubrica"]
 
 
+def test_quitar_la_marca_de_grave_tambien_es_bajar():
+    """Misma categoría, pero la rúbrica no marca descompensación grave cuando las reglas sí: bloqueado (requiere humano)."""
+    lect = [(resp(), {}, [])]
+    motivos = controles.evaluar(lect, [{"categoria": "alta", "descompensacion_grave": False, "revision": []}],
+                                {"categoria": "alta", "riesgo_vital": True})
+    assert any(m["motivo"] == "bajaria" for m in motivos)
+
+
+def test_propiedad_nunca_se_pierde_la_marca_grave_sin_humano():
+    rnd = random.Random(11)
+    perfs = [p for p in app.perfiles().values() if (r := puntaje.puntuar(p, CORTE)) and not r.get("excluido") and r["riesgo_vital"]]
+    for p in perfs:
+        h = rubrica.historial(p, CORTE)
+        def azar(_t):
+            ev = rnd.choice(h["eventos"]) if h["eventos"] else None
+            c = [dict(fecha=ev["fecha"], tipo=ev["tipo"], valor=ev["valor"])] if ev else []
+            return {"evento_grave": {"valor": "si", "citas": c}, "estabilizado_despues": {"valor": "no", "citas": []},
+                    "tendencia_medicion": {"valor": "desconocido", "citas": []}, "cambio_tratamiento_por_mal_control": {"valor": "no", "citas": []}}
+        reg = algoritmo.evaluar_paciente(p, CORTE, rubrica.ClienteFalso(azar))
+        assert reg["descompensacion_grave_final"] or reg["requiere_revision"], p["id_paciente"]
+
+
 def test_discrepancia_de_mas_de_un_nivel_pide_revision():
     lect = [(resp(), {}, [])]
     motivos = controles.evaluar(lect, [{"categoria": "alta", "revision": []}], {"categoria": "baja"})

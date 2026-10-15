@@ -1,6 +1,6 @@
 # Evaluación offline del algoritmo decisor
 
-Generado por `scripts/evaluar_algoritmo.py` · fecha de corte 2026-10-13 · modelo `us.anthropic.claude-sonnet-5` · 409 pacientes en lista · 3 corridas por paciente · duración 3 s.
+Generado por `scripts/evaluar_algoritmo.py` · fecha de corte 2026-10-13 · modelo `us.anthropic.claude-sonnet-5` · 409 pacientes en lista · 3 corridas por paciente · duración 1 s.
 
 ## Brazos
 
@@ -32,7 +32,7 @@ Pacientes con un control bloqueante: **43**.
 | Motivo | Pacientes |
 |---|---|
 | dato_desconocido | 42 |
-| bajaria | 17 |
+| bajaria | 18 |
 | discrepancia | 5 |
 
 Ejemplos de `bajaria` (la fórmula los habría bajado; el control lo impidió):
