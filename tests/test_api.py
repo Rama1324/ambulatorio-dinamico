@@ -312,6 +312,16 @@ def test_grupo_proteccion_ordena_despues_de_lace():
     q = fila(d, ultimo["id_paciente"])
     assert q["grupo_proteccion"] == "PRAIS" and q["acg"] == "G3" and q["posicion"] < ultimo["posicion"]
 
+def test_box_horas_distintas_por_paciente():
+    _, b = call("GET", "/boxes", {"fecha_corte": "2026-10-13"})
+    for e in b["especialidades"]:
+        for a in e["asignaciones"]:
+            horas = [p["hora"] for p in a["pacientes"]]
+            assert len(horas) == len(set(horas)), f'{a["id_box"]} repite horas: {horas}'
+            ini, fin = a["bloque"].split("-")
+            assert all(ini <= h < fin for h in horas)
+    assert all(v["hora"] for v in b["cupo_por_paciente"].values())
+
 def test_medico_con_horas_libres():
     s, d = call("GET", "/disponible", {"fecha_corte": "2026-10-13", "especialidad": "Cardiología", "desde": "14:00", "hasta": "17:00"})
     assert s == 200 and d["duracion_min"] > 0 and d["cupos"] == 180 // d["duracion_min"]

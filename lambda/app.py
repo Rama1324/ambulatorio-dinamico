@@ -600,6 +600,18 @@ def _fila_box(p):
             or ("confirmar asistencia por teléfono (2 inasistencias seguidas)" if p["riesgo_inasistencia"] else "citar")}
 
 
+def _horas_libres(bx, n):
+    """Horas sugeridas para n pacientes en un bloque: el bloque se divide por su capacidad (ej. 08:30–13:30 con 10 cupos
+    = una hora cada 30 min). El registro informa cuántas horas quedan libres, no cuáles: se sugieren las últimas del bloque."""
+    try:
+        ini, fin = (datetime.strptime(x.strip(), "%H:%M") for x in bx.get("bloque", "").split("-"))
+        minutos = max(1, int((fin - ini).total_seconds() // 60) // max(1, bx["capacidad"]))
+        return {"minutos": minutos,
+                "horas": [(ini + timedelta(minutes=minutos * (bx["usados"] + i))).strftime("%H:%M") for i in range(n)]}
+    except (ValueError, KeyError):
+        return {"minutos": None, "horas": [None] * n}
+
+
 def boxes(corte, especialidad=None):
     b = box_data()
     data = lista(corte)
@@ -617,7 +629,9 @@ def boxes(corte, especialidad=None):
         for bx in sorted((x for x in agenda.get(dia, []) if x["especialidad"] == esp), key=lambda x: x["id_box"]):
             libres = bx["capacidad"] - bx["usados"]
             pacientes = [pendientes.pop(0) for _ in range(min(libres, len(pendientes)))]
-            asignaciones.append({**bx, "libres": libres, "pacientes": [_fila_box(p) for p in pacientes]})
+            horas = _horas_libres(bx, len(pacientes))
+            asignaciones.append({**bx, "libres": libres, "minutos_por_hora": horas["minutos"],
+                                 "pacientes": [{**_fila_box(p), "hora": h} for p, h in zip(pacientes, horas["horas"])]})
         # alternativa: el siguiente de la lista, por si alguien no confirma; y por qué va después del último citado
         ultimo = next((a["pacientes"][-1] for a in reversed(asignaciones) if a["pacientes"]), None)
         alt = pendientes[0] if pendientes else None
@@ -630,7 +644,7 @@ def boxes(corte, especialidad=None):
         out.append({**info, "especialidad": esp, "dia_agenda": dia, "asignaciones": asignaciones, "alternativa": alternativa,
                     "cupos_libres_hoy": sum(a["libres"] for a in asignaciones), "vitales_sin_cupo": sin_cupo,
                     "sugeridos": [p for a in asignaciones for p in a["pacientes"]][:5]})
-    cupo = {p["id_paciente"]: a["id_box"] for e in out for a in e["asignaciones"] for p in a["pacientes"]}
+    cupo = {p["id_paciente"]: {"id_box": a["id_box"], "hora": p["hora"]} for e in out for a in e["asignaciones"] for p in a["pacientes"]}
     # mapa de todos los box del hospital ese día (los que no aparecen en la agenda no tienen bloque asignado)
     del_dia = {x["id_box"]: x for x in agenda.get(dia, [])}
     asignados = {a["id_box"]: len(a["pacientes"]) for e in out for a in e["asignaciones"]}

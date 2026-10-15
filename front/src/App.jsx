@@ -1191,7 +1191,7 @@ function Hoy({ vitales, fecha, esp, setEsp, onVer, esApi, onCambio, onAviso }) {
   };
 
   const Ofrecer = ({ p }) => hora[p.id_paciente]
-    ? <span className="text-hlf font-semibold">Ofrecer hora hoy: {nombreBox(hora[p.id_paciente])}, {box[hora[p.id_paciente]]?.bloque}</span>
+    ? <span className="text-hlf font-semibold">Ofrecer hora hoy: {nombreBox(hora[p.id_paciente].id_box)} a las {hora[p.id_paciente].hora}</span>
     : <span className="text-error font-semibold">No queda hora hoy en {p.especialidad}: evaluar sobrecupo o derivación a urgencia</span>;
 
   return (
@@ -1253,10 +1253,11 @@ function Hoy({ vitales, fecha, esp, setEsp, onVer, esApi, onCambio, onAviso }) {
                   <div className="text-[14px] font-semibold mb-1">
                     {nombreBox(a.id_box)} · {a.bloque} · {a.libres === 0 ? "sin horas libres" : `${a.libres} hora${a.libres !== 1 ? "s" : ""} libre${a.libres !== 1 ? "s" : ""} → propuesta:`}
                   </div>
+                  {a.minutos_por_hora && a.pacientes.length > 0 && <p className="text-[12px] text-on-surface-variant mb-1">Horas sugeridas: bloque dividido en {a.capacidad} atenciones de {a.minutos_por_hora} min; se proponen las últimas libres del bloque.</p>}
                   <ol className="text-[14px]">
                     {a.pacientes.map((p, i) => (
                       <li key={p.id_paciente} onClick={() => onVer(p.id_paciente)} className={`cursor-pointer border-t border-outline-variant/60 py-2 hover:bg-surface-container-low flex gap-2 ${p.riesgo_vital ? "bg-error-container/30" : ""}`}>
-                        <span className="shrink-0 w-16 text-on-surface-variant text-[13px]">Hora {i + 1}</span>
+                        <span className="shrink-0 w-14 font-semibold text-primary-container text-[14px]">{p.hora || `${i + 1}.`}</span>
                         <span className="shrink-0"><Prioridad cat={p.categoria} /></span>
                         <span>
                           <b>{p.nombre_fantasia}</b> <span className="text-[13px] text-on-surface-variant">· {p.diagnostico_texto} · {p.dias_espera} días esperando</span>
