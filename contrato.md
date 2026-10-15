@@ -74,7 +74,7 @@ Sin `fecha_corte`, la API usa `FECHA_REFERENCIA` (variable de entorno): `hoy` = 
 | GET | `/plantillas/{tabla}` | CSV de ejemplo: pacientes, lista_espera, eventos_clinicos, mediciones, citaciones, agenda_box |
 | POST | `/pacientes/{id}/revision` | `{"accion":"confirmar"}` o `{"accion":"ajustar","categoria_ajustada":"alta|media|baja","motivo":"..."}` |
 | POST | `/pacientes/{id}/explicar` | Bedrock redacta `explicacion_ia` desde `razones` |
-| GET | `/boxes?fecha_corte=AAAA-MM-DD` | Ocupación de box por especialidad + pacientes sugeridos para horas libres. Cada fila trae `estado_cita` (propuesta · reservada · confirmada · atendida · no_asistio); por especialidad `conteo_citas` y `descompensados` |
+| GET | `/boxes?fecha_corte=AAAA-MM-DD` | Ocupación de box por especialidad + pacientes sugeridos para horas libres. Cada fila trae `estado_cita` (propuesta · reservada · confirmada · atendida · no_asistio); por especialidad `conteo_citas` y `descompensados`. `agenda_referencia: true` si la fecha no tiene agenda propia y se usa la última del registro (`dia_agenda`) |
 | GET | `/health` | `{ok, pacientes, fecha_hoy, modo, datos: "sinteticos"}` para verificar el deploy |
 
 ## Respuesta POST /pacientes/{id}/informe
