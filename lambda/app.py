@@ -659,8 +659,14 @@ def historia(pid, corte):
         fechas.append(f); f += timedelta(days=14)
     fechas.append(corte)
     vals, puntos = list(perfs.values()), []
+    rubrica_activa = algoritmo_activo() == "rubrica"
+    if rubrica_activa:  # misma vara que la lista: rúbrica vigente a cada fecha y orden del Ord. 536
+        import decisor
+        evs = evaluaciones_por_paciente()
     for fc in fechas:
         activos, excluidos = puntaje.priorizar(vals, fc)
+        if rubrica_activa:
+            activos = [{**x, "posicion": i} for i, x in enumerate(sorted(_aplicar_rubrica(activos, perfs, fc, evs), key=decisor.clave_orden_536), 1)]
         r = next((x for x in activos if x["id_paciente"] == pid), None)
         if r:
             puntos.append({"fecha": fc.isoformat(), "posicion": r["posicion"], "total": len(activos),
