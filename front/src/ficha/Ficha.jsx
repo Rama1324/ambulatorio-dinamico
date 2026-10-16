@@ -23,6 +23,7 @@ export function Ficha({ p, total, detalle, fecha, demo, onCambio, onAviso, onDes
   const [cargando, setCargando] = useState(null);
   const [ajuste, setAjuste] = useState(null);
   const [tipoEv, setTipoEv] = useState("hospitalizacion");
+  const [resultado, setResultado] = useState(null);  // qué pasó con el último evento registrado desde la ficha
   useEffect(() => { setResumen(null); }, [p.categoria, p.estado_clinico, fecha]);
 
   const correr = async (nombre, fn) => {
@@ -34,6 +35,8 @@ export function Ficha({ p, total, detalle, fecha, demo, onCambio, onAviso, onDes
       tipo_evento: ev.tipo_evento, subtipo: ev.subtipo, severidad: ev.severidad, detalle: ev.detalle,
       ...(ev.motivo_clinico ? { motivo: ev.motivo_clinico } : {}), ...(ev.relacionado != null ? { relacionado: ev.relacionado } : {}) });
     await onCambio(); onDestacar(p.id_paciente);
+    setResultado({ origen, evento: ev.label || `${TIPO_EVENTO[ev.tipo_evento] || ev.tipo_evento}: ${ev.subtipo}`, antes: r.posicion_antes, despues: r.posicion_despues,
+      catAntes: p.categoria, paciente: r.paciente });
     onAviso({ titulo: `${origen}. Lista actualizada`, antes: r.posicion_antes, despues: r.posicion_despues, cat: r.paciente?.categoria });
   });
   const [tab, setTab] = useState("resumen");
@@ -190,6 +193,7 @@ export function Ficha({ p, total, detalle, fecha, demo, onCambio, onAviso, onDes
               </div>
             </Caja>
           )}
+          {resultado && <ResultadoEvento r={resultado} onVer={onVer} onCerrar={() => setResultado(null)} />}
           {!demo && <p className="text-[12px] text-on-surface-variant">Para simular un evento en una demostración, marque «Explorar fechas anteriores» arriba a la derecha.</p>}
           <Informe p={p} fecha={fecha} cargando={cargando} onConfirmar={(ev) => registrarEvento(ev, "Evento del informe registrado")} onAviso={onAviso}
             onRegistrado={async (r) => { await onCambio(); onDestacar(p.id_paciente);
@@ -216,6 +220,38 @@ export function Ficha({ p, total, detalle, fecha, demo, onCambio, onAviso, onDes
         </ol>
       </Caja>}
     </>
+  );
+}
+
+// Qué pasó con el evento recién registrado: puesto y prioridad antes/después, la regla que lo explica y sus nuevos vecinos.
+const FACTORES_CAMBIO = ["urgencia", "combinacion", "criterio_registro", "oncologico", "riesgo_vital", "tabla_oficial"];
+function ResultadoEvento({ r, onVer, onCerrar }) {
+  const p = r.paciente;
+  if (!p) return null;
+  const subio = r.despues < r.antes, cambioCat = p.categoria !== r.catAntes;
+  const ev = p.razones.find((x) => x.factor === "evento");
+  const reglas = p.razones.filter((x) => FACTORES_CAMBIO.includes(x.factor));
+  return (
+    <Caja titulo={`Resultado: ${r.evento}`} className={subio ? "border-error/50" : "border-outline-variant"}
+      accion={<button onClick={onCerrar} className="text-[13px] text-on-surface-variant">Cerrar</button>}>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[15px]">
+        <span>Puesto: N° {r.antes} → <b className={subio ? "text-error" : ""}>N° {r.despues}</b>
+          {subio ? <span className="text-error text-[13px] font-semibold"> (subió {r.antes - r.despues})</span> : r.despues === r.antes ? <span className="text-on-surface-variant text-[13px]"> (se mantiene)</span> : null}</span>
+        <span className="flex items-center gap-1">Prioridad: <Prioridad cat={r.catAntes} />{cambioCat && <>→<Prioridad cat={p.categoria} /></>}</span>
+      </div>
+      <div className="mt-2 text-[14px]"><b>Por qué:</b>
+        {ev && <p className="text-[13px] text-on-surface-variant">Evento registrado: {ev.valor}</p>}
+        <ul className="mt-1 space-y-1.5">
+          {reglas.map((x, i) => (
+            <li key={i} className="pl-2 border-l-4 border-error/60 text-[13px]">{x.valor}
+              {x.riesgo && <div className="text-on-surface-variant">Riesgo: {x.riesgo}</div>}
+              <div className="text-[12px] text-on-surface-variant">Fuente: {x.fuente}</div></li>
+          ))}
+          {reglas.length === 0 && <li className="text-[13px]">Ninguna regla oficial cambia su prioridad con este evento{ev?.valor?.includes("sin relación") ? " (no tiene relación con su diagnóstico)" : ""}: se mantiene donde estaba.</li>}
+        </ul>
+      </div>
+      {p.comparacion && <div className="mt-2"><Vecino v={p.comparacion.arriba} arriba onVer={onVer} /><Vecino v={p.comparacion.abajo} onVer={onVer} /></div>}
+    </Caja>
   );
 }
 
