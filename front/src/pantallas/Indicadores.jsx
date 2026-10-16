@@ -4,7 +4,7 @@ import { descargarExcel } from "../excel";
 import { Caja, Filtro, Icono, Prioridad } from "../componentes/comunes";
 import { COLOR_HEX, ESPECIALIDADES } from "../constantes";
 import { EvolucionPaciente } from "../ficha/Evolucion";
-import { fmt } from "../util";
+import { fmt, coincide } from "../util";
 
 // Estadísticas (aporte de Diego, integrado y mejorado): curva de variación de la lista en el tiempo, por qué cambió
 // (evento clínico exacto que entrega GET /estadisticas, una sola llamada) y evolución de cada paciente.
@@ -153,8 +153,7 @@ export function Indicadores({ fecha, data, esp, setEsp, onVer }) {
   }
   const causasOrden = Object.entries(causas).sort((a, b) => b[1] - a[1]);
   const totalCausas = causasOrden.reduce((s, [, n]) => s + n, 0) || 1;
-  const q = buscaEst.trim().toLowerCase();
-  const listaPac = pacientes.filter((p) => !q || [p.nombre_fantasia, p.id_paciente, p.rut, p.diagnostico_texto].some((x) => (x || "").toLowerCase().includes(q)));
+  const listaPac = pacientes.filter((p) => coincide(p, buscaEst));
   const maxTramo = Math.max(...k.tramos_espera.map((t) => t.pacientes), 1);
 
   const Seccion = ({ titulo, sub, accion, children }) => (

@@ -13,3 +13,14 @@ export function hace(iso, ref) {
   return m < 24 ? `hace ${m} meses` : `hace ${Math.round(n / 365)} años`;
 }
 export const fmtHace = (iso, ref) => (iso ? `${fmt(iso)} (${hace(iso, ref)})` : "");
+
+// Búsqueda que ignora tildes y mayúsculas ("hipertension" encuentra "Hipertensión") y busca también por código CIE-10,
+// ID y RUT con o sin puntos y guion.
+const sinTildes = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+export function coincide(p, busca) {
+  const q = sinTildes(busca).trim();
+  if (!q) return true;
+  const qRut = q.replace(/[.\-\s]/g, "");
+  return [p.nombre_fantasia, p.id_paciente, p.diagnostico_texto, p.diagnostico_cie10, p.especialidad, p.comuna, p.rut]
+    .some((x) => sinTildes(x).includes(q)) || (qRut.length >= 4 && sinTildes(p.rut).replace(/[.-]/g, "").includes(qRut));
+}

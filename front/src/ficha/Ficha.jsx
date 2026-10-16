@@ -111,7 +111,8 @@ export function Ficha({ p, total, detalle, fecha, demo, esp, onCambio, onAviso, 
       </Caja>}
       </>}
 
-      {tab === "gestion" && <>
+      {tab === "gestion" && demo && <p className="rounded bg-ambar-container/60 text-ambar text-[13px] p-2.5 flex gap-1.5"><Icono n="history" className="text-[18px]" /><span>Está viendo la lista de una fecha anterior: es solo lectura. Para registrar, revisar o gestionar, desmarque «Explorar fechas anteriores».</span></p>}
+      {tab === "gestion" && !demo && <>
         <GestionCaso p={p} fecha={fecha} onListo={async () => { await onCambio(); onDestacar(p.id_paciente); onAviso({ titulo: `${p.nombre_fantasia}: gestión actualizada` }); }} onAviso={onAviso} />
         {p.riesgo_vital && <DecisionClinica p={p} fecha={fecha} onListo={async (r) => { await onCambio(); onAviso({ titulo: `${p.nombre_fantasia}: ${r.decision.texto} (${r.decision.responsable})` }); }} onAviso={onAviso} />}
         <Contacto p={p} fecha={fecha} onListo={async (r) => { await onCambio(); onAviso({ titulo: `${p.nombre_fantasia}: ${r.contacto.texto}` }); }} onAviso={onAviso} />
@@ -157,7 +158,7 @@ export function Ficha({ p, total, detalle, fecha, demo, esp, onCambio, onAviso, 
       </details>
       </>}
 
-      {tab === "resumen" && (
+      {tab === "resumen" && !demo && (
         <>
           <Caja titulo="Revisión de la prioridad (especialista)">
             <p className="text-[13px] text-on-surface-variant mb-2">¿Está de acuerdo con la prioridad {ETIQUETA[p.categoria].toLowerCase()} que propone el sistema? Su respuesta queda registrada a su nombre y sirve para medir cuánto coincide el sistema con los especialistas.</p>
@@ -192,6 +193,7 @@ export function Ficha({ p, total, detalle, fecha, demo, esp, onCambio, onAviso, 
           )}
           {resultado && <ResultadoEvento r={resultado} onVer={onVer} onCerrar={() => setResultado(null)} />}
           {!demo && <p className="text-[12px] text-on-surface-variant">Para simular un evento en una demostración, marque «Explorar fechas anteriores» arriba a la derecha.</p>}
+          {demo ? <p className="rounded bg-ambar-container/60 text-ambar text-[13px] p-2.5 flex gap-1.5"><Icono n="history" className="text-[18px]" /><span>Está viendo la lista de una fecha anterior: es solo lectura. Aquí solo se puede simular un evento. Para registrar informes o novedades, desmarque «Explorar fechas anteriores».</span></p> : <>
           <Informe p={p} fecha={fecha} cargando={cargando} onConfirmar={(ev) => registrarEvento(ev, "Evento del informe registrado")} onAviso={onAviso}
             onRegistrado={async (r) => { await onCambio(); onDestacar(p.id_paciente);
               onAviso({ titulo: `La IA leyó el informe y registró: ${r.registrados.map((e) => e.subtipo).join(", ")}. Lista actualizada`, antes: r.posicion_antes, despues: r.posicion_despues, cat: r.paciente?.categoria }); }} />
@@ -201,6 +203,7 @@ export function Ficha({ p, total, detalle, fecha, demo, esp, onCambio, onAviso, 
             onAviso(r.en_lista ? { titulo: `Registrado: ${r.mensaje}`, despues: r.paciente?.posicion, antes: p.posicion, cat: r.paciente?.categoria }
               : { titulo: `${p.nombre_fantasia}: ${r.mensaje}` });
           }} onAviso={onAviso} />
+          </>}
 
         </>
       )}

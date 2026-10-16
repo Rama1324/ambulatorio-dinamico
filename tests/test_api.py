@@ -621,3 +621,17 @@ def test_grafico_de_evolucion_cuadra_con_la_lista_de_su_especialidad():
     p = d["pacientes"][2]
     s, h = call("GET", f"/pacientes/{p['id_paciente']}/historia", {"especialidad": "Cardiología", "fecha_corte": "2026-10-13"})
     assert s == 200 and h["puntos"][-1]["posicion"] == p["posicion"] and h["puntos"][-1]["total"] == d["total"]
+
+def test_importar_pacientes_nuevos_en_una_sola_hoja():
+    filas = [["RUT", "Nombre", "Edad", "Sexo", "CIE10", "Prioridad", "Fecha ingreso"],
+             ["15.555.555-K", "Ana Excel", 70, "Femenino", "I50", "ALTA", "2026-09-10"],
+             ["16.666.666-5", "Luis Excel", 45, "Masculino", "M54", "BAJA", "2026-09-12"]]
+    s, rev = call("POST", "/importar", body={"archivos": [{"nombre": "nuevos.xlsx", "contenido_base64": _xlsx({"Pacientes nuevos": filas})}]})
+    assert s == 200 and rev["resumen"]["pacientes_nuevos"] == 2, rev["avisos"]
+    assert sorted(i["tabla"] for i in rev["informe"]) == ["lista_espera", "pacientes"]
+    s, carga = call("POST", "/importar", body={"archivos": [{"nombre": "nuevos.xlsx", "contenido_base64": _xlsx({"Pacientes nuevos": filas})}], "confirmar": True})
+    d = call("GET", "/pacientes", {"especialidad": "Cardiología"})[1]
+    p = fila(d, "15.555.555-K")
+    assert p["categoria"] == "alta" and p["especialidad"] == "Cardiología" and p["posicion"] <= d["total"]
+    plantilla = app.handler({"requestContext": {"http": {"method": "GET"}}, "rawPath": "/plantillas/pacientes_nuevos"})
+    assert plantilla["statusCode"] == 200 and "diagnostico_cie10" in plantilla["body"]

@@ -111,7 +111,7 @@ def handler(event, context=None):
         except ValueError:
             return _resp(400, {"error": "el cuerpo de la solicitud no es JSON válido"})
         partes = [p for p in path.split("/") if p]
-        if method == "GET" and len(partes) == 2 and partes[0] == "plantillas" and partes[1] in importar.TABLAS:
+        if method == "GET" and len(partes) == 2 and partes[0] == "plantillas" and partes[1] in importar.PLANTILLAS:
             return {"statusCode": 200, "headers": {**CORS, "Content-Type": "text/csv; charset=utf-8",
                                                    "Content-Disposition": f'attachment; filename="plantilla_{partes[1]}.csv"'},
                     "body": importar.plantilla_csv(partes[1])}

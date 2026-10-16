@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { descargarExcel } from "../excel";
 import { Filtro, Icono, Prioridad } from "../componentes/comunes";
 import { ESPECIALIDADES, ETIQUETA, plural } from "../constantes";
-import { fmt } from "../util";
+import { fmt, coincide } from "../util";
 
 // Decisión clínica ante una descompensación grave: la registra un profesional identificado, con seguimiento.
 // Lista de espera simple: como una planilla, sin términos técnicos. Un clic abre todo el detalle en "Lista detallada".
@@ -13,9 +13,7 @@ export function ListaSimple({ data, fecha, esp, setEsp, actualizando, onVer }) {
   const [prioridad, setPrioridad] = useState("todas");
   const [pagina, setPagina] = useState(0);
   useEffect(() => setPagina(0), [busca, prioridad, esp]);
-  const q = busca.trim().toLowerCase();
-  const filas = data.pacientes.filter((p) => (prioridad === "todas" || p.categoria === prioridad) &&
-    (!q || [p.nombre_fantasia, p.rut, (p.rut || "").replace(/[.-]/g, ""), p.id_paciente, p.diagnostico_texto, p.comuna].some((x) => (x || "").toLowerCase().includes(q))));
+  const filas = data.pacientes.filter((p) => (prioridad === "todas" || p.categoria === prioridad) && coincide(p, busca));
   const pag = filas.slice(pagina * POR_PAGINA_SIMPLE, (pagina + 1) * POR_PAGINA_SIMPLE);
   const paginas = Math.max(1, Math.ceil(filas.length / POR_PAGINA_SIMPLE));
   const SEXO = { F: "Femenino", M: "Masculino" };

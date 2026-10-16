@@ -32,7 +32,8 @@ export function NuevoPaciente({ fecha, esp, onCerrar, onListo }) {
     ...["alta", "media", "baja"].map((c) => [`Tabla oficial HLF · prioridad ${ETIQUETA[c].toLowerCase()}`, dxs.filter((d) => d.prioridad_tabla === c)])].filter(([, l]) => l.length);
   const rutOk = validarRut(f.rut);
   const rutMal = f.rut.trim() !== "" && !rutOk;
-  const valido = f.nombre.trim() && f.edad !== "" && f.sexo && f.diagnostico_cie10 && f.prioridad_inicial && f.fecha_ingreso_lista && !rutMal;
+  const edadOk = f.edad !== "" && Number.isInteger(Number(f.edad)) && Number(f.edad) >= 0 && Number(f.edad) <= 120;
+  const valido = f.nombre.trim() && edadOk && f.sexo && f.diagnostico_cie10 && f.prioridad_inicial && f.fecha_ingreso_lista && !rutMal;
   const guardar = async () => {
     setEnviando(true); setError(null);
     try { onListo(await api.postPaciente({ ...f, rut: rutOk || undefined, edad: Number(f.edad), fecha_corte: fecha })); }
@@ -55,7 +56,8 @@ export function NuevoPaciente({ fecha, esp, onCerrar, onListo }) {
               {rutMal ? "RUT inválido: revise el dígito verificador" : rutOk ? "RUT válido" : "Se valida el dígito verificador"}</span>
           </Filtro>
           <div className="grid grid-cols-2 gap-2">
-            <Filtro label="Edad"><input type="number" min={0} max={120} value={f.edad} onChange={set("edad")} className={campo} /></Filtro>
+            <Filtro label="Edad"><input type="number" min={0} max={120} step={1} value={f.edad} onChange={set("edad")} className={`${campo} ${f.edad !== "" && !edadOk ? "border-error" : ""}`} />
+              {f.edad !== "" && !edadOk && <span className="text-[12px] text-error">Entre 0 y 120 años</span>}</Filtro>
             <Filtro label="Sexo"><select value={f.sexo} onChange={set("sexo")} className={campo}><option value="">Seleccione…</option><option value="F">Femenino</option><option value="M">Masculino</option></select></Filtro>
           </div>
           <Filtro label="Comuna"><select value={f.comuna} onChange={set("comuna")} className={campo}><option value="">Sin dato</option>{cat?.comunas.map((c) => <option key={c}>{c}</option>)}</select></Filtro>

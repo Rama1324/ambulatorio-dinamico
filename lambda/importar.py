@@ -284,38 +284,49 @@ def procesar(archivos):
                 continue
             enc = filas[0]
             tabla = detectar(enc, f'{a["nombre"]} {hoja}')
-            item = {"archivo": a["nombre"], "hoja": hoja, "tabla": tabla, "nombre_tabla": TABLAS[tabla]["nombre"] if tabla else None,
-                    "filas": len(filas) - 1, "validas": 0, "errores": [], "columnas": [], "ignoradas": []}
             if not tabla:
-                item["error"] = ("No se reconoció qué tabla es. Debe traer al menos las columnas de alguna tabla: " +
-                                 "; ".join(f'{v["nombre"]}: {", ".join(v["requeridas"])}' for v in TABLAS.values()))
-                informe.append(item)
+                informe.append({"archivo": a["nombre"], "hoja": hoja, "tabla": None, "nombre_tabla": None, "filas": len(filas) - 1,
+                                "validas": 0, "errores": [], "columnas": [], "ignoradas": [],
+                                "error": ("No se reconoció qué tabla es. Debe traer al menos las columnas de alguna tabla: " +
+                                          "; ".join(f'{v["nombre"]}: {", ".join(v["requeridas"])}' for v in TABLAS.values()))})
                 continue
-            m = mapear(enc, tabla)
-            item["columnas"] = [{"original": str(enc[i]), "campo": c} for i, c in sorted(m.items())]
-            item["ignoradas"] = [str(h) for i, h in enumerate(enc) if i not in m and str(h).strip()]
-            for n_fila, f in enumerate(filas[1:], start=2):
-                reg, problemas = {}, []
-                for i, campo in m.items():
-                    v = f[i] if i < len(f) else ""
-                    try:
-                        reg[campo] = CONVERSORES[campo](v) if campo in CONVERSORES and v not in ("", None) else (
-                            None if v in ("", None) else str(v).strip())
-                    except (ValueError, TypeError) as e:
-                        problemas.append(str(e))
-                faltan = [r for r in TABLAS[tabla]["requeridas"] if reg.get(r) in (None, "")]
-                if faltan:
-                    problemas.append("falta " + ", ".join(faltan))
-                if problemas:
-                    if len(item["errores"]) < 15:
-                        item["errores"].append({"fila": n_fila, "motivo": "; ".join(problemas)})
-                    item.setdefault("n_errores", 0)
-                    item["n_errores"] += 1
-                    continue
-                datos[tabla].append(reg)
-                item["validas"] += 1
-            informe.append(item)
+            # Una sola hoja con los datos del paciente Y de su interconsulta (lo más común: "pacientes nuevos"): se lee como las dos tablas
+            par = {"pacientes": "lista_espera", "lista_espera": "pacientes"}.get(tabla)
+            tablas = [tabla] + ([par] if par and all(r in set(mapear(enc, par).values()) for r in TABLAS[par]["requeridas"]) else [])
+            for tabla in tablas:
+                informe.append(_procesar_tabla(a["nombre"], hoja, filas, tabla, datos))
     return informe, datos
+
+
+def _procesar_tabla(archivo, hoja, filas, tabla, datos):
+    """Lee las filas de una hoja como `tabla`: valida, convierte y agrega a `datos`. Devuelve el informe de la hoja."""
+    enc = filas[0]
+    item = {"archivo": archivo, "hoja": hoja, "tabla": tabla, "nombre_tabla": TABLAS[tabla]["nombre"],
+            "filas": len(filas) - 1, "validas": 0, "errores": [], "columnas": [], "ignoradas": []}
+    m = mapear(enc, tabla)
+    item["columnas"] = [{"original": str(enc[i]), "campo": c} for i, c in sorted(m.items())]
+    item["ignoradas"] = [str(h) for i, h in enumerate(enc) if i not in m and str(h).strip()]
+    for n_fila, f in enumerate(filas[1:], start=2):
+        reg, problemas = {}, []
+        for i, campo in m.items():
+            v = f[i] if i < len(f) else ""
+            try:
+                reg[campo] = CONVERSORES[campo](v) if campo in CONVERSORES and v not in ("", None) else (
+                    None if v in ("", None) else str(v).strip())
+            except (ValueError, TypeError) as e:
+                problemas.append(str(e))
+        faltan = [r for r in TABLAS[tabla]["requeridas"] if reg.get(r) in (None, "")]
+        if faltan:
+            problemas.append("falta " + ", ".join(faltan))
+        if problemas:
+            if len(item["errores"]) < 15:
+                item["errores"].append({"fila": n_fila, "motivo": "; ".join(problemas)})
+            item.setdefault("n_errores", 0)
+            item["n_errores"] += 1
+            continue
+        datos[tabla].append(reg)
+        item["validas"] += 1
+    return item
 
 
 # Rangos normales de referencia del diccionario de datos (para calcular fuera_de_rango si no viene)
@@ -438,4 +449,11 @@ def plantilla_csv(tabla):
         "mediciones": ["PAC-0001", "02-10-2026", "presion_sistolica", "165", "mmHg", "si"],
         "citaciones": ["PAC-0001", "CT-0001", "BOX-12", "21-09-2026", "Cardiología", "no_asistio", ""],
     }
+    if tabla == "pacientes_nuevos":  # una sola hoja con el paciente y su interconsulta (lo más simple para cargar muchos)
+        return ("﻿" + ";".join(PACIENTES_NUEVOS) + "\n" + "12.345.678-5;Juan Pérez;64;M;I50;media;15-09-2026;CESFAM/APS\n"
+                "9.876.543-3;María Soto;71;F;J44;alta;02-10-2026;Hospitalización\n")
     return "﻿" + ";".join(TABLAS[tabla]["campos"]) + "\n" + ";".join(ejemplos[tabla]) + "\n"
+
+
+PACIENTES_NUEVOS = ["rut", "nombre", "edad", "sexo", "diagnostico_cie10", "prioridad_inicial", "fecha_ingreso_lista", "origen_derivacion"]
+PLANTILLAS = ["pacientes_nuevos", *TABLAS]

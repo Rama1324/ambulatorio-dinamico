@@ -11,6 +11,7 @@ const leerBase64 = (f) => new Promise((ok, mal) => {
 });
 
 const TABLAS_IMPORT = [
+  ["pacientes_nuevos", "Pacientes nuevos (una sola hoja)", "rut, nombre, edad, sexo, diagnostico_cie10, prioridad_inicial, fecha_ingreso_lista"],
   ["pacientes", "Pacientes", "id_paciente, edad, sexo"],
   ["lista_espera", "Lista de espera", "id_paciente, diagnostico_cie10, prioridad_inicial, fecha_ingreso_lista"],
   ["eventos_clinicos", "Eventos clínicos", "id_paciente, fecha_evento, tipo_evento"],

@@ -4,7 +4,7 @@ import * as api from "../api";
 import { descargarExcel } from "../excel";
 import { Filtro, Icono, Prioridad } from "../componentes/comunes";
 import { ESPECIALIDADES, ETIQUETA, ESTILO_GESTION, EVAL_TXT, FACTOR, ordenLista, plural } from "../constantes";
-import { fmt, fmtHace, hace } from "../util";
+import { fmt, fmtHace, hace, coincide } from "../util";
 
 const POR_PAGINA = 25;
 
@@ -41,14 +41,13 @@ export function ListaDetallada({ data, fecha, esp, setEsp, filtros, setFiltros, 
   const [pagina, setPagina] = useState(0);
 
   const filtrados = useMemo(() => {
-    const q = busca.trim().toLowerCase();
     const g = (p) => p.gestion || {};
     return data.pacientes.filter((p) =>
       (filtroCat === "todas" || (filtroCat === "vital" ? p.riesgo_vital : filtroCat === "ges" ? p.ges?.vencida : p.categoria === filtroCat)) &&
       (filtroGestion === "todos" || (filtroGestion === "sin_responsable" ? !g(p).responsable
         : filtroGestion === "seguimiento_vencido" ? g(p).seguimiento_vencido : g(p).estado === filtroGestion)) &&
       (!esperaLarga || p.dias_espera > (Number(diasEspera) || 0)) &&
-      (!q || p.nombre_fantasia.toLowerCase().includes(q) || p.id_paciente.toLowerCase().includes(q) || p.diagnostico_texto.toLowerCase().includes(q)));
+      coincide(p, busca));
   }, [data, busca, filtroCat, filtroGestion, esperaLarga, diasEspera]);
   useEffect(() => setPagina(0), [filtros, esp]);
   // al seleccionar (p. ej. un paciente recién ingresado) saltar a la página donde está
@@ -86,10 +85,10 @@ export function ListaDetallada({ data, fecha, esp, setEsp, filtros, setFiltros, 
         <input type="number" min={0} step={30} value={diasEspera} onChange={(e) => { setDiasEspera(e.target.value); setEsperaLarga(true); }} aria-label="Días mínimos de espera"
           className="h-8 w-20 px-2 border border-outline-variant rounded" />días</label>
       {hayFiltros && <button onClick={limpiarFiltros} className="h-9 px-2 text-primary font-semibold flex items-center gap-1"><Icono n="filter_alt_off" className="text-[18px]" />Limpiar filtros</button>}
-      <button onClick={() => exportarExcel(filtrados, fecha, { excluidos: data.excluidos, filtros: [["Especialidad", esp], ["Búsqueda", busca || "(ninguna)"],
+      <button onClick={() => exportarExcel(filtrados, fecha, { excluidos: data.excluidos.filter((e) => coincide(e, busca)), filtros: [["Especialidad", esp], ["Búsqueda", busca || "(ninguna)"],
         ["Prioridad", FILTRO_CAT[filtroCat]], ["Estado de gestión", FILTRO_GESTION[filtroGestion]],
         ["Espera mínima", esperaLarga ? `${diasEspera} días` : "(sin filtro)"]] })} className="ml-auto h-9 px-3 rounded border border-outline-variant bg-surface-container-lowest font-semibold flex items-center gap-1"><Icono n="download" className="text-[18px]" />Exportar a Excel</button>
-      <button onClick={onIngresar} className="h-9 px-3 rounded bg-primary text-on-primary font-semibold flex items-center gap-1"><Icono n="person_add" className="text-[18px]" />Ingresar paciente</button>
+      <button onClick={onIngresar} disabled={demo} title={demo ? "No disponible al ver una fecha anterior" : undefined} className="disabled:opacity-40 h-9 px-3 rounded bg-primary text-on-primary font-semibold flex items-center gap-1"><Icono n="person_add" className="text-[18px]" />Ingresar paciente</button>
     </div>
     {children}
 
