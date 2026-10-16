@@ -103,7 +103,7 @@ export function Ficha({ p, total, detalle, fecha, demo, esp, onCambio, onAviso, 
 
       {tab === "resumen" && <>
       <Caja titulo={`Por qué está en el N° ${p.posicion} y cómo se ha movido`}>
-        <EvolucionPaciente p={p} fecha={fecha} />
+        <EvolucionPaciente p={p} fecha={fecha} esp={esp && esp !== "Todas" ? esp : null} />
       </Caja>
       {p.comparacion && (p.comparacion.arriba || p.comparacion.abajo) && <Caja titulo="Comparado con sus vecinos en la lista">
         <Vecino v={p.comparacion.arriba} arriba onVer={onVer} />
@@ -218,7 +218,7 @@ export function Ficha({ p, total, detalle, fecha, demo, esp, onCambio, onAviso, 
               <span className={x.rojo ? "text-error font-semibold" : x.ambar ? "text-ambar" : ""}>{x.t}{x.d && <span className="text-on-surface-variant font-normal"> · {x.d}</span>}</span>
             </li>
           ))}
-          {!detalle && <li className="text-on-surface-variant">Cargando…</li>}
+          {!detalle && [0, 1, 2, 3, 4].map((i) => <li key={i} className="h-8 my-1.5 rounded bg-surface-container-high/50 animate-pulse" aria-hidden="true" />)}
         </ol>
       </Caja>}
     </>

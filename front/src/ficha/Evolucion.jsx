@@ -6,15 +6,15 @@ import { fmt, fmtHace } from "../util";
 
 // Carga la historia de un paciente (posición/categoría en el tiempo), dibuja el gráfico
 // y explica en detalle qué eventos hicieron subir su prioridad / posición en la lista.
-export function EvolucionPaciente({ p, fecha }) {
+export function EvolucionPaciente({ p, fecha, esp }) {
   const [h, setH] = useState(null);
   const [err, setErr] = useState(null);
   useEffect(() => {
     let vivo = true;
     setH(null); setErr(null);
-    api.getHistoria(p.id_paciente, fecha).then((r) => { if (vivo) setH(r); }).catch((e) => { if (vivo) setErr(e.message); });
+    api.getHistoria(p.id_paciente, fecha, esp).then((r) => { if (vivo) setH(r); }).catch((e) => { if (vivo) setErr(e.message); });
     return () => { vivo = false; };
-  }, [p.id_paciente, fecha]);
+  }, [p.id_paciente, fecha, esp]);
 
   // Razones indexadas por factor: traen el texto y la fuente oficial que ya calculó el motor de reglas.
   const rz = Object.fromEntries((p.razones || []).map((r) => [r.factor, r]));
@@ -33,11 +33,12 @@ export function EvolucionPaciente({ p, fecha }) {
       v: e.subtipo || "Descompensación", d: "Evento clínico registrado después de la interconsulta: es lo que gatilló la reevaluación." });
   }
   if (eventosGraves.length === 0 && rz.evento) {
-    pasos.push({ icon: "emergency", rojo: true, t: "Evento posterior a la interconsulta", v: rz.evento.valor, d: `Fuente: ${rz.evento.fuente}` });
+    pasos.push({ icon: "emergency", rojo: true, t: "Evento posterior a la interconsulta", v: rz.evento.valor.replaceAll("_", " ").replace(/^evento grave: /, ""), d: `Fuente: ${rz.evento.fuente}` });
   }
   if (subioTabla) {
     pasos.push({ icon: "arrow_upward", rojo: true, t: "Subió de prioridad por la tabla oficial",
-      v: rz.tabla_oficial.valor.split("→").slice(-1)[0].trim(), d: `${rz.tabla_oficial.valor.split("→")[0].replaceAll('"', "").trim()} · Fuente: ${rz.tabla_oficial.fuente}` });
+      v: rz.tabla_oficial.valor.split("→").slice(-1)[0].split(" · ")[0].trim(),
+      d: `${rz.tabla_oficial.valor.split("→")[0].replaceAll('"', "").trim()} · Fuente: ${rz.tabla_oficial.fuente}` });
   }
   if (rz.riesgo_vital) {
     pasos.push({ icon: "priority_high", rojo: true, t: "Descompensación grave", v: "Prioridad actualizada: contactar al paciente", d: rz.riesgo_vital.fuente });
@@ -56,10 +57,17 @@ export function EvolucionPaciente({ p, fecha }) {
     v: `N° ${p.posicion}${p.posicion_anterior ? ` (antes N° ${p.posicion_anterior})` : ""}`,
     d: delta > 0 ? `Subió ${delta} puesto${delta !== 1 ? "s" : ""} respecto al corte anterior.` : delta < 0 ? `Bajó ${-delta} puesto${-delta !== 1 ? "s" : ""} respecto al corte anterior.` : "Sin cambio de posición respecto al corte anterior." });
 
+  if (!h && !err) return (
+    <div className="flex flex-col gap-3 animate-pulse" aria-busy="true" aria-label="Cargando la evolución del paciente">
+      <div className="max-w-[640px] h-[236px] rounded bg-surface-container-high/70" />
+      <div className="h-4 w-48 rounded bg-surface-container-high/70" />
+      <div className="h-4 w-full rounded bg-surface-container-high/50" />
+      {pasos.map((_, i) => <div key={i} className="ml-6 h-9 rounded bg-surface-container-high/40" />)}
+    </div>
+  );
   return (
     <div className="flex flex-col gap-3">
       {err ? <p className="text-[13px] text-error">No se pudo cargar la evolución: {err}</p>
-        : !h ? <p className="text-[13px] text-on-surface-variant">Cargando evolución…</p>
         : <div className="max-w-[640px]"><GraficoPosicion h={h} /></div>}
 
       <div>

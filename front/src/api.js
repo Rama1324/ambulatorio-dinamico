@@ -41,7 +41,7 @@ const conFecha = (fechaCorte, especialidad) =>
 // Lectura
 export const getPacientes = (fechaCorte, especialidad) => req("GET", `/pacientes?${conFecha(fechaCorte, especialidad)}`);
 export const getPaciente = (id, fechaCorte) => req("GET", `/pacientes/${id}?${conFecha(fechaCorte)}`);
-export const getHistoria = (id, fechaCorte) => req("GET", `/pacientes/${id}/historia?${conFecha(fechaCorte)}`);
+export const getHistoria = (id, fechaCorte, especialidad) => req("GET", `/pacientes/${id}/historia?${conFecha(fechaCorte, especialidad)}`);
 export const getKpis = (fechaCorte, especialidad) => req("GET", `/kpis?${conFecha(fechaCorte, especialidad)}`);
 export const getEstadisticas = (fechaCorte, especialidad) => req("GET", `/estadisticas?${conFecha(fechaCorte, especialidad)}`);
 export const getCatalogo = () => req("GET", "/catalogo");

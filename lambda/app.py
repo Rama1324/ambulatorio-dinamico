@@ -78,7 +78,7 @@ def _rutear(method, partes, qs, body):
     if len(partes) == 3 and partes[0] == "pacientes":
         pid, sub = partes[1], partes[2]
         if method == "GET" and sub == "historia":
-            h = historia(pid, fecha_de(qs))
+            h = historia(pid, fecha_de(qs), qs.get("especialidad") or None)
             return (200, h) if h else (404, {"error": "paciente no existe"})
         if method == "GET" and sub == "evaluaciones":
             return 200, {"id_paciente": pid, "evaluaciones": _evaluaciones_de(pid), "algoritmo_activo": algoritmo_activo()}

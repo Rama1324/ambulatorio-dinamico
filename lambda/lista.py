@@ -290,11 +290,16 @@ def estadisticas(corte, especialidad=None):
             "evento_causa": eventos}
 
 
-def historia(pid, corte):
-    """Posición y categoría del paciente cada 14 días hasta la fecha de corte (mismas reglas que la lista)."""
+def historia(pid, corte, especialidad=None):
+    """Posición y categoría del paciente cada 14 días hasta la fecha de corte (mismas reglas que la lista). Con
+    `especialidad`, los puestos son los de la lista de esa especialidad (como la ve el especialista)."""
     perfs, _ = perfiles_combinados()
     if pid not in perfs:
         return None
+    if especialidad:
+        perfs = {k: v for k, v in perfs.items() if v["lista_espera"]["especialidad"] == especialidad}
+        if pid not in perfs:
+            return None
     fechas, f = [], corte - timedelta(days=14 * 14)  # últimas 28 semanas
     while f < corte:
         fechas.append(f); f += timedelta(days=14)
@@ -314,6 +319,10 @@ def historia(pid, corte):
                            "categoria": r["categoria"], "riesgo_vital": r["riesgo_vital"]})
         elif any(x["id_paciente"] == pid for x in excluidos):
             puntos.append({"fecha": fc.isoformat(), "excluido": True})
+    # el punto de hoy sale del mismo cálculo que la lista (revisiones, ajustes manuales, cierre de urgencias): cuadra con la ficha
+    hoy_fila = next((x for x in lista(corte, especialidad)["pacientes"] if x["id_paciente"] == pid), None)
+    if hoy_fila and puntos and puntos[-1].get("fecha") == corte.isoformat() and not puntos[-1].get("excluido"):
+        puntos[-1].update(posicion=hoy_fila["posicion"], categoria=hoy_fila["categoria"], riesgo_vital=hoy_fila["riesgo_vital"])
     eventos = [e for e in perfs[pid].get("eventos_clinicos", []) if e["fecha_evento"] <= corte.isoformat()
                and puntaje.descompensa(e) or (puntaje.estabiliza(e) and e["fecha_evento"] <= corte.isoformat())]
     return {"id_paciente": pid, "puntos": puntos, "eventos": eventos}

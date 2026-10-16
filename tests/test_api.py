@@ -612,3 +612,9 @@ def test_la_ia_no_recibe_nombre_ni_rut():
     finally:
         os.environ.pop("ALGORITMO", None); app._llm["cliente"] = None
     assert vistos and all(pac["nombre_fantasia"] not in v and "12.345.678-5" not in v for v in vistos)
+
+def test_grafico_de_evolucion_cuadra_con_la_lista_de_su_especialidad():
+    d = call("GET", "/pacientes", {"especialidad": "Cardiología", "fecha_corte": "2026-10-13"})[1]
+    p = d["pacientes"][2]
+    s, h = call("GET", f"/pacientes/{p['id_paciente']}/historia", {"especialidad": "Cardiología", "fecha_corte": "2026-10-13"})
+    assert s == 200 and h["puntos"][-1]["posicion"] == p["posicion"] and h["puntos"][-1]["total"] == d["total"]
