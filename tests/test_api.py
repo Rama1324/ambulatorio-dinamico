@@ -474,7 +474,7 @@ def test_kpis_de_resultado():
 def test_ges_y_equivalencias_se_informan_para_verificar():
     _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
     g = next(p for p in d["pacientes"] if p["ges"] and p["ges"]["vencida"])
-    assert g["ges"]["verificar"] and any("posible incumplimiento" in r["valor"] for r in g["razones"])
+    assert g["ges"]["verificar"] and any(r["factor"] == "ges" and "vencida hace" in r["valor"] and "SIGGES" in r["valor"] for r in g["razones"])
     k = next((p for p in d["pacientes"] if p["diagnostico_cie10"] == "K70" and p["estado_clinico"] == "descompensado"), None)
     assert k is None or any("equivalencia usada" in r["valor"] for r in k["razones"] if r["factor"] == "tabla_oficial")
 
@@ -646,3 +646,23 @@ def test_hallazgos_de_la_revision_de_kiro():
     assert "Insulinoterapia" not in filas and "Diabetes gestacional con indicacion de insulinoterapia" in filas   # fila unida
     comb = _j.load(open(os.path.join(RAIZ, "lambda", "conocimiento", "combinaciones_riesgo.json"), encoding="utf-8"))
     assert "hacerle dano" in next(c for c in comb["combinaciones"] if c["id"] == "riesgo_suicida")["gatillo_terminos"]
+
+def test_carril_ges_con_plazos_oficiales_verificados():
+    import json as _j, puntaje
+    from datetime import date as _d, timedelta as _td
+    ges = _j.load(open(os.path.join(RAIZ, "lambda", "conocimiento", "ges_especialista.json"), encoding="utf-8"))["problemas"]
+    plazos = {g["problema"]: g["plazo_dias"] for g in ges}
+    assert plazos == {7: 60, 15: 20, 21: 45, 34: 30, 38: 45, 41: 120, 60: 60, 61: 60}      # auge.minsal.cl, verificado
+    assert all(g["cita"] and g["url"].startswith("https://auge.minsal.cl/problemasdesalud/index/") for g in ges)
+    assert all(str(g["plazo_dias"]) in g["cita"] for g in ges)                               # el plazo está en la cita textual
+    d = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})[1]
+    for p in d["pacientes"]:
+        g = p["ges"]
+        if not g:
+            continue
+        lim = _d.fromisoformat(p["fecha_ingreso_lista"]) + _td(days=g["plazo_dias"])
+        assert g["fecha_limite"] == lim.isoformat() and g["dias_restantes"] == g["plazo_dias"] - p["dias_espera"]
+        assert g["estado"] == ("vencida" if g["dias_restantes"] < 0 else "por_vencer" if g["dias_restantes"] <= 14 else "en_plazo")
+    assert puntaje.GES_ESPECIALISTA["HLF-SME-01"][:3] == (15, "Esquizofrenia", 20)               # fila de la tabla HLF
+    assert "alto riesgo" in puntaje.GES_DETALLE[38]["condicion"]                                 # EPOC: condición de la garantía
+    assert "HLF-END-04" not in puntaje.GES_ESPECIALISTA                                          # diabetes gestacional: no es GES N°7

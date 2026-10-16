@@ -1,0 +1,127 @@
+{
+ "version": "ges_especialista_v1",
+ "consultado": "2026-10-16",
+ "objeto": "Garantías GES de oportunidad para la atención por médico especialista (Ley 19.966). Solo las que fijan un plazo de consulta con especialista desde la derivación o la indicación médica; las de cirugía, tratamiento o control post alta no se usan en la lista de espera de consultas.",
+ "fuente_general": "https://auge.minsal.cl/problemasdesalud/lista",
+ "excluidos": {
+  "N°6 Diabetes mellitus tipo 1": "especialista dentro de 7 días desde la sospecha por exámenes alterados (diagnóstico inicial, no control de DM1 conocida)",
+  "N°12 Endoprótesis de cadera": "plazo de cirugía (240 días), no de consulta",
+  "N°76 Hipotiroidismo": "plazo de inicio de tratamiento, no de especialista",
+  "N°75 Trastorno bipolar": "la página no fija plazo de especialista",
+  "N°5, N°25, N°44, N°88": "tratamiento, cirugía o control después del alta"
+ },
+ "problemas": [
+  {
+   "problema": 7,
+   "nombre": "Diabetes mellitus tipo 2",
+   "plazo_dias": 60,
+   "edad_minima": 0,
+   "condicion": "según indicación médica",
+   "cita": "La atención por médico especialista se realizará dentro de 60 días desde la derivación, según indicación médica",
+   "url": "https://auge.minsal.cl/problemasdesalud/index/7",
+   "diagnosticos": [
+    "E11",
+    "HLF-END-01",
+    "HLF-END-06",
+    "HLF-END-08",
+    "HLF-END-09",
+    "HLF-END-10",
+    "HLF-END-12",
+    "HLF-END-13",
+    "HLF-END-15"
+   ]
+  },
+  {
+   "problema": 15,
+   "nombre": "Esquizofrenia",
+   "plazo_dias": 20,
+   "edad_minima": 0,
+   "condicion": "beneficiarios con sospecha de esquizofrenia cuyos síntomas aparecieron por primera vez desde el 1-07-2005",
+   "cita": "Se otorgará atención por médico especialista dentro de 20 días desde la derivación",
+   "url": "https://auge.minsal.cl/problemasdesalud/index/15",
+   "diagnosticos": [
+    "HLF-SME-01"
+   ]
+  },
+  {
+   "problema": 21,
+   "nombre": "Hipertensión arterial primaria o esencial en personas de 15 años y más",
+   "plazo_dias": 45,
+   "edad_minima": 15,
+   "condicion": "15 años y más; según indicación médica",
+   "cita": "La atención por especialista se realizará dentro de 45 días según indicación médica",
+   "url": "https://auge.minsal.cl/problemasdesalud/index/21",
+   "diagnosticos": [
+    "I10",
+    "HLF-CAR-11"
+   ]
+  },
+  {
+   "problema": 34,
+   "nombre": "Depresión en personas de 15 años y más",
+   "plazo_dias": 30,
+   "edad_minima": 15,
+   "condicion": "15 años y más",
+   "cita": "La consulta con médico especialista se realizará dentro de 30 días desde la derivación",
+   "url": "https://auge.minsal.cl/problemasdesalud/index/34",
+   "diagnosticos": [
+    "F32",
+    "HLF-SME-02"
+   ]
+  },
+  {
+   "problema": 38,
+   "nombre": "Enfermedad pulmonar obstructiva crónica de tratamiento ambulatorio",
+   "plazo_dias": 45,
+   "edad_minima": 0,
+   "condicion": "solo pacientes con sospecha de EPOC de alto riesgo, según indicación médica",
+   "cita": "La atención con médico especialista, según indicación médica en pacientes con sospecha de EPOC de alto riesgo, se realizará dentro de 45 días desde la derivación",
+   "url": "https://auge.minsal.cl/problemasdesalud/index/38",
+   "diagnosticos": [
+    "J44",
+    "HLF-BRP-03"
+   ]
+  },
+  {
+   "problema": 41,
+   "nombre": "Tratamiento médico en personas de 55 años y más con artrosis de cadera y/o rodilla, leve o moderada",
+   "plazo_dias": 120,
+   "edad_minima": 55,
+   "condicion": "55 años y más, artrosis de cadera y/o rodilla leve o moderada",
+   "cita": "La atención por médico especialista se realizará dentro de 120 días desde la indicación médica",
+   "url": "https://auge.minsal.cl/problemasdesalud/index/41",
+   "diagnosticos": [
+    "M17",
+    "HLF-TRA-05"
+   ]
+  },
+  {
+   "problema": 60,
+   "nombre": "Epilepsia en personas de 15 años y más",
+   "plazo_dias": 60,
+   "edad_minima": 15,
+   "condicion": "15 años y más",
+   "cita": "La evaluación por médico especialista se realizará dentro de 60 días desde la derivación",
+   "url": "https://auge.minsal.cl/problemasdesalud/index/60",
+   "diagnosticos": [
+    "G40",
+    "HLF-NEU-04",
+    "HLF-NEU-11",
+    "HLF-NEU-23"
+   ]
+  },
+  {
+   "problema": 61,
+   "nombre": "Asma bronquial en personas de 15 años y más",
+   "plazo_dias": 60,
+   "edad_minima": 15,
+   "condicion": "15 años y más; según indicación médica",
+   "cita": "La atención con médico especialista se realizará dentro de 60 días desde la derivación, según indicación médica",
+   "url": "https://auge.minsal.cl/problemasdesalud/index/61",
+   "diagnosticos": [
+    "J45",
+    "HLF-BRP-04"
+   ]
+  }
+ ]
+}

@@ -137,7 +137,8 @@ export function ListaDetallada({ data, fecha, esp, setEsp, filtros, setFiltros, 
                       {p.ajuste_manual_vencido && <Marca tono="ambar" title={`Evento nuevo: ${p.ajuste_manual_vencido.vencido_por}`}>Ajuste sin efecto: revisar</Marca>}
                       {p.grupo_proteccion && <Marca tono="azul">{p.grupo_proteccion}</Marca>}
                       {p.estado_clinico === "estabilizado" && <Marca>Estabilizado</Marca>}
-                      {p.ges?.vencida && <Marca tono="azul" title={`GES N°${p.ges.problema}: plazo ${p.ges.plazo_dias} días desde la derivación. Se calcula desde el ingreso a la lista: verificar el hito real.`}>GES: verificar</Marca>}
+                      {p.ges && p.ges.estado !== "en_plazo" && <Marca tono={p.ges.estado === "vencida" ? "rojo" : "ambar"} title={`GES N°${p.ges.problema} ${p.ges.nombre}: ${p.ges.plazo_dias} días desde la derivación (fecha límite ${fmt(p.ges.fecha_limite)}). Calculado desde el ingreso a la lista: verificar el hito en SIGGES.`}>
+                        GES: {p.ges.estado === "vencida" ? `vencida hace ${-p.ges.dias_restantes} d` : `vence en ${p.ges.dias_restantes} d`}</Marca>}
                       {p.riesgo_inasistencia && <Marca tono="ambar" title="2 inasistencias consecutivas (causal 8)">2 inasistencias</Marca>}
                     </div>
                   </td>

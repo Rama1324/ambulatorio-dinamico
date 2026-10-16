@@ -114,9 +114,16 @@ export function Criterios({ ia }) {
         </table>
         <p className="text-[13px] text-on-surface-variant mt-2">Validación en este registro (datos sintéticos): a más puntos, más eventos en los 90 días siguientes (LACE 0: 11% · 2: 14% · 3: 17%), con discriminación baja (AUC 0,54). Debe recalibrarse con datos reales del HLF.</p>
       </Plegable>}
-      <Plegable titulo="Garantías GES · atención por especialista">
-        <p>Depresión (N°34): 30 días · Hipertensión (N°21): 45 · EPOC (N°38): 45 · Diabetes tipo 2 (N°7): 60 · Asma (N°61): 60 · Epilepsia (N°60): 60 · Artrosis de rodilla, 55 años o más (N°41): 120.</p>
-        <p className="text-[13px] text-on-surface-variant mt-1">El plazo corre desde la derivación con sospecha o confirmación diagnóstica; el registro solo trae el ingreso a la lista, así que la herramienta marca "posible incumplimiento: verificar". Fuente: <a className="text-primary underline" target="_blank" rel="noreferrer" href="https://auge.minsal.cl">auge.minsal.cl</a></p>
+      <Plegable titulo="Garantías GES · atención por especialista (carril propio)">
+        <p>Los pacientes GES tienen un <b>plazo legal</b> (Ley 19.966), no una prioridad clínica. Por eso van en su propio carril, la pestaña
+          <b> Garantías GES</b>, ordenados por fecha límite; la lista principal (tabla del HLF y Ord. 536) es para la priorización No GES y no cambia.
+          Si un paciente GES empeora, sube igual en la lista principal.</p>
+        <p className="mt-1">Plazos de consulta con especialista (cita textual de cada página oficial): depresión (N°34) 30 días · esquizofrenia (N°15) 20 ·
+          hipertensión (N°21) 45 · EPOC de alto riesgo (N°38) 45 · diabetes tipo 2 (N°7) 60 · asma (N°61) 60 · epilepsia (N°60) 60 · artrosis de cadera
+          o rodilla, 55 años o más (N°41) 120. Se excluyen las garantías de cirugía, tratamiento o control después del alta.</p>
+        <p className="text-[13px] text-on-surface-variant mt-1">El plazo corre desde la derivación; se usa la fecha de ingreso de la interconsulta a la lista
+          (en producción, la fecha del hito desde SIGGES). Fuente: <a className="text-primary underline" target="_blank" rel="noreferrer" href="https://auge.minsal.cl/problemasdesalud/lista">auge.minsal.cl</a> ·
+          lambda/conocimiento/ges_especialista.json.</p>
       </Plegable>
       <Plegable titulo="Lectura automática de informes">
         {ia

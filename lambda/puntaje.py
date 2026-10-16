@@ -20,7 +20,7 @@ Exclusión: causal 9 "fallecimiento" (Manual SSMSO, Anexo 4) desde fecha_defunci
 Uso: python puntaje.py perfiles.json [fecha_corte AAAA-MM-DD]
 """
 import json, os, sys
-from datetime import date
+from datetime import date, timedelta
 
 FUENTE_TABLA = "Tabla SSMSO 2025, HLF"
 ORDEN_CAT = {"alta": 3, "media": 2, "baja": 1}
@@ -78,17 +78,14 @@ FACTORES_REGLA = {"tabla_oficial", "riesgo_vital", "criterio_registro", "criteri
 # Mediciones que reflejan semanas o meses (no un momento): las únicas que pueden aparecer como razón de prioridad
 MEDICIONES_ESTABLES = ("HbA1c", "PHQ9")
 
-# Garantía GES de oportunidad: atención por especialista (días). auge.minsal.cl/problemasdesalud/index/<N°>
-# cie10: (N° problema GES, nombre, días, edad mínima)
-GES_ESPECIALISTA = {
-    "F32": (34, "Depresión", 30, 15),
-    "I10": (21, "Hipertensión arterial", 45, 15),
-    "J44": (38, "EPOC", 45, 0),
-    "E11": (7, "Diabetes mellitus tipo 2", 60, 0),
-    "J45": (61, "Asma bronquial", 60, 15),
-    "G40": (60, "Epilepsia", 60, 15),
-    "M17": (41, "Artrosis de rodilla", 120, 55),
-}
+# Garantías GES de oportunidad para la atención por especialista (Ley 19.966), con la cita textual de cada página oficial
+# de auge.minsal.cl: lambda/conocimiento/ges_especialista.json. Por diagnóstico (CIE-10 del registro o código HLF-… de la
+# tabla): (N° problema GES, nombre, días, edad mínima). GES_DETALLE trae la cita, la URL y la condición de la garantía.
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "conocimiento", "ges_especialista.json"), encoding="utf-8") as _f:
+    _GES = json.load(_f)["problemas"]
+GES_ESPECIALISTA = {c: (g["problema"], g["nombre"], g["plazo_dias"], g["edad_minima"]) for g in _GES for c in g["diagnosticos"]}
+GES_DETALLE = {g["problema"]: g for g in _GES}
+GES_POR_VENCER_DIAS = 14  # aviso: quedan 14 días o menos para que venza la garantía
 
 DIAS_ANTIGUEDAD = 365  # MINSAL Ord. 536/2025: "antigüedad en la lista de espera mayor a un año"
 
@@ -513,12 +510,19 @@ def puntuar(perfil, corte):
     ges = GES_ESPECIALISTA.get(cie)
     ges_info = None
     if ges and pac["edad"] >= ges[3]:
-        vencida = dias_espera > ges[2]
-        ges_info = {"problema": ges[0], "nombre": ges[1], "plazo_dias": ges[2], "vencida": vencida, "verificar": vencida}
-        razones.append({"factor": "ges", "valor": f"GES N°{ges[0]} {ges[1]}: especialista en {ges[2]} días desde la derivación" +
-                        (f" — posible incumplimiento: {dias_espera} días desde el ingreso a la lista (verificar el hito real)"
-                         if vencida else ""),
-                        "fuente": f"auge.minsal.cl, problema de salud N°{ges[0]}"})
+        det = GES_DETALLE[ges[0]]
+        # el plazo corre desde la derivación: se usa la fecha de ingreso de la interconsulta a la lista (verificar con SIGGES)
+        restantes = ges[2] - dias_espera
+        vencida = restantes < 0
+        estado_ges = "vencida" if vencida else "por_vencer" if restantes <= GES_POR_VENCER_DIAS else "en_plazo"
+        limite = (ingreso + timedelta(days=ges[2])).isoformat()
+        ges_info = {"problema": ges[0], "nombre": ges[1], "plazo_dias": ges[2], "vencida": vencida, "verificar": vencida,
+                    "estado": estado_ges, "dias_restantes": restantes, "fecha_limite": limite, "condicion": det["condicion"],
+                    "cita": det["cita"], "url": det["url"]}
+        razones.append({"factor": "ges", "valor": f"GES N°{ges[0]} {ges[1]}: «{det['cita']}» · fecha límite {limite} "
+                        + (f"(vencida hace {-restantes} días)" if vencida else f"(quedan {restantes} días)")
+                        + f" · condición: {det['condicion']} · calculado desde el ingreso a la lista: verificar el hito en SIGGES",
+                        "fuente": det["url"]})
 
     # Señales que piden revisión del especialista (no cambian el orden): fecha y momento de registro para compararlas
     # con la última revisión clínica.

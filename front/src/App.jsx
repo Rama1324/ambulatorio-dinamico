@@ -11,6 +11,7 @@ import { Indicadores } from "./pantallas/Indicadores";
 import { ListaSimple } from "./pantallas/ListaSimple";
 import { FILTROS_VACIOS, ListaDetallada } from "./pantallas/ListaDetallada";
 import { NuevoPaciente } from "./pantallas/NuevoPaciente";
+import { CarrilGES } from "./pantallas/CarrilGES";
 import { fmt } from "./util";
 
 // Tema claro/oscuro (del PR #1): por defecto sigue al sistema; el botón lo fija y se recuerda en este navegador.
@@ -110,7 +111,7 @@ export default function App() {
           </div>
         </div>
         <nav className="max-w-[1400px] mx-auto px-4 sm:px-6 flex gap-5 sm:gap-6 text-[14px] overflow-x-auto whitespace-nowrap" aria-label="Secciones">
-          {[["simple", "Lista de espera", null], ["lista", "Lista detallada", null], ["hoy", "Empeoraron", porContactar.length], ["indicadores", "Indicadores", null], ["cargar", "Cargar datos", null], ["criterios", "Criterios", null]].map(([k, t, n]) => (
+          {[["simple", "Lista de espera", null], ["lista", "Lista detallada", null], ["hoy", "Empeoraron", porContactar.length], ["ges", "Garantías GES", null], ["indicadores", "Indicadores", null], ["cargar", "Cargar datos", null], ["criterios", "Criterios", null]].map(([k, t, n]) => (
             <button key={k} onClick={() => setVista(k)} aria-current={vista === k ? "page" : undefined}
               className={`shrink-0 py-2.5 border-b-2 -mb-px ${vista === k ? "border-primary text-primary font-semibold" : "border-transparent text-on-surface-variant hover:text-on-surface"}`}>
               {t}{n ? <span className="ml-1.5 px-1.5 rounded-full bg-error text-on-error text-[12px] font-semibold">{n}</span> : null}
@@ -156,18 +157,19 @@ export default function App() {
       <main className="flex-1 max-w-[1400px] w-full mx-auto px-4 sm:px-6 py-5">
         {error && <div className="bg-error-container text-on-error-container p-3 mb-4 rounded">{error}</div>}
 
-        {vista !== "simple" && vista !== "indicadores" && <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-5">
+        {vista !== "simple" && vista !== "indicadores" && vista !== "ges" && <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-5">
           <Indicador n={data.total} t="Pacientes en espera · ver todos" onClick={() => verLista()} />
           <Indicador n={porContactar.length} t="Descompensación grave: contactar" tono={porContactar.length ? "rojo" : null} onClick={() => setVista("hoy")} />
           <Indicador n={altas} t="Prioridad alta" onClick={() => verLista({ cat: "alta" })} />
           <Indicador n={pendientes} t="Requieren decisión del especialista" tono={pendientes ? "ambar" : null} onClick={() => verLista({ gestion: "pendiente_revision" })} />
           <Indicador n={masDeUnAnio} t="Esperan más de 1 año" onClick={() => verLista({ esperaLarga: true })} />
-          <Indicador n={gesVenc} t="GES: posible incumplimiento, verificar" onClick={() => verLista({ cat: "ges" })} />
+          <Indicador n={gesVenc} t="GES: plazo legal superado (ver garantías)" onClick={() => setVista("ges")} />
         </div>}
 
         {vista === "simple" && <ListaSimple data={data} fecha={fecha} esp={esp} setEsp={setEsp} actualizando={actualizando} onVer={abrir} />}
 
         {vista === "hoy" && <Alertas vitales={vitales} todosPacientes={data.pacientes} fecha={fecha} esp={esp} setEsp={setEsp} onVer={abrir} onCambio={cargar} onAviso={mostrarAviso} />}
+        {vista === "ges" && <CarrilGES data={data} esp={esp} setEsp={setEsp} onVer={abrir} />}
         {vista === "criterios" && <Criterios ia={data.pacientes.some((p) => p.algoritmo === "rubrica")} />}
         {vista === "indicadores" && <Indicadores fecha={fecha} data={data} esp={esp} setEsp={setEsp} onVer={abrir} />}
         {vista === "cargar" && <CargarDatos onListo={async (r) => {
