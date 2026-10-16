@@ -163,5 +163,6 @@ def evento_registrable(h, corte):
     f = h["fecha"] if h["fecha"] and h["fecha"] <= corte.isoformat() else corte.isoformat()
     return {"fecha_evento": f, "tipo_evento": h["tipo_evento"], "subtipo": h["subtipo"], "severidad": h["severidad"],
             "detalle": f'Informe (leído por IA): "{h["cita"]}"', "origen": "documento_ia", "cita": h["cita"],
+            "fecha_en_documento": bool(h.get("fecha_en_documento")),
             **({"motivo": h["motivo_clinico"]} if h.get("motivo_clinico") else {}),
             **({"relacionado": h["relacionado"]} if h.get("relacionado") is not None else {})}

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import * as api from "../api";
 import { Caja, Icono, Prioridad } from "../componentes/comunes";
 import { TIPO_EVENTO } from "../constantes";
-import { fmt } from "../util";
+import { fmtHace } from "../util";
 
 // Achica la foto en el navegador para no superar el límite de la Lambda (6 MB) y la devuelve en base64.
 function fotoABase64(archivo, lado = 1600) {
@@ -83,6 +83,7 @@ export function Informe({ p, fecha, cargando, onConfirmar, onAviso, onRegistrado
   const [camara, setCamara] = useState(false);
   const [elegido, setElegido] = useState(0);
   const [esDelPaciente, setEsDelPaciente] = useState(false);
+  const [fechaEv, setFechaEv] = useState("");  // fecha del evento que confirma el equipo (corrige la del documento)
   const analizar = async (body) => {
     setLeyendo(true); setRes(null); setElegido(0); setEsDelPaciente(false);
     try {
@@ -96,6 +97,7 @@ export function Informe({ p, fecha, cargando, onConfirmar, onAviso, onRegistrado
   const foto = (b64) => { setCamara(false); analizar({ imagen_base64: b64, media_type: "image/jpeg" }); };
   const eventos = res?.eventos || [];
   const ev = eventos[elegido];
+  useEffect(() => setFechaEv(ev?.fecha_evento || ""), [ev]);
   const dudosas = new Set((res?.lectura?.lineas_dudosas || []).map((l) => l.texto));
   const bloqueado = res?.otro_paciente || (res?.lectura && !res.lectura.legible);
   return (
@@ -123,7 +125,8 @@ export function Informe({ p, fecha, cargando, onConfirmar, onAviso, onRegistrado
         <div className="mt-3 rounded border border-hlf bg-hlf-claro p-3 text-[14px] space-y-1.5">
           <p className="font-semibold text-hlf flex items-center gap-1"><Icono n="check_circle" className="text-[18px]" />Registrado automáticamente ({res.ia?.lecturas} lecturas iguales de la IA, cita verificada en el documento)</p>
           {res.registrados.map((e, i) => (
-            <div key={i}><b>{TIPO_EVENTO[e.tipo_evento] || e.tipo_evento}</b> · {e.subtipo} · {fmt(e.fecha_evento)}
+            <div key={i}><b>{TIPO_EVENTO[e.tipo_evento] || e.tipo_evento}</b> · {e.subtipo} · {fmtHace(e.fecha_evento, fecha)}
+              {e.fecha_en_documento === false && <span className="text-ambar text-[12px]"> (el documento no dice la fecha: se usó la de hoy)</span>}
               {e.motivo && <span> · motivo: {e.motivo}</span>}
               {e.relacionado === false && <span className="ml-1 text-[12px] rounded bg-surface-container-low px-1">sin relación con su diagnóstico: no cambia su prioridad</span>}
               <blockquote className="border-l-4 border-hlf px-2 italic text-[13px]">“{e.cita}”</blockquote></div>
@@ -177,7 +180,7 @@ export function Informe({ p, fecha, cargando, onConfirmar, onAviso, onRegistrado
               <label key={i} className={`flex items-start gap-2 rounded p-1.5 cursor-pointer ${i === elegido ? "bg-primary/10" : "hover:bg-surface-container-low"}`}>
                 {eventos.length > 1 && <input type="radio" checked={i === elegido} onChange={() => setElegido(i)} className="mt-1" />}
                 <span>
-                  <b>{TIPO_EVENTO[e.tipo_evento]}</b> · {e.subtipo} · {fmt(e.fecha_evento)}
+                  <b>{TIPO_EVENTO[e.tipo_evento]}</b> · {e.subtipo} · {fmtHace(e.fecha_evento, fecha)}
                   {!e.fecha_en_documento && <span className="text-ambar text-[12px]"> (fecha no encontrada: verificar)</span>}
                   {(e.detectado_por === "bedrock" || e.detectado_por === "ia") && <span className="ml-1 text-[11px] rounded bg-tertiary-fixed text-on-tertiary-fixed-variant px-1">leído por IA</span>}
                 </span>
@@ -185,6 +188,12 @@ export function Informe({ p, fecha, cargando, onConfirmar, onAviso, onRegistrado
             ))}
           </div>
           <blockquote className="border-l-4 border-ambar bg-ambar-container/40 px-2 py-1 italic">“{ev.evidencia}”</blockquote>
+          <label className="flex flex-wrap items-center gap-2 text-[13px]">
+            <span className={ev.fecha_en_documento ? "text-on-surface-variant" : "text-ambar font-semibold"}>
+              {ev.fecha_en_documento ? "¿Cuándo ocurrió?" : "El documento no dice cuándo ocurrió. Indique la fecha:"}</span>
+            <input type="date" value={fechaEv} max={fecha} onChange={(e) => setFechaEv(e.target.value)} className="h-8 px-2 border border-outline-variant rounded" />
+            {fechaEv && <span className="text-on-surface-variant">{fmtHace(fechaEv, fecha).split(" (")[1]?.replace(")", "")}</span>}
+          </label>
           <div className="flex items-center gap-2"><span className="text-on-surface-variant">Prioridad:</span><Prioridad cat={res.categoria_actual} /><span>→</span><Prioridad cat={ev.categoria_propuesta} /></div>
           {ev.razones_propuestas?.map((r, i) => <div key={i} className="text-[13px] text-on-surface-variant">{r.valor} · {r.fuente}</div>)}
           <label className={`flex items-start gap-2 rounded p-2 text-[13px] ${bloqueado ? "opacity-50" : "bg-surface-container-low"}`}>
@@ -192,7 +201,7 @@ export function Informe({ p, fecha, cargando, onConfirmar, onAviso, onRegistrado
             <span>Confirmo que el documento corresponde a <b>{p.nombre_fantasia}</b> ({p.id_paciente}) y que el evento está bien leído.</span>
           </label>
           <div className="flex gap-2 pt-1">
-            <button disabled={cargando || !esDelPaciente || bloqueado} onClick={async () => { await onConfirmar({ ...ev, detalle: `Informe: ${ev.evidencia}` }); setRes(null); setTexto(""); }}
+            <button disabled={cargando || !esDelPaciente || bloqueado || !fechaEv} onClick={async () => { await onConfirmar({ ...ev, fecha_evento: fechaEv || ev.fecha_evento, detalle: `Informe: ${ev.evidencia}` }); setRes(null); setTexto(""); }}
               className="flex-1 py-2 rounded bg-primary text-on-primary font-semibold disabled:opacity-40">Confirmar y actualizar lista</button>
             <button onClick={() => setRes(null)} className="flex-1 py-2 rounded border border-outline-variant font-semibold">Descartar</button>
           </div>

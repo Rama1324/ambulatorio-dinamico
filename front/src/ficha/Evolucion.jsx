@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import * as api from "../api";
 import { Icono } from "../componentes/comunes";
 import { COLOR_HEX, ETIQUETA, TIPO_EVENTO } from "../constantes";
-import { fmt } from "../util";
+import { fmt, fmtHace } from "../util";
 
 // Carga la historia de un paciente (posición/categoría en el tiempo), dibuja el gráfico
 // y explica en detalle qué eventos hicieron subir su prioridad / posición en la lista.
@@ -29,7 +29,7 @@ export function EvolucionPaciente({ p, fecha }) {
   const pasos = [];
   pasos.push({ icon: "flag", t: "Prioridad inicial", v: `${ETIQUETA[p.prioridad_inicial] || p.prioridad_inicial}`, d: "Asignada por el especialista al priorizar la interconsulta (SIC)." });
   for (const e of eventosGraves) {
-    pasos.push({ icon: "emergency", rojo: true, t: `${TIPO_EVENTO[e.tipo_evento] || e.tipo_evento || "Evento clínico"}${e.fecha_evento ? ` · ${fmt(e.fecha_evento)}` : ""}`,
+    pasos.push({ icon: "emergency", rojo: true, t: `${TIPO_EVENTO[e.tipo_evento] || e.tipo_evento || "Evento clínico"}${e.fecha_evento ? ` · ${fmtHace(e.fecha_evento, fecha)}` : ""}`,
       v: e.subtipo || "Descompensación", d: "Evento clínico registrado después de la interconsulta: es lo que gatilló la reevaluación." });
   }
   if (eventosGraves.length === 0 && rz.evento) {
@@ -65,7 +65,7 @@ export function EvolucionPaciente({ p, fecha }) {
       <div>
         <h4 className="text-[13px] font-semibold mb-2 flex items-center gap-1"><Icono n="trending_up" className="text-[18px]" />Por qué cambió su lugar en la lista</h4>
         {delta > 0
-          ? <p className="text-[13px] mb-2">Subió <b className="text-error">{delta} puesto{delta !== 1 ? "s" : ""}</b> (de N° {p.posicion_anterior} a N° {p.posicion}){eventosGraves[0] ? <> por {TIPO_EVENTO[eventosGraves[0].tipo_evento]?.toLowerCase() || "un evento clínico"} del {fmt(eventosGraves[0].fecha_evento)}.</> : "."}</p>
+          ? <p className="text-[13px] mb-2">Subió <b className="text-error">{delta} puesto{delta !== 1 ? "s" : ""}</b> (de N° {p.posicion_anterior} a N° {p.posicion}){eventosGraves[0] ? <> por {TIPO_EVENTO[eventosGraves[0].tipo_evento]?.toLowerCase() || "un evento clínico"} del {fmtHace(eventosGraves[0].fecha_evento, fecha)}.</> : "."}</p>
           : p.estado_clinico === "descompensado"
             ? <p className="text-[13px] mb-2">Está en <b className="text-error">prioridad {ETIQUETA[p.categoria].toLowerCase()}</b> por una descompensación registrada después de la interconsulta.</p>
             : <p className="text-[13px] mb-2 text-on-surface-variant">Mantiene su prioridad {ETIQUETA[p.categoria].toLowerCase()}; su lugar sigue el orden oficial de la lista.</p>}

@@ -3,7 +3,7 @@ import * as api from "../api";
 import { descargarExcel } from "../excel";
 import { Caja, Icono } from "../componentes/comunes";
 import { ESPECIALIDADES, ETIQUETA, EVAL_TXT } from "../constantes";
-import { fmt } from "../util";
+import { fmt, fmtHace } from "../util";
 
 // Pestaña "Alertas pendientes": descompensaciones graves cuya prioridad debe revisar el especialista, y quienes se
 // descompensaron sin regla que defina cuánto suben (no se mueven solos: se avisa al especialista).
@@ -70,7 +70,7 @@ export function Alertas({ vitales, todosPacientes, fecha, esp, setEsp, onVer, on
                       <b>{p.nombre_fantasia}</b> <span className="text-on-surface-variant text-[13px]">· {p.edad} años · {p.especialidad} · {p.diagnostico_texto}</span>
                     </button>
                     {p.evaluacion && <div className="text-[12px] font-semibold text-on-surface-variant">
-                      Evento grave del {fmt(p.evaluacion.fecha_evento)} · en el sistema desde el {fmt(p.evaluacion.llego_al_sistema)} ({p.evaluacion.dias_en_revision} día{p.evaluacion.dias_en_revision !== 1 ? "s" : ""})</div>}
+                      Evento grave del {fmtHace(p.evaluacion.fecha_evento, fecha)} · en el sistema desde el {fmt(p.evaluacion.llego_al_sistema)} ({p.evaluacion.dias_en_revision} día{p.evaluacion.dias_en_revision !== 1 ? "s" : ""})</div>}
                     {p.contacto?.intentos_sin_respuesta > 0 && <div className="text-[12px] text-ambar font-semibold">{p.contacto.intentos_sin_respuesta} intento{p.contacto.intentos_sin_respuesta > 1 ? "s" : ""} sin respuesta{p.contacto.intentos_sin_respuesta >= 3 ? ": evaluar visita domiciliaria o derivación" : ""}</div>}
                     {p.contacto?.resultado === "contactado" && <div className="text-[12px] text-on-surface-variant">Informado por teléfono: falta la decisión médica.</div>}
                     <div className="flex flex-wrap items-center gap-1 mt-1.5 text-[12px]">

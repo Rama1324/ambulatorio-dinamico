@@ -4,7 +4,7 @@ import * as api from "../api";
 import { descargarExcel } from "../excel";
 import { Filtro, Icono, Prioridad } from "../componentes/comunes";
 import { ESPECIALIDADES, ETIQUETA, ESTILO_GESTION, EVAL_TXT, FACTOR } from "../constantes";
-import { fmt } from "../util";
+import { fmt, fmtHace, hace } from "../util";
 
 const POR_PAGINA = 25;
 
@@ -128,8 +128,9 @@ export function ListaDetallada({ data, fecha, esp, setEsp, filtros, setFiltros, 
                     <div className="text-[13px] text-on-surface-variant">{p.diagnostico_cie10} {p.diagnostico_texto}</div>
                     <div className="flex flex-wrap gap-1 mt-0.5">
                       {p.urgencia_hoy && <Marca tono="rojo" title="Cumple una excepción de urgencia de los criterios clínicos: no debe esperar cita electiva">Derivar hoy a urgencia</Marca>}
-                      {p.contactar_hoy && p.riesgo_vital && <Marca tono="rojo" title={`Descompensación grave del ${fmt(p.evaluacion?.fecha_evento)}: el especialista debe revisar su prioridad`}>
+                      {p.contactar_hoy && p.riesgo_vital && <Marca tono="rojo" title={`Descompensación grave del ${fmtHace(p.evaluacion?.fecha_evento, fecha)}: el especialista debe revisar su prioridad`}>
                         Revisar prioridad</Marca>}
+                      {p.riesgo_vital && p.evaluacion?.fecha_evento && <span className="text-[12px] text-error font-semibold self-center">evento grave {hace(p.evaluacion.fecha_evento, fecha)}</span>}
                       {p.riesgo_vital && !p.contactar_hoy && <Marca tono="azul" title={p.evaluacion?.cierre?.texto}>Prioridad revisada</Marca>}
                       {!p.riesgo_vital && p.estado_clinico === "descompensado" && <Marca tono="rojo">Descompensado</Marca>}
                       {p.ajuste_manual && <Marca tono="azul" title={`${p.ajuste_manual.motivo_texto}: ${p.ajuste_manual.explicacion} (${p.ajuste_manual.usuario})`}>Ajuste manual</Marca>}

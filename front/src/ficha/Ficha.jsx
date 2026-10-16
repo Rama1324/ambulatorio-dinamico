@@ -5,7 +5,7 @@ import { ESTILO_GESTION, ETIQUETA, FACTOR, TIPO_EVENTO } from "../constantes";
 import { AjusteManual, Contacto, DecisionClinica, GestionCaso, Novedad } from "./Acciones";
 import { EvolucionPaciente } from "./Evolucion";
 import { Informe } from "./Informe";
-import { fmt } from "../util";
+import { fmt, fmtHace, hace } from "../util";
 
 const EVENTOS = {
   urgencia: { label: "Consulta en urgencia (ESI 2)", tipo_evento: "visita_urgencia", subtipo: "triage ESI 2", severidad: "grave" },
@@ -45,7 +45,7 @@ export function Ficha({ p, total, detalle, fecha, demo, onCambio, onAviso, onDes
   const pedirResumen = () => correr("ia", async () => setResumen(await api.postExplicar(p.id_paciente, fecha)));
 
   const timeline = detalle ? [
-    ...detalle.eventos_clinicos.map((e) => ({ f: e.fecha_evento, t: `${TIPO_EVENTO[e.tipo_evento] || e.tipo_evento}: ${e.subtipo}`, d: e.detalle?.startsWith("Informe") ? e.detalle : null, rojo: e.severidad === "grave", nuevo: e.id_evento?.startsWith("EV-DEMO") })),
+    ...detalle.eventos_clinicos.map((e) => ({ f: e.fecha_evento, t: `${TIPO_EVENTO[e.tipo_evento] || e.tipo_evento}: ${e.subtipo}`, d: [e.detalle?.startsWith("Informe") ? e.detalle : null, e.fecha_en_documento === false ? "el documento no decía la fecha: se registró con la del día en que se leyó" : null].filter(Boolean).join(" · ") || null, rojo: e.severidad === "grave", nuevo: e.id_evento?.startsWith("EV-DEMO") })),
     ...detalle.mediciones.map((m) => ({ f: m.fecha_medicion, t: `${m.tipo_medicion.replace("_", " ")}: ${m.valor} ${m.unidad}`, d: m.fuera_de_rango ? "fuera de rango" : null, ambar: m.fuera_de_rango })),
     ...(detalle.citaciones || []).map((c) => ({ f: c.fecha_cita, t: `Citación ${c.id_box}: ${c.estado_cita.replace("_", " ")}`, ambar: c.estado_cita === "no_asistio" })),
     { f: p.fecha_ingreso_lista, t: "Ingreso de la interconsulta", d: `prioridad inicial ${p.prioridad_inicial}` },
@@ -66,7 +66,7 @@ export function Ficha({ p, total, detalle, fecha, demo, onCambio, onAviso, onDes
         {p.urgencia_cerrada && <div className="mt-3 p-2.5 rounded bg-hlf-claro text-hlf text-[14px] flex gap-2"><Icono n="task_alt" className="text-[20px]" /><span>
           <b>Urgencia revisada</b>{p.urgencia_cerrada.responsable && ` por ${p.urgencia_cerrada.responsable}`}: sale del carril de urgencia y sigue en prioridad alta.</span></div>}
         {p.contactar_hoy && p.riesgo_vital && <div className="mt-3 p-2.5 rounded bg-error-container text-on-error-container text-[14px] flex gap-2"><Icono n="call" className="text-[20px]" /><span>
-          <b>Descompensación grave: revisar su prioridad.</b> Evento del {fmt(p.evaluacion?.fecha_evento)}, en el sistema desde el {fmt(p.evaluacion?.llego_al_sistema)}.
+          <b>Descompensación grave: revisar su prioridad.</b> Evento del {fmtHace(p.evaluacion?.fecha_evento, fecha)}, en el sistema desde el {fmt(p.evaluacion?.llego_al_sistema)}.
           {" "}No hay registro posterior de estabilización ni de evaluación; el especialista decide.</span></div>}
         {p.riesgo_vital && !p.contactar_hoy && p.evaluacion?.cierre && <div className="mt-3 p-2.5 rounded bg-hlf-claro text-hlf text-[14px] flex gap-2"><Icono n="task_alt" className="text-[20px]" /><span>
           <b>Prioridad revisada: {p.evaluacion.cierre.texto}</b>{p.evaluacion.cierre.responsable && ` · ${p.evaluacion.cierre.responsable}`}{p.decision?.seguimiento && ` · seguimiento ${fmt(p.decision.seguimiento)}`}</span></div>}
@@ -198,8 +198,8 @@ export function Ficha({ p, total, detalle, fecha, demo, onCambio, onAviso, onDes
       {tab === "historia" && <Caja titulo="Historia mientras espera">
         <ol className="text-[14px]">
           {timeline.map((x, i) => (
-            <li key={i} className={`grid grid-cols-[88px_1fr] gap-2 py-1.5 border-b border-outline-variant/50 ${x.nuevo ? "bg-ambar-container/50" : ""}`}>
-              <span className="text-on-surface-variant text-[13px]">{fmt(x.f)}</span>
+            <li key={i} className={`grid grid-cols-[96px_1fr] gap-2 py-1.5 border-b border-outline-variant/50 ${x.nuevo ? "bg-ambar-container/50" : ""}`}>
+              <span className="text-on-surface-variant text-[13px] leading-tight">{fmt(x.f)}<br /><span className="text-[11px]">{hace(x.f, fecha)}</span></span>
               <span className={x.rojo ? "text-error font-semibold" : x.ambar ? "text-ambar" : ""}>{x.t}{x.d && <span className="text-on-surface-variant font-normal"> · {x.d}</span>}</span>
             </li>
           ))}
