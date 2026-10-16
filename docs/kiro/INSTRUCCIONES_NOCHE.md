@@ -7,6 +7,33 @@ cuando un paciente empeora. El equipo revisa tu trabajo a las **08:00** y el cie
 **Tu trabajo es investigar y producir información, no programar el sistema.** Queremos el conjunto de criterios clínicos
 más completo y confiable posible para nuestras 7 especialidades, con pruebas que demuestren que funcionan.
 
+## Lo más importante: no inventes nada
+
+Esta información se usa para decidir a qué paciente se atiende primero. **Un dato inventado es peor que un dato que
+falta.** Por eso:
+
+1. **Todo lo que escribas debe venir de una fuente que abriste y leíste esta noche.** No escribas criterios, cifras,
+   umbrales, citas, URLs, PMID ni DOI de memoria.
+2. **Para cada dato guarda la evidencia de que lo leíste:**
+   - `url`: la dirección exacta de la página;
+   - `cita`: el fragmento copiado tal cual, en el idioma original;
+   - `fecha_consulta`: la fecha y hora en que lo leíste;
+   - `ubicacion`: la sección, página, tabla o párrafo.
+
+   Sin esos cuatro campos, el dato no se acepta.
+3. **`"estado": "verificado"` solo si la cita está textual en la página que abriste.** Si el dato viene de un documento
+   que cita a otro y no abriste el original, usa `"guia_citada"` e indica cuál es el original.
+4. **Si no tienes acceso a internet o no pudiste abrir una fuente, no la uses.** Escríbelo al inicio del informe:
+   "sin acceso web: nada de esto está verificado". En ese caso, entrega solo la lista de preguntas y fuentes por revisar,
+   no criterios.
+5. **Antes de dar por buena una URL, comprueba que abre y que trae la cita.** Antes de dar por bueno un PMID o DOI,
+   comprueba en PubMed o doi.org que el título y los autores coinciden con lo que afirmas.
+6. **No completes huecos con "lo razonable".** Si una guía no define el nivel medio de una enfermedad, déjalo vacío y
+   anótalo. No traduzcas de forma que cambie el sentido: si hay duda, deja también la frase original.
+7. **Si encuentras que algo de lo que ya tenemos está mal o no tiene sustento, dilo en el informe**, con la fuente.
+
+Al final, revisa una muestra al azar de 20 datos tuyos, vuelve a abrir sus fuentes y reporta cuántos estaban bien.
+
 ## Lee primero
 
 - `docs/CRITERIO_PRIORIZACION.md`: qué buscamos, cómo decide hoy el sistema y de dónde sale cada regla. **Léelo completo.**
@@ -49,9 +76,9 @@ con fuente comprobable:
    - guías de sociedades científicas (ESC, GOLD, GINA, ADA, AASLD, ILAE, APA, AAOS…);
    - artículos revisados por pares con **PMID o DOI**.
 
-   Cada dato lleva **URL y cita textual**. Marca `"estado": "verificado"` solo si leíste la cita en la fuente original;
-   si viene de una fuente secundaria, usa `"guia_citada"`. **No inventes nada.** Si no encuentras fuente, no lo agregues y
-   anótalo como pregunta para un médico. No uses blogs, Wikipedia ni sitios comerciales como fuente final.
+   Cada dato lleva **URL, cita textual, fecha de consulta y ubicación** (ver "No inventes nada"). Si no encuentras fuente,
+   no lo agregues y anótalo como pregunta para un médico. No uses blogs, Wikipedia, sitios comerciales ni respuestas de
+   otras IA como fuente.
 4. **Las reglas solo pueden subir la prioridad o marcar urgencia. Nunca bajar.** Un criterio de "baja" sirve solo como referencia.
 5. **No uses datos de pacientes.** El registro (`data/perfiles.json`) es sintético y no debe salir a ningún servicio
    externo. No ajustes pesos ni "aprendas" con esos datos, porque aprenderías los patrones del generador sintético.
@@ -63,7 +90,10 @@ con fuente comprobable:
 
 ## Método (repítelo para cada criterio)
 
-1. **Investigar:** busca el criterio en la fuente oficial y copia la frase exacta con su URL.
+0. **Casos primero:** antes de escribir la regla, escribe los casos de prueba a partir de ejemplos o viñetas de la propia
+   guía, o de su texto. Aparta un 30 % de los casos en `tests/kiro/casos_reservados.json` y **no los mires al ajustar las
+   reglas**: al final se miden solo una vez. Así las pruebas no son circulares (tú escribes la regla y también los casos).
+1. **Investigar:** busca el criterio en la fuente oficial y copia la frase exacta con su URL, fecha de consulta y ubicación.
 2. **Contrastar con lo que ya tenemos:** compáralo con `criterios_registro.json`, la tabla del HLF y
    `combinaciones_riesgo.json`.
    - Si coincide, anótalo como "confirma".
@@ -141,12 +171,13 @@ derivación. Empieza por los de prioridad alta. Prefiere pocos criterios bien he
 
 ### T5. Informe completo
 Archivo: `docs/kiro/INFORME_NOCHE.md`. Debe incluir:
+- **Al inicio:** si tuviste acceso web, cuántas fuentes abriste y el resultado de la revisión de la muestra de 20 datos.
 - **Resumen** en 10 líneas: qué encontraste, cuánto mejora y qué recomiendas integrar antes de las 10:15.
 - **Por especialidad:** enfermedades y síntomas cubiertos, criterios nuevos, fuentes y qué confirma, complementa o
   contradice lo actual.
 - **Banderas rojas, combinaciones, letalidad y ventanas,** con sus fuentes.
 - **Resultados de las pruebas,** con números: casos, aciertos, falsos positivos, falsos negativos, clasificaciones más
-  bajas de lo debido, y comparación con lo actual.
+  bajas de lo debido, y comparación con lo actual. Reporta aparte el resultado en los **casos reservados**.
 - **Lista de fuentes** con URL, marcando cuáles verificaste en el original.
 - **Preguntas abiertas para médicos del HLF.**
 - **Qué no recomiendas integrar** y por qué.
@@ -163,7 +194,16 @@ sistema lea las banderas rojas y los criterios nuevos) lo hace el equipo, no tú
 - La inasistencia, la comuna, la previsión o el nivel socioeconómico **nunca** pueden cambiar la prioridad clínica.
 - No conviertas el GES en una regla de orden: hoy el cálculo de plazos GES es aproximado. Anótalo como propuesta.
 
-## Horario
+## Horario (con tope por tarea)
 
-Trabaja por bloques y haz commit en tu rama al terminar cada tarea, para no perder avance. Detente a las **07:45**, corre
-todas las pruebas (las actuales y las tuyas) y deja el informe listo.
+Es mejor terminar bien lo primero que dejar todo a medias.
+
+| Bloque | Tarea |
+|---|---|
+| Primeros 90 min | T1, banderas rojas: es lo único que el equipo alcanza a integrar antes de las 10:15. |
+| Siguientes 90 min | T2, solo los diagnósticos de **prioridad alta** de cada especialidad. |
+| Siguientes 60 min | T3 y T4: pruebas, medición y comparación con lo actual. |
+| Últimos 30 min | T5 (informe) y revisión de la muestra de 20 datos. |
+
+Si sobra tiempo, sigue con los diagnósticos de prioridad media y baja. **Haz commit en tu rama cada hora** con un mensaje
+claro. Detente a las **07:45**, corre todas las pruebas (las actuales y las tuyas) y deja el informe listo.
