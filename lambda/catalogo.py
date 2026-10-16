@@ -56,6 +56,8 @@ def catalogo():
     vistos = {}
     for p in perfiles_combinados()[0].values():
         le = p["lista_espera"]
+        if le["diagnostico_cie10"] in puntaje.tabla_hlf():
+            continue  # paciente ingresado con una fila de la tabla: esa fila ya está abajo (no duplicar)
         vistos[le["diagnostico_cie10"]] = {"especialidad": le["especialidad"], "sub_especialidad": le["sub_especialidad"],
                                           "diagnostico_cie10": le["diagnostico_cie10"], "diagnostico_texto": le["diagnostico_texto"]}
     registro = sorted(vistos.values(), key=lambda d: (d["especialidad"], d["diagnostico_cie10"]))

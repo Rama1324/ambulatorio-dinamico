@@ -297,9 +297,8 @@ def historia(pid, corte, especialidad=None):
     if pid not in perfs:
         return None
     if especialidad:
+        especialidad = perfs[pid]["lista_espera"]["especialidad"]  # siempre la del paciente (el filtro pudo cambiar a otra)
         perfs = {k: v for k, v in perfs.items() if v["lista_espera"]["especialidad"] == especialidad}
-        if pid not in perfs:
-            return None
     fechas, f = [], corte - timedelta(days=14 * 14)  # últimas 28 semanas
     while f < corte:
         fechas.append(f); f += timedelta(days=14)

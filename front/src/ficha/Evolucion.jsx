@@ -12,7 +12,8 @@ export function EvolucionPaciente({ p, fecha, esp }) {
   useEffect(() => {
     let vivo = true;
     setH(null); setErr(null);
-    api.getHistoria(p.id_paciente, fecha, esp).then((r) => { if (vivo) setH(r); }).catch((e) => { if (vivo) setErr(e.message); });
+    // puestos dentro de la especialidad del paciente (aunque el filtro de arriba haya cambiado a otra)
+    api.getHistoria(p.id_paciente, fecha, esp && esp !== "Todas" ? p.especialidad : esp).then((r) => { if (vivo) setH(r); }).catch((e) => { if (vivo) setErr(e.message); });
     return () => { vivo = false; };
   }, [p.id_paciente, fecha, esp, p.posicion, p.categoria]);  // un evento nuevo cambia el puesto: se vuelve a pedir la historia
 

@@ -694,3 +694,14 @@ def test_diagnosticos_de_la_tabla_usan_los_criterios_de_su_enfermedad():
     assert e["paciente"]["categoria"] == "alta"
     e = hospitalizar("HLF-TRA-12")                          # quiste de Baker: sin fila más grave → misma prioridad, sube y se revisa
     assert e["paciente"]["categoria"] == "baja" and e["posicion_despues"] < e["posicion_antes"] and cat["HLF-TRA-12"]["si_empeora"] is None
+
+def test_historia_con_filtro_de_otra_especialidad_no_falla():
+    """Ficha abierta de Salud Mental y filtro cambiado a Cardiología: el historial usa la especialidad del paciente."""
+    s, h = call("GET", "/pacientes/PAC-HLF-00053/historia", {"fecha_corte": "2026-10-13", "especialidad": "Cardiología"})
+    s2, h2 = call("GET", "/pacientes/PAC-HLF-00053/historia", {"fecha_corte": "2026-10-13", "especialidad": "Salud Mental"})
+    assert s == s2 == 200 and h == h2
+
+def test_catalogo_sin_duplicados_tras_ingresar_con_fila_de_la_tabla():
+    call("POST", "/pacientes", body={"nombre": "Dup", "edad": 50, "sexo": "F", "diagnostico_cie10": "HLF-GAS-16", "prioridad_inicial": "media", "usuario": "t"})
+    cods = [d["diagnostico_cie10"] for d in call("GET", "/catalogo")[1]["diagnosticos"]]
+    assert len(cods) == len(set(cods)) == 191
