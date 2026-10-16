@@ -7,22 +7,48 @@ import { EvolucionPaciente } from "./Evolucion";
 import { Informe } from "./Informe";
 import { fmt, fmtHace, hace } from "../util";
 
-const EVENTOS = {
-  urgencia: { label: "Consulta en urgencia (ESI 2)", tipo_evento: "visita_urgencia", subtipo: "triage ESI 2", severidad: "grave" },
-  hospitalizacion: { label: "Hospitalización", tipo_evento: "hospitalizacion", subtipo: "ingreso hospitalario", severidad: "grave" },
-  examen: { label: "Examen alterado", tipo_evento: "examen_alterado", subtipo: "resultado alterado", severidad: "moderada" },
-  mejora: { label: "Buena respuesta en APS", tipo_evento: "control_aps", subtipo: "buena respuesta", severidad: "leve" },
-  leve: { label: "Urgencia leve (ESI 4-5): dolor de dedo", tipo_evento: "visita_urgencia", subtipo: "triage ESI 4-5", severidad: "leve",
-    motivo_clinico: "dolor de dedo tras golpe", relacionado: false },
-  ajena: { label: "Hospitalización sin relación: amputación traumática", tipo_evento: "hospitalizacion", subtipo: "ingreso hospitalario", severidad: "grave",
-    motivo_clinico: "amputación traumática de pierna (accidente)", relacionado: false },
+// Simulación (modo demostración): eventos con un motivo clínico propio de la enfermedad del paciente, más dos sin relación
+// con ella (apendicitis, esguince) que NO deben subirlo. La gravedad la pone el vocabulario del registro, no esta lista.
+const ev = (label, tipo_evento, subtipo, motivo_clinico, extra = {}) => ({ label, tipo_evento, subtipo, motivo_clinico, ...extra });
+const SIMULABLES = {
+  I20: [ev("Urgencia por dolor torácico en reposo (sospecha de angina inestable)", "visita_urgencia", "triage ESI 2", "dolor torácico opresivo en reposo"),
+    ev("Hospitalización por angina inestable", "hospitalizacion", "ingreso hospitalario", "angina inestable")],
+  I50: [ev("Hospitalización por insuficiencia cardíaca descompensada (edema pulmonar)", "hospitalizacion", "ingreso hospitalario", "insuficiencia cardíaca descompensada con edema pulmonar"),
+    ev("Urgencia por disnea de reposo y edema", "visita_urgencia", "triage ESI 2", "disnea de reposo y edema de extremidades")],
+  I10: [ev("Urgencia por crisis hipertensiva con cefalea intensa", "visita_urgencia", "triage ESI 2", "crisis hipertensiva con cefalea intensa")],
+  J44: [ev("Hospitalización por exacerbación grave de EPOC", "hospitalizacion", "ingreso hospitalario", "exacerbación grave de EPOC"),
+    ev("UCI por insuficiencia respiratoria (exacerbación de EPOC)", "hospitalizacion", "ingreso UCI", "insuficiencia respiratoria por exacerbación de EPOC")],
+  J45: [ev("Urgencia por crisis asmática grave", "visita_urgencia", "triage ESI 2", "crisis asmática grave"),
+    ev("UCI por crisis asmática con insuficiencia respiratoria", "hospitalizacion", "ingreso UCI", "crisis asmática con insuficiencia respiratoria")],
+  K70: [ev("Hospitalización por hemorragia digestiva (várices esofágicas)", "hospitalizacion", "ingreso hospitalario", "hemorragia digestiva por várices esofágicas")],
+  K21: [ev("Urgencia por dolor epigástrico y vómitos persistentes", "visita_urgencia", "descompensación", "reflujo con dolor epigástrico y vómitos persistentes")],
+  E11: [ev("Urgencia por hiperglicemia grave (descompensación diabética)", "visita_urgencia", "triage ESI 2", "descompensación diabética con hiperglicemia grave")],
+  E03: [ev("Urgencia por hipotiroidismo descompensado (letargia, bradicardia)", "visita_urgencia", "descompensación grave", "hipotiroidismo descompensado con letargia y bradicardia")],
+  G40: [ev("Urgencia por crisis convulsiva prolongada", "visita_urgencia", "triage ESI 2", "crisis convulsiva prolongada")],
+  G43: [ev("Urgencia por migraña refractaria al tratamiento", "visita_urgencia", "descompensación", "migraña refractaria al tratamiento")],
+  F32: [ev("Urgencia por intento de suicidio", "visita_urgencia", "triage ESI 2", "intento de suicidio por intoxicación con fármacos")],
+  F41: [ev("Urgencia por crisis de pánico", "visita_urgencia", "descompensación", "crisis de pánico")],
+  M17: [ev("Urgencia por dolor de rodilla que impide caminar", "visita_urgencia", "descompensación", "gonartrosis con dolor que impide la marcha")],
+  M54: [ev("Urgencia por lumbago con debilidad de las piernas", "visita_urgencia", "triage ESI 2", "lumbago con debilidad progresiva de las piernas")],
+  M75: [ev("Urgencia por dolor de hombro que impide moverlo", "visita_urgencia", "descompensación", "dolor de hombro que impide la movilidad")],
 };
+const SIN_RELACION = [
+  ev("Hospitalización por apendicitis (sin relación con su enfermedad)", "hospitalizacion", "ingreso hospitalario", "apendicitis aguda", { relacionado: false }),
+  ev("Urgencia leve por esguince de tobillo (sin relación)", "visita_urgencia", "triage ESI 4-5", "esguince de tobillo", { relacionado: false }),
+  ev("Control en APS: buena respuesta al tratamiento", "control_aps", "buena respuesta", null),
+];
+function eventosSimulables(p) {
+  const propios = SIMULABLES[p.diagnostico_cie10] || [
+    ev(`Hospitalización por descompensación de ${p.diagnostico_texto.toLowerCase()}`, "hospitalizacion", "ingreso hospitalario", `descompensación de ${p.diagnostico_texto.toLowerCase()}`)];
+  return [...propios, ...SIN_RELACION];
+}
 
 export function Ficha({ p, total, detalle, fecha, demo, esp, onCambio, onAviso, onDestacar, onVer }) {
   const [resumen, setResumen] = useState(null);
   const [cargando, setCargando] = useState(null);
   const [ajuste, setAjuste] = useState(null);
-  const [tipoEv, setTipoEv] = useState("hospitalizacion");
+  const [tipoEv, setTipoEv] = useState(0);
+  const simulables = eventosSimulables(p);
   const [resultado, setResultado] = useState(null);  // qué pasó con el último evento registrado desde la ficha
   useEffect(() => { setResumen(null); }, [p.categoria, p.estado_clinico, fecha]);
 
@@ -52,7 +78,7 @@ export function Ficha({ p, total, detalle, fecha, demo, esp, onCambio, onAviso, 
   // avisos que piden mirar algo; "prioridad ajustada por tabla HLF" no es aviso: es el motivo por el que ya subió (ver Fundamento)
   const avisos = [...new Set((p.revision_sugerida || []).map((s) => s.motivo).filter((m) => !m.includes("prioridad ajustada")))];
   const timeline = detalle ? [
-    ...detalle.eventos_clinicos.map((e) => ({ f: e.fecha_evento, t: `${TIPO_EVENTO[e.tipo_evento] || e.tipo_evento}: ${e.subtipo}`, d: [e.detalle?.startsWith("Informe") ? e.detalle : null, e.fecha_en_documento === false ? "el documento no decía la fecha: se registró con la del día en que se leyó" : null].filter(Boolean).join(" · ") || null, rojo: e.severidad === "grave", nuevo: e.id_evento?.startsWith("EV-DEMO") })),
+    ...detalle.eventos_clinicos.map((e) => ({ f: e.fecha_evento, t: `${TIPO_EVENTO[e.tipo_evento] || e.tipo_evento}: ${e.subtipo}`, d: [e.motivo ? `motivo: ${e.motivo}${e.relacionado === false ? " (sin relación con su enfermedad)" : ""}` : null, e.detalle?.startsWith("Informe") ? e.detalle : null, e.fecha_en_documento === false ? "el documento no decía la fecha: se registró con la del día en que se leyó" : null].filter(Boolean).join(" · ") || null, rojo: e.severidad === "grave", nuevo: e.id_evento?.startsWith("EV-DEMO") })),
     ...detalle.mediciones.map((m) => ({ f: m.fecha_medicion, t: `${m.tipo_medicion.replace("_", " ")}: ${m.valor} ${m.unidad}`, d: m.fuera_de_rango ? "fuera de rango" : null, ambar: m.fuera_de_rango })),
     ...(detalle.citaciones || []).map((c) => ({ f: c.fecha_cita, t: `Citación ${c.id_box}: ${c.estado_cita.replace("_", " ")}`, ambar: c.estado_cita === "no_asistio" })),
     { f: p.fecha_ingreso_lista, t: "Ingreso de la interconsulta", d: `prioridad inicial ${p.prioridad_inicial}` },
@@ -153,7 +179,7 @@ export function Ficha({ p, total, detalle, fecha, demo, esp, onCambio, onAviso, 
       </Caja>
       <details className="bg-surface-container-lowest border border-outline-variant rounded px-4 py-2.5 text-[14px]">
         <summary className="cursor-pointer font-semibold text-[15px]">Puntaje LACE (experimental)</summary>
-        <p className="text-[12px] text-on-surface-variant mt-1 mb-2">Solo desempata dentro de la misma prioridad cuando el sistema usa las reglas; con el algoritmo de IA no entra al orden.</p>
+        <p className="text-[12px] text-on-surface-variant mt-1 mb-2">Solo desempata a pacientes igual de graves, antes de los días de espera: a igual gravedad, quien se hospitalizó o fue a urgencia más veces en los últimos 6 meses va antes. Experimental: el registro no trae los días de estada.</p>
         <BoletaLace lace={p.lace} />
       </details>
       </>}
@@ -184,10 +210,10 @@ export function Ficha({ p, total, detalle, fecha, demo, esp, onCambio, onAviso, 
           {demo && (
             <Caja titulo="Simular evento (demostración)" className="border-ambar/50">
               <div className="flex flex-wrap gap-2">
-                <select value={tipoEv} onChange={(e) => setTipoEv(e.target.value)} className="flex-1 min-w-0 h-9 px-2 border border-outline-variant rounded bg-surface-container-lowest">
-                  {Object.entries(EVENTOS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                <select value={tipoEv} onChange={(e) => setTipoEv(+e.target.value)} className="flex-1 min-w-0 h-9 px-2 border border-outline-variant rounded bg-surface-container-lowest">
+                  {simulables.map((v, i) => <option key={i} value={i}>{v.label}</option>)}
                 </select>
-                <button onClick={() => registrarEvento(EVENTOS[tipoEv], "Evento simulado")} disabled={cargando} className="shrink-0 h-9 px-4 rounded bg-ambar text-background font-semibold disabled:opacity-50">Simular</button>
+                <button onClick={() => registrarEvento({ ...simulables[tipoEv], detalle: `Evento simulado: ${simulables[tipoEv].label}` }, "Evento simulado")} disabled={cargando} className="shrink-0 h-9 px-4 rounded bg-ambar text-background font-semibold disabled:opacity-50">Simular</button>
               </div>
             </Caja>
           )}

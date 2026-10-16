@@ -219,7 +219,7 @@ def lista(corte, especialidad=None, perfs=None, revs=None):
         p["posicion"] = i
         por_esp[p["especialidad"]] = por_esp.get(p["especialidad"], 0) + 1
         p["posicion_especialidad"] = por_esp[p["especialidad"]]
-    vecinos.agregar(pacientes, con_lace=not rubrica_activa)  # por qué va antes o después de sus vecinos
+    vecinos.agregar(pacientes, con_lace=True)  # por qué va antes o después de sus vecinos (el LACE desempata en ambos modos)
     exc = [{"id_paciente": r["id_paciente"], "motivo": r["motivo"], "fecha": r.get("fecha"),
             "nombre_fantasia": perfs[r["id_paciente"]]["paciente"].get("nombre_fantasia"),
             "especialidad": perfs[r["id_paciente"]]["lista_espera"].get("especialidad"),

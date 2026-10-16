@@ -33,7 +33,8 @@ export const EVAL_TXT = { pendiente: "Aviso abierto", evaluada: "Visto por espec
 export const COLOR_HEX = { alta: "rgb(var(--c-error))", media: "rgb(var(--c-ambar))", baja: "rgb(var(--c-verde))" };
 
 // La única descripción del orden de la lista (la misma que aplica el motor: puntaje.clave_orden / decisor.clave_orden_536).
-// Con el algoritmo de IA (rúbrica) el LACE no entra al orden.
-export const ordenLista = (ia) => "Orden (MINSAL Ord. 536/2025): prioridad → «derivar hoy» → descompensación grave → mortalidad del cuadro → " +
-  `gravedad del último evento → descompensado → grupo de especial protección → más de 1 año esperando → ${ia ? "" : "LACE (desempate experimental) → "}días de espera.`;
+// El LACE (hospitalizaciones y urgencias recientes) desempata en ambos modos, antes de los días de espera.
+export const ordenLista = () => "Orden (MINSAL Ord. 536/2025): prioridad → «derivar hoy» → descompensación grave → mortalidad del cuadro → " +
+  "gravedad del último evento → descompensado → grupo de especial protección → más de 1 año esperando → " +
+  "reingresos y urgencias recientes (índice LACE, desempate) → días de espera.";
 export const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;

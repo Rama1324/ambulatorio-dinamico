@@ -130,7 +130,10 @@ def charlson(perfil):
 def indice_lace(perfil, corte):
     """Devuelve el desglose LACE con los eventos con fecha ≤ corte."""
     desde = corte.toordinal() - LACE_VENTANA_DIAS
-    evs = [e for e in perfil.get("eventos_clinicos", []) if desde <= d(e["fecha_evento"]).toordinal() <= corte.toordinal()]
+    # sin los eventos que no tienen relación con su enfermedad ni las urgencias leves (ESI 4-5): igual que en el resto del
+    # sistema, una apendicitis o un esguince no adelantan a nadie en la lista
+    evs = [e for e in perfil.get("eventos_clinicos", []) if desde <= d(e["fecha_evento"]).toordinal() <= corte.toordinal()
+           and not no_relacionado(e) and e.get("severidad") != "leve"]
     hosp = [e for e in evs if e["tipo_evento"] == "hospitalizacion"]
     urg = sum(1 for e in evs if e["tipo_evento"] == "visita_urgencia")
     total_c, conds = charlson(perfil)

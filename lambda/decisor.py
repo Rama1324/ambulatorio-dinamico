@@ -10,7 +10,8 @@ PubMed). Reglas:
   (¿hay una descompensación?, ¿hay un control de estabilización posterior?), que es un hecho y no un juicio clínico.
 - El LLM no decide qué es una descompensación: el código comprueba en el registro que el evento citado lo sea, que la
   estabilización sea posterior y que la medición realmente empeore (usa los valores registrados, no los del LLM).
-- Orden: cascada del Ord. 536 (criterio médico → grupo de especial protección → antigüedad > 1 año → llegada). Sin LACE.
+- Orden: cascada del Ord. 536 (criterio médico → grupo de especial protección → antigüedad > 1 año → llegada), con el LACE
+  (hospitalizaciones y urgencias recientes) como desempate antes de la llegada, igual que en el modo de reglas.
 """
 import json
 import os
@@ -223,8 +224,9 @@ def decidir(perfil, resp, corte, kb):
 
 def clave_orden_536(r):
     """Ord. MINSAL 536/2025: criterio médico (categoría, descompensación grave y cualquier descompensación vigente) →
-    grupo de especial protección → antigüedad > 1 año → orden de llegada. Sin LACE. El criterio médico va antes que el
+    grupo de especial protección → antigüedad > 1 año → LACE (reingresos y urgencias recientes: a igual gravedad, quien volvió a
+    hospitalizarse va antes) → orden de llegada. El criterio médico va antes que el
     grupo de protección: un paciente descompensado no puede quedar bajo uno estable de la misma prioridad."""
     return (-ORDEN_CAT[r["categoria"]], not r.get("urgencia_hoy"), not r.get("riesgo_vital"), r.get("letalidad", 9), -r.get("agudeza", 0),
             r.get("estado_clinico") != "descompensado", not r.get("grupo_proteccion"),
-            not (r["dias_espera"] > DIAS_ANTIGUEDAD), -r["dias_espera"], r["id_paciente"])
+            not (r["dias_espera"] > DIAS_ANTIGUEDAD), -((r.get("lace") or {}).get("total") or 0), -r["dias_espera"], r["id_paciente"])

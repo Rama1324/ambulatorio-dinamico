@@ -666,3 +666,12 @@ def test_carril_ges_con_plazos_oficiales_verificados():
     assert puntaje.GES_ESPECIALISTA["HLF-SME-01"][:3] == (15, "Esquizofrenia", 20)               # fila de la tabla HLF
     assert "alto riesgo" in puntaje.GES_DETALLE[38]["condicion"]                                 # EPOC: condición de la garantía
     assert "HLF-END-04" not in puntaje.GES_ESPECIALISTA                                          # diabetes gestacional: no es GES N°7
+
+def test_evento_sin_relacion_no_adelanta_ni_por_desempate():
+    L = call("GET", "/pacientes", {"especialidad": "Cardiología"})[1]["pacientes"]
+    p = next(x for x in L if x["diagnostico_cie10"] == "I20" and x["categoria"] == "baja" and x["estado_clinico"] != "descompensado")
+    for sub, tipo, extra in (("ingreso hospitalario", "hospitalizacion", {"motivo": "apendicitis aguda", "relacionado": False}),
+                             ("triage ESI 4-5", "visita_urgencia", {"motivo": "esguince de tobillo", "relacionado": False})):
+        s, r = call("POST", "/eventos", body={"id_paciente": p["id_paciente"], "tipo_evento": tipo, "subtipo": sub, "especialidad": "Cardiología",
+                                              "usuario": "Dr. Prueba", **extra})
+        assert s == 200 and r["paciente"]["categoria"] == "baja" and r["posicion_despues"] == r["posicion_antes"], (sub, r["posicion_antes"], r["posicion_despues"])

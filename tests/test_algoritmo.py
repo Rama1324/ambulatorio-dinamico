@@ -219,11 +219,13 @@ def test_medicion_sube_solo_con_umbral_con_fuente_y_si_el_registro_lo_confirma()
     assert dec("PAC-HLF-00296", cita_valor="9,5 %")["categoria"] == "alta"   # un número mal escrito por el LLM no rompe nada (usa el registro)
 
 
-# ---------- R: orden Ord. 536 sin LACE ----------
-def test_orden_536_no_usa_lace():
+# ---------- R: orden Ord. 536 con LACE como desempate antes de la llegada ----------
+def test_orden_536_desempata_por_lace_antes_que_por_dias():
     a = {"id_paciente": "A", "categoria": "media", "riesgo_vital": False, "grupo_proteccion": None, "dias_espera": 200, "lace": {"total": 9}}
     b = {"id_paciente": "B", "categoria": "media", "riesgo_vital": False, "grupo_proteccion": None, "dias_espera": 300, "lace": {"total": 0}}
-    assert sorted([a, b], key=decisor.clave_orden_536)[0]["id_paciente"] == "B"     # más días esperando primero, LACE no cuenta
+    assert sorted([a, b], key=decisor.clave_orden_536)[0]["id_paciente"] == "A"     # reingresos recientes antes que más días
+    c = {**b, "id_paciente": "C", "dias_espera": 400}                                                    # pero más de 1 año esperando va antes que el LACE
+    assert sorted([a, c], key=decisor.clave_orden_536)[0]["id_paciente"] == "C"
 
 
 # ---------- R: base de conocimiento auditable ----------
