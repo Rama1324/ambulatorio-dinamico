@@ -15,15 +15,21 @@ function validarRut(valor) {
   return dv === esperado ? `${Number(cuerpo).toLocaleString("es-CL")}-${dv}` : null;
 }
 
-export function NuevoPaciente({ fecha, onCerrar, onListo }) {
+export function NuevoPaciente({ fecha, esp, onCerrar, onListo }) {
   const [cat, setCat] = useState(null);
-  const [f, setF] = useState({ nombre: "", rut: "", edad: "", sexo: "F", comuna: "La Florida", prevision: "FONASA B", especialidad: "", diagnostico_cie10: "", prioridad_inicial: "media", origen_derivacion: "CESFAM/APS", grupo_proteccion: "", acg: "", motivo_interconsulta: "" });
+  const [f, setF] = useState({ nombre: "", rut: "", edad: "", sexo: "F", comuna: "La Florida", prevision: "FONASA B", especialidad: esp && esp !== "Todas" ? esp : "", diagnostico_cie10: "", prioridad_inicial: "media", origen_derivacion: "CESFAM/APS", grupo_proteccion: "", acg: "", motivo_interconsulta: "" });
   const [error, setError] = useState(null);
   const [enviando, setEnviando] = useState(false);
   useEffect(() => { api.getCatalogo().then(setCat).catch((e) => setError(e.message)); }, []);
-  const set = (k) => (e) => setF({ ...f, [k]: e.target.value, ...(k === "especialidad" ? { diagnostico_cie10: "" } : {}) });
+  const set = (k) => (e) => {
+    const v = e.target.value, dx = k === "diagnostico_cie10" ? cat?.diagnosticos.find((d) => d.diagnostico_cie10 === v) : null;
+    setF({ ...f, [k]: v, ...(k === "especialidad" ? { diagnostico_cie10: "" } : {}), ...(dx?.prioridad_tabla ? { prioridad_inicial: dx.prioridad_tabla } : {}) });
+  };
   const especialidades = cat ? [...new Set(cat.diagnosticos.map((d) => d.especialidad))] : [];
   const dxs = cat ? cat.diagnosticos.filter((d) => d.especialidad === f.especialidad) : [];
+  const elegido = dxs.find((d) => d.diagnostico_cie10 === f.diagnostico_cie10);
+  const grupos = [["Con pacientes en el registro (CIE-10)", dxs.filter((d) => !d.prioridad_tabla)],
+    ...["alta", "media", "baja"].map((c) => [`Tabla oficial HLF · prioridad ${ETIQUETA[c].toLowerCase()}`, dxs.filter((d) => d.prioridad_tabla === c)])].filter(([, l]) => l.length);
   const rutOk = validarRut(f.rut);
   const rutMal = f.rut.trim() !== "" && !rutOk;
   const valido = f.nombre.trim() && f.edad !== "" && f.diagnostico_cie10 && !rutMal;
@@ -55,7 +61,11 @@ export function NuevoPaciente({ fecha, onCerrar, onListo }) {
           <Filtro label="Comuna"><select value={f.comuna} onChange={set("comuna")} className={campo}>{cat?.comunas.map((c) => <option key={c}>{c}</option>)}</select></Filtro>
           <Filtro label="Previsión"><select value={f.prevision} onChange={set("prevision")} className={campo}>{cat?.previsiones.map((c) => <option key={c}>{c}</option>)}</select></Filtro>
           <Filtro label="Especialidad"><select value={f.especialidad} onChange={set("especialidad")} className={campo}><option value="">Seleccione…</option>{especialidades.map((e) => <option key={e}>{e}</option>)}</select></Filtro>
-          <Filtro label="Diagnóstico (CIE-10)"><select value={f.diagnostico_cie10} onChange={set("diagnostico_cie10")} disabled={!f.especialidad} className={campo}><option value="">Seleccione…</option>{dxs.map((d) => <option key={d.diagnostico_cie10} value={d.diagnostico_cie10}>{d.diagnostico_cie10} · {d.diagnostico_texto}</option>)}</select></Filtro>
+          <Filtro label="Diagnóstico o síntoma"><select value={f.diagnostico_cie10} onChange={set("diagnostico_cie10")} disabled={!f.especialidad} className={campo}><option value="">Seleccione…</option>
+            {grupos.map(([t, l]) => <optgroup key={t} label={t}>{l.map((d) => <option key={d.diagnostico_cie10} value={d.diagnostico_cie10}>{d.prioridad_tabla ? d.diagnostico_texto : `${d.diagnostico_cie10} · ${d.diagnostico_texto}`}</option>)}</optgroup>)}
+          </select>
+            {elegido?.prioridad_tabla && <span className="text-[12px] text-on-surface-variant">Tabla SSMSO 2025, HLF, pág. {elegido.pagina}: prioridad {ETIQUETA[elegido.prioridad_tabla].toLowerCase()}. Puede subirla; el sistema no la deja más abajo.</span>}
+          </Filtro>
           <Filtro label="Prioridad asignada al revisar la SIC">
             <div className="flex gap-1">{["alta", "media", "baja"].map((c) => (
               <button key={c} type="button" onClick={() => setF({ ...f, prioridad_inicial: c })} className={`flex-1 h-9 rounded border font-semibold ${f.prioridad_inicial === c ? COLOR_CAT[c] : "border-outline-variant text-on-surface-variant"}`}>{ETIQUETA[c]}</button>
@@ -64,7 +74,7 @@ export function NuevoPaciente({ fecha, onCerrar, onListo }) {
           <Filtro label="Origen de la derivación"><select value={f.origen_derivacion} onChange={set("origen_derivacion")} className={campo}>{cat?.origenes.map((c) => <option key={c}>{c}</option>)}</select></Filtro>
           <Filtro label="Grupo de especial protección"><select value={f.grupo_proteccion} onChange={set("grupo_proteccion")} className={campo}><option value="">Ninguno</option>{cat?.grupos_proteccion.map((g) => <option key={g}>{g}</option>)}</select></Filtro>
           <div className="col-span-2"><Filtro label="Motivo de la interconsulta (lo que escribió quien deriva)">
-            <textarea rows={3} value={f.motivo_interconsulta} onChange={set("motivo_interconsulta")} placeholder="Ej.: Hipoacusia súbita de oído izquierdo de 24 horas de evolución."
+            <textarea rows={3} value={f.motivo_interconsulta} onChange={set("motivo_interconsulta")} placeholder="Ej.: Disnea de esfuerzo progresiva y edema de extremidades inferiores desde hace 2 semanas."
               className="w-full p-2 border border-outline-variant rounded bg-surface-container-lowest text-[14px]" />
             <span className="text-[12px] text-on-surface-variant">Si la IA está activa y la enfermedad tiene criterios clínicos, se lee con ellos: puede subir la prioridad o marcar "derivar hoy a urgencia". Nunca la baja.</span>
           </Filtro></div>

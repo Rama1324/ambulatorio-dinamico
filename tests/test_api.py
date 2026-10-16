@@ -197,6 +197,21 @@ def test_cada_paciente_explica_su_lugar_frente_a_sus_vecinos():
     c = alta_media["comparacion"]["abajo"]
     assert c["criterio"] == "prioridad clínica" and c["clinico"] and c["este"].startswith("prioridad alta")
 
+def test_diagnostico_de_la_tabla_oficial_fija_el_piso_de_prioridad():
+    cat = {d["diagnostico_texto"]: d for d in call("GET", "/catalogo")[1]["diagnosticos"]}
+    fa = cat["Fibrilación auricular no controlada"]
+    assert fa["especialidad"] == "Cardiología" and fa["prioridad_tabla"] == "alta" and fa["pagina"] == 85
+    s, r = call("POST", "/pacientes", body={"nombre": "Tabla HLF", "edad": 72, "sexo": "F", "diagnostico_cie10": fa["diagnostico_cie10"],
+                                            "prioridad_inicial": "baja", "fecha_corte": "2026-10-13"})
+    p = r["paciente"]
+    assert s == 200 and p["categoria"] == "alta" and p["especialidad"] == "Cardiología"
+    assert any(x["factor"] == "tabla_oficial" and "Fibrilación auricular no controlada" in x["valor"] and "pág. 85" in x["fuente"] for x in p["razones"])
+    # una fila baja no baja a quien el especialista puso más arriba
+    baja = cat["Hallazgo ECG incidental"]
+    s, r = call("POST", "/pacientes", body={"nombre": "Tabla HLF 2", "edad": 50, "sexo": "M", "diagnostico_cie10": baja["diagnostico_cie10"],
+                                            "prioridad_inicial": "media", "fecha_corte": "2026-10-13"})
+    assert r["paciente"]["categoria"] == "media"
+
 def test_entrada_mal_formada_da_400():
     assert call("GET", "/pacientes", {"fecha_corte": "hola"})[0] == 400
     assert call("GET", "/kpis", {"fecha_corte": "2026-13-45"})[0] == 400

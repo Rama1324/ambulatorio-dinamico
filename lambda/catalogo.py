@@ -48,7 +48,12 @@ def catalogo():
         le = p["lista_espera"]
         vistos[le["diagnostico_cie10"]] = {"especialidad": le["especialidad"], "sub_especialidad": le["sub_especialidad"],
                                           "diagnostico_cie10": le["diagnostico_cie10"], "diagnostico_texto": le["diagnostico_texto"]}
-    return {"diagnosticos": sorted(vistos.values(), key=lambda d: (d["especialidad"], d["diagnostico_cie10"])),
+    registro = sorted(vistos.values(), key=lambda d: (d["especialidad"], d["diagnostico_cie10"]))
+    # más todos los diagnósticos y síntomas de la tabla oficial del HLF para esas mismas especialidades (código HLF-…)
+    tabla = [{"especialidad": x["especialidad"], "sub_especialidad": x["especialidad"], "diagnostico_cie10": x["codigo"],
+              "diagnostico_texto": x["texto"], "prioridad_tabla": x["prioridad"], "pagina": x["pagina"], "origen": "tabla_hlf"}
+             for x in puntaje.tabla_hlf().values() if x["especialidad"] in {d["especialidad"] for d in registro}]
+    return {"diagnosticos": registro + tabla,
             "comunas": sorted({p["paciente"]["comuna"] for p in perfiles().values()}),
             "previsiones": sorted({p["paciente"]["prevision"] for p in perfiles().values()}),
             "origenes": sorted({p["lista_espera"]["origen_derivacion"] for p in perfiles().values()}),

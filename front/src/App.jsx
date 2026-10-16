@@ -32,7 +32,7 @@ export default function App() {
   const [demo, setDemo] = useState(false);
   const [iFechaSel, setIFecha] = useState(null);
   const iFecha = iFechaSel ?? fechas.length - 1;
-  const [esp, setEsp] = useState("Todas");
+  const [esp, setEsp] = useState("Cardiología");  // los especialistas atienden por especialidad: se parte en Cardiología
   const [vista, setVista] = useState("simple");  // página principal: la lista de espera simple, como una planilla
   const [data, setData] = useState(null);
   const [sel, setSel] = useState(null);
@@ -58,7 +58,7 @@ export default function App() {
     api.getPaciente(sel, fecha).then(setDetalle).catch(() => setDetalle(null));
   }, [sel, fecha, data]);
   // los indicadores de arriba abren la lista detallada con un filtro puesto
-  const verLista = (filtro = {}) => { setFiltros({ ...FILTROS_VACIOS, ...filtro }); setEsp("Todas"); setVista("lista"); };
+  const verLista = (filtro = {}) => { setFiltros({ ...FILTROS_VACIOS, ...filtro }); setVista("lista"); };
 
   const mostrarAviso = (a) => { setAviso(a); setTimeout(() => setAviso(null), 6000); };
   const abrir = (id) => { setSel(id); setVista("lista"); };
@@ -174,8 +174,8 @@ export default function App() {
             <div className={`${paciente ? "lg:col-span-7 xl:col-span-8" : "lg:col-span-12"} flex flex-col gap-4`}>
               <ListaDetallada data={data} fecha={fecha} esp={esp} setEsp={setEsp} filtros={filtros} setFiltros={setFiltros} sel={sel} setSel={setSel}
                 destacado={destacado} demo={demo} actualizando={actualizando} onIngresar={() => setNuevo(true)}>
-                {nuevo && <NuevoPaciente fecha={fecha} onCerrar={() => setNuevo(false)} onListo={async (r) => {
-                  setNuevo(false); setFiltros(FILTROS_VACIOS); setEsp("Todas"); await cargar(); setSel(r.id_paciente);
+                {nuevo && <NuevoPaciente fecha={fecha} esp={esp} onCerrar={() => setNuevo(false)} onListo={async (r) => {
+                  setNuevo(false); setFiltros(FILTROS_VACIOS); setEsp(r.paciente?.especialidad || esp); await cargar(); setSel(r.id_paciente);
                   mostrarAviso({ titulo: `${r.paciente?.nombre_fantasia} ingresado a la lista` + (r.criterio?.urgencia ? " · DERIVAR HOY A URGENCIA" : r.criterio?.nivel ? ` · criterio clínico: ${r.criterio.nivel}` : ""),
                     despues: r.paciente?.posicion, antes: "—", cat: r.paciente?.categoria });
                 }} />}
@@ -184,7 +184,7 @@ export default function App() {
 
             {paciente && <aside className="lg:col-span-5 xl:col-span-4 lg:sticky lg:top-4 flex flex-col gap-3 [&>*]:shrink-0 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto lg:overflow-x-hidden" aria-label="Detalle del paciente" id="ficha">
               <button onClick={() => setSel(null)} className="self-end text-[13px] text-on-surface-variant hover:text-on-surface flex items-center gap-1"><Icono n="close" className="text-[18px]" />Cerrar detalle</button>
-              <Ficha key={paciente.id_paciente} p={paciente} total={data.total} detalle={detalle} fecha={fecha} demo={demo} onCambio={cargar} onAviso={mostrarAviso} onVer={setSel}
+              <Ficha key={paciente.id_paciente} p={paciente} total={data.total} detalle={detalle} fecha={fecha} demo={demo} esp={esp} onCambio={cargar} onAviso={mostrarAviso} onVer={setSel}
                 onDestacar={(id) => { setDestacado(id); setTimeout(() => setDestacado(null), 3000); }} />
             </aside>}
           </div>

@@ -19,7 +19,7 @@ Exclusión: causal 9 "fallecimiento" (Manual SSMSO, Anexo 4) desde fecha_defunci
 
 Uso: python puntaje.py perfiles.json [fecha_corte AAAA-MM-DD]
 """
-import json, sys
+import json, os, sys
 from datetime import date
 
 FUENTE_TABLA = "Tabla SSMSO 2025, HLF"
@@ -272,6 +272,15 @@ RIESGO_ESPERA = ("Esperar más del plazo aumenta el riesgo: en lista de espera c
                  "muertes porque esperaron más (OR 1,66; Sobolev 2006, PMID 16799363); en cáncer, cada 4 semanas de retraso eleva la "
                  "mortalidad 6–8% (Hanna 2020, PMID 33148535)")
 _REG = {}
+_TABLA = {}
+
+
+def tabla_hlf():
+    """Diagnósticos de la tabla oficial del HLF (SSMSO 2025, secciones de adulto de las 7 especialidades), por código HLF-…"""
+    if "por_codigo" not in _TABLA:
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "conocimiento", "diagnosticos_tabla_hlf.json"), encoding="utf-8") as f:
+            _TABLA["por_codigo"] = {x["codigo"]: x for x in json.load(f)["diagnosticos"]}
+    return _TABLA["por_codigo"]
 
 
 def criterios_registro():
@@ -420,6 +429,14 @@ def puntuar(perfil, corte):
         estado = "estabilizado"
 
     categoria = inicial
+    oficial = tabla_hlf().get(cie)  # diagnóstico elegido de la tabla oficial: su prioridad es el piso (nunca baja)
+    if oficial:
+        sube = ORDEN_CAT[oficial["prioridad"]] > ORDEN_CAT[categoria]
+        categoria = oficial["prioridad"] if sube else categoria
+        nota = "" if sube or oficial["prioridad"] == inicial else " (no supera la asignada por el especialista)"
+        razones.append({"factor": "tabla_oficial", "valor": f'"{oficial["texto"]}" → prioridad {oficial["prioridad"]}'
+                        f'{" (ALTA-URGENCIA en la tabla)" if oficial["urgencia"] else ""}{nota}',
+                        "fuente": f"{FUENTE_TABLA}, pág. {oficial['pagina']}"})
     fila = FILA_DESCOMPENSADO.get(cie)
     # Riesgo vital: descompensación grave sin estabilización posterior, en un diagnóstico cuya fila oficial es Alta.
     # MINSAL prioriza primero la "criticidad / riesgo vital" (Ord. C27 N°373/2021, citado en SSMSO 2025 pág. 4)

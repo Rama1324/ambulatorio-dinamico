@@ -18,7 +18,7 @@ const EVENTOS = {
     motivo_clinico: "amputación traumática de pierna (accidente)", relacionado: false },
 };
 
-export function Ficha({ p, total, detalle, fecha, demo, onCambio, onAviso, onDestacar, onVer }) {
+export function Ficha({ p, total, detalle, fecha, demo, esp, onCambio, onAviso, onDestacar, onVer }) {
   const [resumen, setResumen] = useState(null);
   const [cargando, setCargando] = useState(null);
   const [ajuste, setAjuste] = useState(null);
@@ -82,7 +82,7 @@ export function Ficha({ p, total, detalle, fecha, demo, onCambio, onAviso, onDes
           <dt className="text-on-surface-variant">Diagnóstico</dt><dd>{p.diagnostico_cie10} · {p.diagnostico_texto}</dd>
           <dt className="text-on-surface-variant">Ingreso a lista</dt><dd>{fmt(p.fecha_ingreso_lista)} ({p.dias_espera} días)</dd>
           <dt className="text-on-surface-variant">Prioridad inicial</dt><dd className="capitalize">{p.prioridad_inicial}</dd>
-          <dt className="text-on-surface-variant">N° en la lista</dt><dd>{p.posicion} de {total}</dd>
+          <dt className="text-on-surface-variant">N° en la lista</dt><dd>{p.posicion} de {total} {esp && esp !== "Todas" ? `en ${esp}` : "(todas las especialidades)"}</dd>
           <dt className="text-on-surface-variant">Prioridad</dt><dd><EstadoRevision p={p} /></dd>
           {p.gestion && <><dt className="text-on-surface-variant">Gestión</dt><dd><b className={ESTILO_GESTION[p.gestion.estado]}>{p.gestion.texto}</b>{p.gestion.motivo_texto && ` · ${p.gestion.motivo_texto}`}</dd>
             <dt className="text-on-surface-variant">Próxima acción</dt><dd>{p.gestion.proxima_accion}{p.gestion.seguimiento && <span className={p.gestion.seguimiento_vencido ? "text-error font-semibold" : ""}> · seguimiento {fmt(p.gestion.seguimiento)}{p.gestion.seguimiento_vencido && " (vencido)"}</span>}</dd>

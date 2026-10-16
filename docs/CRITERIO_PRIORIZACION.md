@@ -58,6 +58,19 @@ Consecuencias de este objetivo:
    excepciones de urgencia. Su origen no está confirmado: se usa **solo para subir**, nunca para bajar de lo que dice la
    tabla oficial.
 
+## 3b. Diagnósticos que se pueden ingresar (16-10-2026)
+Solo las **7 especialidades del registro** (Cardiología, Broncopulmonar, Gastroenterología, Endocrinología, Neurología,
+Salud Mental y Traumatología). Por especialidad se puede elegir:
+- los **17 diagnósticos CIE-10** que tienen pacientes en el registro;
+- los **176 diagnósticos y síntomas de la tabla oficial del HLF** para esas especialidades (SSMSO 2025, secciones de
+  adulto, págs. 85, 94–96, 103, 110 y 111; `lambda/conocimiento/diagnosticos_tabla_hlf.json`, códigos `HLF-…`).
+  La prioridad de cada fila se leyó con dos métodos independientes (orden del texto y color de la celda); coincidieron en
+  162 de 176 y las 14 diferencias se revisaron en la imagen de la página.
+  Al ingresar un paciente con una de esas filas, **la prioridad de la tabla es el piso**: si quien prioriza puso una
+  menor, el sistema la sube y lo explica con la página; si puso una mayor, se respeta.
+La lista se ve **por especialidad** (al entrar, Cardiología): el N° es el puesto dentro de esa especialidad y la
+comparación con los vecinos también. "Todas" queda como vista de coordinación.
+
 ## 4. Cómo decide hoy, paso a paso
 
 ### 4.1 Prioridad (alta / media / baja)

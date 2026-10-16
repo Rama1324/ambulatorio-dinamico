@@ -43,7 +43,9 @@ def test_json_completo_y_mapeado():
     registro = {"I50", "I20", "I10", "J44", "J45", "K70", "K21", "E11", "E03", "E66", "G40", "G43", "F32", "F41", "M17", "M54", "M75"}
     assert registro <= set(kb["por_cie"])                                 # los 17 diagnósticos del registro tienen criterios
     cat = app.catalogo()["diagnosticos"]
-    assert {d["diagnostico_cie10"] for d in cat} == registro                # solo se ingresan diagnósticos del registro del hospital
+    codigos = {d["diagnostico_cie10"] for d in cat}
+    assert registro <= codigos and all(c.startswith("HLF-") for c in codigos - registro)  # registro + tabla oficial del HLF
+    assert sum(c.startswith("HLF-") for c in codigos) == 176
     assert {d["especialidad"] for d in cat} == {"Cardiología", "Traumatología", "Endocrinología", "Salud Mental", "Broncopulmonar",
                                                 "Neurología", "Gastroenterología"}
     assert criterios.enfermedad_de("F32")["id"] == "psiquiatria_07"        # la depresión del registro usa sus criterios
