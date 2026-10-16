@@ -332,6 +332,10 @@ def post_explicar(pid, corte):
     d = detalle(pid, corte)
     if not d or not d["paciente"]:
         return 404, {"error": "paciente no está en la lista a esa fecha"}
+    # el riesgo con cifra y fuente sale de las reglas (con la rúbrica activa, las razones de la lista no lo traen)
+    reglas = puntaje.puntuar(perfiles_combinados()[0][pid], corte) or {}
+    d["riesgos"] = list(dict.fromkeys(r["riesgo"] for r in (d["paciente"].get("razones") or []) + (reglas.get("razones") or [])
+                                      if r.get("riesgo") and r.get("factor") != "plazo"))[:3]
     secciones, fuente = explicar.resumen_equipo(d, corte)
     texto = " ".join([secciones["en_pocas_palabras"], *secciones["mientras_esperaba"], secciones["por_que_importa"], *secciones["que_hacer"]])
     return 200, {"id_paciente": pid, "resumen": secciones, "explicacion_ia": texto + " Propuesta sujeta a validación clínica.", "fuente": fuente}

@@ -102,7 +102,7 @@ Reglas estrictas:
 - Responde SOLO un objeto JSON con estas claves:
   "en_pocas_palabras": 1 o 2 frases: quién es (edad, qué espera y desde cuándo) y cómo está hoy.
   "mientras_esperaba": lista de 1 a 5 frases, en orden de fecha, con lo que le pasó mientras esperaba, en palabras simples.
-  "por_que_importa": 1 o 2 frases con qué le puede pasar si sigue esperando, usando SOLO el campo "riesgo" de las razones (con su cifra y fuente). Si no hay riesgo en los datos, dilo.
+  "por_que_importa": 1 o 2 frases con qué le puede pasar si sigue esperando, usando SOLO "riesgos_conocidos" y "riesgo_de_esperar_mas_del_plazo" (con su cifra y fuente, explicadas en palabras simples). Si ambos están vacíos, dilo.
   "que_hacer": lista de 1 a 4 acciones concretas para el equipo, sacadas de los datos (próxima acción, contactar hoy, plazo, GES, inasistencias, revisión del especialista).
   "que_falta": lista de 0 a 3 datos que faltan o están por confirmar.
 """
@@ -129,8 +129,10 @@ def _datos_resumen(d, corte):
         "mediciones": [{"fecha": m["fecha_medicion"], "tipo": m["tipo_medicion"], "valor": m.get("valor"), "unidad": m.get("unidad"),
                         "fuera_de_rango": m.get("fuera_de_rango")} for m in meds],
         "citas": {"asistio": sum(c.get("estado_cita") == "asistio" for c in citas), "no_asistio": sum(c.get("estado_cita") == "no_asistio" for c in citas)},
-        "razones": [{"factor": r.get("factor"), "valor": r.get("valor"), "riesgo": r.get("riesgo"), "fuente": r.get("fuente")}
+        "razones": [{"factor": r.get("factor"), "valor": r.get("valor"), "fuente": r.get("fuente")}
                     for r in p.get("razones", []) if r.get("factor") != "lace"],
+        "riesgos_conocidos": d.get("riesgos") or [],
+        "riesgo_de_esperar_mas_del_plazo": "Esperar más que el plazo de referencia se asocia a más muertes en lista de espera (OR 1,66; Sobolev 2006, PMID 16799363)." if p.get("plazo_vencido") else None,
     }
 
 
@@ -162,9 +164,9 @@ def resumen_plantilla(d, corte):
     if not hechos:
         hechos.append("No hay eventos registrados desde que entró a la lista.")
     # el riesgo de su enfermedad primero; el de esperar más del plazo, solo en su primera frase (la general)
-    riesgos = list(dict.fromkeys(r["riesgo"] if r.get("factor") != "plazo" else
-                                 "Esperar más que el plazo de referencia se asocia a más muertes en lista de espera (OR 1,66; Sobolev 2006, PMID 16799363)."
-                                 for r in p.get("razones", []) if r.get("riesgo")))[:2]
+    riesgos = (d.get("riesgos") or [r["riesgo"] for r in p.get("razones", []) if r.get("riesgo") and r.get("factor") != "plazo"])[:1]
+    if p.get("plazo_vencido"):
+        riesgos.append("Esperar más que el plazo de referencia se asocia a más muertes en lista de espera (OR 1,66; Sobolev 2006, PMID 16799363).")
     importa = " ".join(riesgos) if riesgos else "No hay registrado un evento que aumente su riesgo mientras espera."
     hacer = []
     if p.get("urgencia_hoy"):
