@@ -5,7 +5,7 @@ import { Caja, Icono } from "../componentes/comunes";
 import { ESPECIALIDADES, ETIQUETA, EVAL_TXT } from "../constantes";
 import { fmt, fmtHace } from "../util";
 
-// Pestaña "Alertas pendientes": descompensaciones graves cuya prioridad debe revisar el especialista, y quienes se
+// Pestaña "Alertas pendientes": descompensaciones graves (prioridad ya actualizada) por contactar, y quienes se
 // descompensaron sin regla que defina cuánto suben (no se mueven solos: se avisa al especialista).
 export function Alertas({ vitales, todosPacientes, fecha, esp, setEsp, onVer, onCambio, onAviso }) {
   const [enviando, setEnviando] = useState(null);
@@ -49,18 +49,18 @@ export function Alertas({ vitales, todosPacientes, fecha, esp, setEsp, onVer, on
       <section className="rounded border border-primary/30 bg-primary/5 p-4 text-[15px] leading-relaxed">
         <b>Resumen del {fmt(fecha)}{esp !== "Todas" ? ` · ${esp}` : ""}:</b>{" "}
         {todos.length ? <>Hay <b>{todos.length} pacientes con descompensación grave</b>: <b className="text-hlf">{todos.length - pendientes.length} con la prioridad ya revisada</b>
-          {pendientes.length > 0 && <>, <b className="text-error">{pendientes.length} esperan revisión de su prioridad</b></>}.
-        </> : "No hay descompensaciones graves pendientes de revisión."}
+          {pendientes.length > 0 && <>, <b className="text-error">{pendientes.length} por contactar</b></>}. En todos, la prioridad ya se actualizó.
+        </> : "No hay descompensaciones graves por contactar."}
       </section>
 
       <div className="grid gap-5 lg:grid-cols-12 items-start">
-        <Caja titulo={`Descompensaciones graves: revisar prioridad (${pendientes.length})`} className="lg:col-span-7 border-l-4 border-l-error">
-          <p className="text-[13px] text-on-surface-variant mb-3">Tuvieron un evento grave después de la interconsulta y no hay registro posterior de estabilización ni de evaluación. La lista ya se recalculó al llegar el evento; falta que el especialista revise su prioridad. Llamar o citar no cierra la alerta.</p>
+        <Caja titulo={`Descompensaciones graves: contactar (${pendientes.length})`} className="lg:col-span-7 border-l-4 border-l-error">
+          <p className="text-[13px] text-on-surface-variant mb-3">Tuvieron un evento grave después de la interconsulta y no hay registro posterior de estabilización ni de evaluación. La lista ya se recalculó al llegar el evento: su prioridad está vigente. Queda el aviso para que el especialista lo vea. Llamar o citar no cierra la alerta.</p>
           {todos.length === 0 && <p className="text-on-surface-variant">Nadie pendiente{esp !== "Todas" && ` en ${esp}`}.</p>}
           {agrupar(pendientes).map(([nombreEsp, grupo]) => (
             <div key={nombreEsp} className="mb-3">
               <div className="flex flex-wrap items-baseline justify-between gap-2 bg-surface-container-low rounded px-2 py-1.5 text-[14px]">
-                <b>{nombreEsp} · {grupo.length} por revisar</b>
+                <b>{nombreEsp} · {grupo.length} por contactar</b>
               </div>
               <ul className="divide-y divide-outline-variant/60">
                 {grupo.map((p) => (
@@ -99,10 +99,10 @@ export function Alertas({ vitales, todosPacientes, fecha, esp, setEsp, onVer, on
 
         <Caja titulo={`Avisar al especialista (${aRevisar.length})`} className="lg:col-span-5 border-l-4 border-l-ambar">
           <p className="text-[13px] text-on-surface-variant mb-2">Se descompensaron después de la interconsulta, pero la tabla del HLF no define cuánto sube su prioridad. No se les cambia solo: el especialista debe revisarlos y confirmar o cambiar su prioridad.</p>
-          {aRevisar.length === 0 && <p className="text-[13px] text-on-surface-variant">Nadie pendiente de revisión{esp !== "Todas" && ` en ${esp}`}.</p>}
+          {aRevisar.length === 0 && <p className="text-[13px] text-on-surface-variant">Sin avisos{esp !== "Todas" && ` en ${esp}`}.</p>}
           {agrupar(aRevisar).map(([nombreEsp, grupo]) => (
             <details key={nombreEsp} open={esp !== "Todas"} className="border-t border-outline-variant/60">
-              <summary className="cursor-pointer py-1.5 text-[14px] font-semibold">{nombreEsp} · {grupo.length} para revisar</summary>
+              <summary className="cursor-pointer py-1.5 text-[14px] font-semibold">{nombreEsp} · {grupo.length} con aviso</summary>
               <ul className="divide-y divide-outline-variant/60 pl-3">
                 {grupo.map((p) => {
                   const ev = p.razones.find((r) => r.factor === "evento");

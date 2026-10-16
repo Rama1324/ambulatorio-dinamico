@@ -27,7 +27,7 @@ export const ESTILO_GESTION = { pendiente_revision: "text-ambar", pendiente_cont
 
 // Excel (.xlsx) de la lista tal como se está viendo (mismos filtros), con el fundamento de cada paciente,
 // los ajustes manuales, los egresados y los filtros usados. Ver src/excel.js.
-export const EVAL_TXT = { pendiente: "Pendiente de revisión", evaluada: "Revisada" };
+export const EVAL_TXT = { pendiente: "Aviso abierto", evaluada: "Visto por especialista" };
 
 // Colores por variable CSS: siguen el tema claro/oscuro (también dentro del gráfico SVG)
 export const COLOR_HEX = { alta: "rgb(var(--c-error))", media: "rgb(var(--c-ambar))", baja: "rgb(var(--c-verde))" };

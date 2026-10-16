@@ -169,7 +169,7 @@ export function GestionCaso({ p, fecha, onListo, onAviso }) {
   );
 }
 
-const ESTADO_ACCION = { pendiente_revision: "Revisar la prioridad (especialista)", pendiente_contacto: "Volver a llamar", pendiente_cita: "Buscar cupo y citar",
+const ESTADO_ACCION = { pendiente_revision: "Ver si corresponde cambiar la prioridad", pendiente_contacto: "Volver a llamar", pendiente_cita: "Buscar cupo y citar",
   cita_reservada: "Confirmar asistencia" };
 
 // Ajuste manual de la posición en la lista: siempre con un motivo previo, explicado y a nombre de quien lo hace.

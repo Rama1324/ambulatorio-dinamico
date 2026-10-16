@@ -53,6 +53,7 @@ Sin `fecha_corte`, la API usa `FECHA_REFERENCIA` (variable de entorno): `hoy` = 
 - `evaluacion` (solo si `riesgo_vital`): `{"estado", "dias_desde_evento", "fecha_evento", "plazo_dias": 3, "cierre": null | {"por", "texto", "responsable", "fecha"}}`.
 - `decision`: última decisión clínica o `null`. `contacto`: última llamada o `null` (con `intentos_sin_respuesta`).
 - `gestion`: `{estado (pendiente_revision · pendiente_contacto · pendiente_cita · cita_reservada · atendido), texto, proxima_accion, responsable, seguimiento, seguimiento_vencido, motivo_pendiente, motivo_texto, nota, actualizado_por, actualizado, reserva}`. El estado se calcula con lo registrado.
+  `pendiente_revision` (texto «Decisión del especialista») solo cuando el sistema no puede actuar solo: un evento nuevo después de una revisión o un ajuste manual, o la rúbrica sugiere **bajar**. Lo que el sistema sube rige al instante y queda en `pendiente_cita` (próxima acción «Contactar hoy y citar con prioridad» o «Citar con la nueva prioridad»).
 - `evaluacion` (descompensación grave): el plazo de 72 h es para **revisar la prioridad** y corre desde `llego_al_sistema` (registro en la app o `REGISTRO_AL` del registro cargado); `dias_en_revision`. Se cierra con decisión clínica, revisión o ajuste manual (llamar o citar no la cierran).
 - `prevision` del paciente.
 - `posicion_sistema` (orden de las reglas), `posicion` y `posicion_especialidad` (con ajustes manuales), `ajuste_manual` y `ajuste_manual_vencido`.

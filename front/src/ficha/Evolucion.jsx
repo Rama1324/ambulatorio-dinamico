@@ -40,7 +40,7 @@ export function EvolucionPaciente({ p, fecha }) {
       v: rz.tabla_oficial.valor.split("→").slice(-1)[0].trim(), d: `${rz.tabla_oficial.valor.split("→")[0].replaceAll('"', "").trim()} · Fuente: ${rz.tabla_oficial.fuente}` });
   }
   if (rz.riesgo_vital) {
-    pasos.push({ icon: "priority_high", rojo: true, t: "Descompensación grave", v: "El especialista debe revisar su prioridad", d: rz.riesgo_vital.fuente });
+    pasos.push({ icon: "priority_high", rojo: true, t: "Descompensación grave", v: "Prioridad actualizada: contactar al paciente", d: rz.riesgo_vital.fuente });
   }
   if (p.categoria_sistema && p.categoria !== p.categoria_sistema) pasos.push({ icon: "how_to_reg", t: "Decisión del equipo clínico",
     v: `Prioridad ${ETIQUETA[p.categoria].toLowerCase()} (el sistema proponía ${ETIQUETA[p.categoria_sistema].toLowerCase()})`, d: `${p.revision?.motivo || ""}${p.revision?.usuario ? ` · ${p.revision.usuario}` : ""}` });

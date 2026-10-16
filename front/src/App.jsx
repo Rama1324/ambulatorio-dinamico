@@ -153,9 +153,9 @@ export default function App() {
 
         {vista !== "simple" && vista !== "indicadores" && <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-5">
           <Indicador n={data.total} t="Pacientes en espera · ver todos" onClick={() => verLista()} />
-          <Indicador n={porContactar.length} t="Descompensación grave: revisar prioridad" tono={porContactar.length ? "rojo" : null} onClick={() => setVista("hoy")} />
+          <Indicador n={porContactar.length} t="Descompensación grave: contactar" tono={porContactar.length ? "rojo" : null} onClick={() => setVista("hoy")} />
           <Indicador n={altas} t="Prioridad alta" onClick={() => verLista({ cat: "alta" })} />
-          <Indicador n={pendientes} t="Pendientes de revisión del especialista" tono={pendientes ? "ambar" : null} onClick={() => verLista({ gestion: "pendiente_revision" })} />
+          <Indicador n={pendientes} t="Requieren decisión del especialista" tono={pendientes ? "ambar" : null} onClick={() => verLista({ gestion: "pendiente_revision" })} />
           <Indicador n={masDeUnAnio} t="Esperan más de 1 año" onClick={() => verLista({ esperaLarga: true })} />
           <Indicador n={gesVenc} t="GES: posible incumplimiento, verificar" onClick={() => verLista({ cat: "ges" })} />
         </div>}

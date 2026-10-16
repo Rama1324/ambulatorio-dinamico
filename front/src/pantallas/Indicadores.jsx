@@ -194,7 +194,7 @@ export function Indicadores({ fecha, data, esp, setEsp, onVer }) {
       ["Concordancia con el especialista", kap == null ? "Sin datos" : `kappa ${num(kap, 2)} · ${cc.acuerdo_pct}% de acuerdo · n = ${cc.revisiones}`, "kappa ≥ 0,70", "Prioridad propuesta vs. decisión del especialista"],
       ["Cobertura con criterio común", `${k.cobertura.pct}% (${k.cobertura.evaluados} de ${k.cobertura.en_espera})`, "100%", k.cobertura.criterio]] },
     { nombre: "Por especialidad", filas: [["Especialidad", "En espera", "Alta", "Media", "Baja", "Más de 1 año", "Más de 500 días", "Mediana (días)", "Máxima (días)",
-      "Descompensaciones graves", "Sin revisar", "Pendientes de revisión", "Sin responsable", "Egresos", "Atendidos", "Fallecidos"],
+      "Descompensaciones graves", "Sin revisar", "Decisión del especialista", "Sin responsable", "Egresos", "Atendidos", "Fallecidos"],
       ...[...k.por_especialidad, k.total_hospital].map((r) => [r.especialidad, r.en_espera, r.alta, r.media, r.baja, r.mas_de_1_anio, r.mas_de_500_dias,
         r.mediana_dias, r.maxima_dias, r.graves, r.graves_sin_revisar, r.pendientes_revision, r.sin_responsable, r.egresos, r.atendidos, r.fallecidos])] },
     { nombre: "Evolución", filas: [["Fecha", "En lista", "Alta", "Media", "Baja", "Descompensaciones graves", "Egresos acumulados", "Atendidos", "Fallecidos"],
@@ -204,7 +204,7 @@ export function Indicadores({ fecha, data, esp, setEsp, onVer }) {
     { nombre: "Mayores saltos", filas: [["Paciente", "RUT / ID", "Especialidad", "Diagnóstico", "N° anterior", "N° actual", "Subió", "Evento", "Fecha del evento"],
       ...subieron.map((p) => [p.nombre_fantasia, p.rut || p.id_paciente, p.especialidad, p.diagnostico_texto, p.posicion_anterior, p.posicion, p.salto,
         clasificarEvento(p.evento_causa) || "", fmt(p.evento_causa?.fecha_evento)])] },
-    { nombre: "Trabajo pendiente", filas: [["Indicador", "Valor"], ["Pendientes de revisión", tp.por_estado.pendiente_revision], ["Pendientes de contacto", tp.por_estado.pendiente_contacto],
+    { nombre: "Trabajo pendiente", filas: [["Indicador", "Valor"], ["Decisión del especialista", tp.por_estado.pendiente_revision], ["Pendientes de contacto", tp.por_estado.pendiente_contacto],
       ["Pendientes de cita", tp.por_estado.pendiente_cita], ["Con cita reservada", tp.por_estado.cita_reservada], ["Sin responsable", tp.sin_responsable],
       ["Seguimiento vencido", tp.seguimiento_vencido], ["Ajustes manuales vigentes", k.ajustes_manuales.vigentes], ["Ajustes sin efecto por evento nuevo", k.ajustes_manuales.sin_efecto_por_evento],
       ["Llamadas registradas", co.intentos], ["Llamadas con respuesta", co.efectivos], ["Egresos por fallecimiento (causal 9)", k.egresos.fallecidos], ["Atendidos en consulta nueva", k.egresos.atendidos]] },
@@ -370,7 +370,7 @@ export function Indicadores({ fecha, data, esp, setEsp, onVer }) {
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <Caja titulo="Gestión de los casos">
             <div className="text-[14px] space-y-1">
-              <Fila t="Pendientes de revisión" v={tp.por_estado.pendiente_revision} c="text-ambar" />
+              <Fila t="Decisión del especialista" v={tp.por_estado.pendiente_revision} c="text-ambar" />
               <Fila t="Pendientes de contacto" v={tp.por_estado.pendiente_contacto} />
               <Fila t="Pendientes de cita" v={tp.por_estado.pendiente_cita} />
               <Fila t="Con cita reservada" v={tp.por_estado.cita_reservada} c="text-hlf" />

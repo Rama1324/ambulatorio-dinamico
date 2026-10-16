@@ -178,6 +178,14 @@ def test_detalle():
     s, d = call("GET", "/pacientes/PAC-HLF-00001")
     assert s == 200 and d["mediciones"]
 
+def test_lo_que_sube_el_sistema_rige_sin_esperar_validacion():
+    d = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})[1]
+    p = fila(d, "PAC-HLF-00002")  # subió de baja a alta por urgencia + hospitalización
+    assert p["categoria"] == "alta" and p["gestion"]["estado"] == "pendiente_cita"
+    assert p["gestion"]["proxima_accion"] in ("Contactar hoy y citar con prioridad", "Citar con la nueva prioridad")
+    assert not any(x["gestion"]["estado"] == "pendiente_revision" and x["estado_revision"] == "pendiente" and not (x.get("rubrica") or {}).get("requiere_revision")
+                   for x in d["pacientes"])
+
 def test_entrada_mal_formada_da_400():
     assert call("GET", "/pacientes", {"fecha_corte": "hola"})[0] == 400
     assert call("GET", "/kpis", {"fecha_corte": "2026-13-45"})[0] == 400

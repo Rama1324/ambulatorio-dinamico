@@ -8,9 +8,9 @@ import { fmt, fmtHace, hace } from "../util";
 
 const POR_PAGINA = 25;
 
-const FILTRO_CAT = { todas: "Todas", alta: "Alta", media: "Media", baja: "Baja", vital: "Descompensación grave: revisar", ges: "GES: verificar plazo" };
+const FILTRO_CAT = { todas: "Todas", alta: "Alta", media: "Media", baja: "Baja", vital: "Descompensación grave", ges: "GES: verificar plazo" };
 
-const FILTRO_GESTION = { todos: "Todos", pendiente_revision: "Pendiente de revisión", pendiente_contacto: "Pendiente de contacto",
+const FILTRO_GESTION = { todos: "Todos", pendiente_revision: "Decisión del especialista", pendiente_contacto: "Pendiente de contacto",
   pendiente_cita: "Pendiente de cita", cita_reservada: "Cita reservada",
   sin_responsable: "Sin responsable", seguimiento_vencido: "Seguimiento vencido" };
 
@@ -19,9 +19,9 @@ function EstadoPrioridad({ p }) {
   const r = p.revision;
   if (p.estado_revision === "confirmado") return <div className="text-[11px] text-verde mt-0.5 whitespace-nowrap" title={r && `${r.usuario} · ${fmt(r.fecha)}`}>✓ confirmada</div>;
   if (p.estado_revision === "ajustado") return <div className="text-[11px] text-verde mt-0.5 whitespace-nowrap" title={r && `${r.usuario} · ${fmt(r.fecha)}: ${r.motivo}`}>✓ ajustada</div>;
-  if (p.estado_revision === "requiere_revision") return <div className="text-[11px] text-ambar mt-0.5 whitespace-nowrap">revisar de nuevo</div>;
+  if (p.estado_revision === "requiere_revision") return <div className="text-[11px] text-ambar mt-0.5 whitespace-nowrap">cambió tras la revisión</div>;
   return p.categoria_sistema !== p.prioridad_inicial
-    ? <div className="text-[11px] text-ambar mt-0.5 whitespace-nowrap" title={`La SIC tenía prioridad ${p.prioridad_inicial}`}>propuesta del sistema</div>
+    ? <div className="text-[11px] text-ambar mt-0.5 whitespace-nowrap" title={`La SIC tenía prioridad ${p.prioridad_inicial}. Rige desde ya; el especialista puede cambiarla.`}>actualizada por el sistema</div>
     : <div className="text-[11px] text-on-surface-variant mt-0.5 whitespace-nowrap">asignada en la SIC</div>;
 }
 
@@ -128,8 +128,8 @@ export function ListaDetallada({ data, fecha, esp, setEsp, filtros, setFiltros, 
                     <div className="text-[13px] text-on-surface-variant">{p.diagnostico_cie10} {p.diagnostico_texto}</div>
                     <div className="flex flex-wrap gap-1 mt-0.5">
                       {p.urgencia_hoy && <Marca tono="rojo" title="Cumple una excepción de urgencia de los criterios clínicos: no debe esperar cita electiva">Derivar hoy a urgencia</Marca>}
-                      {p.contactar_hoy && p.riesgo_vital && <Marca tono="rojo" title={`Descompensación grave del ${fmtHace(p.evaluacion?.fecha_evento, fecha)}: el especialista debe revisar su prioridad`}>
-                        Revisar prioridad</Marca>}
+                      {p.contactar_hoy && p.riesgo_vital && <Marca tono="rojo" title={`Descompensación grave del ${fmtHace(p.evaluacion?.fecha_evento, fecha)}: la prioridad ya se actualizó; contactar al paciente`}>
+                        Descompensación grave</Marca>}
                       {p.riesgo_vital && p.evaluacion?.fecha_evento && <span className="text-[12px] text-error font-semibold self-center">evento grave {hace(p.evaluacion.fecha_evento, fecha)}</span>}
                       {p.riesgo_vital && !p.contactar_hoy && <Marca tono="azul" title={p.evaluacion?.cierre?.texto}>Prioridad revisada</Marca>}
                       {!p.riesgo_vital && p.estado_clinico === "descompensado" && <Marca tono="rojo">Descompensado</Marca>}

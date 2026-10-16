@@ -31,7 +31,7 @@ MIN_EXPLICACION = 20
 
 
 ESTADOS_GESTION = {
-    "pendiente_revision": ("Pendiente de revisión", "Revisar la prioridad (especialista)"),
+    "pendiente_revision": ("Decisión del especialista", "Ver si corresponde cambiar la prioridad"),
     "pendiente_contacto": ("Pendiente de contacto", "Volver a llamar"),
     "pendiente_cita": ("Pendiente de cita", "Buscar cupo y citar"),
     "cita_reservada": ("Cita reservada", "Confirmar asistencia"),

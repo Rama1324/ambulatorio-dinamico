@@ -44,6 +44,8 @@ export function Ficha({ p, total, detalle, fecha, demo, onCambio, onAviso, onDes
   });
   const pedirResumen = () => correr("ia", async () => setResumen(await api.postExplicar(p.id_paciente, fecha)));
 
+  // avisos que piden mirar algo; "prioridad ajustada por tabla HLF" no es aviso: es el motivo por el que ya subió (ver Fundamento)
+  const avisos = [...new Set((p.revision_sugerida || []).map((s) => s.motivo).filter((m) => !m.includes("prioridad ajustada")))];
   const timeline = detalle ? [
     ...detalle.eventos_clinicos.map((e) => ({ f: e.fecha_evento, t: `${TIPO_EVENTO[e.tipo_evento] || e.tipo_evento}: ${e.subtipo}`, d: [e.detalle?.startsWith("Informe") ? e.detalle : null, e.fecha_en_documento === false ? "el documento no decía la fecha: se registró con la del día en que se leyó" : null].filter(Boolean).join(" · ") || null, rojo: e.severidad === "grave", nuevo: e.id_evento?.startsWith("EV-DEMO") })),
     ...detalle.mediciones.map((m) => ({ f: m.fecha_medicion, t: `${m.tipo_medicion.replace("_", " ")}: ${m.valor} ${m.unidad}`, d: m.fuera_de_rango ? "fuera de rango" : null, ambar: m.fuera_de_rango })),
@@ -66,12 +68,12 @@ export function Ficha({ p, total, detalle, fecha, demo, onCambio, onAviso, onDes
         {p.urgencia_cerrada && <div className="mt-3 p-2.5 rounded bg-hlf-claro text-hlf text-[14px] flex gap-2"><Icono n="task_alt" className="text-[20px]" /><span>
           <b>Urgencia revisada</b>{p.urgencia_cerrada.responsable && ` por ${p.urgencia_cerrada.responsable}`}: sale del carril de urgencia y sigue en prioridad alta.</span></div>}
         {p.contactar_hoy && p.riesgo_vital && <div className="mt-3 p-2.5 rounded bg-error-container text-on-error-container text-[14px] flex gap-2"><Icono n="call" className="text-[20px]" /><span>
-          <b>Descompensación grave: revisar su prioridad.</b> Evento del {fmtHace(p.evaluacion?.fecha_evento, fecha)}, en el sistema desde el {fmt(p.evaluacion?.llego_al_sistema)}.
-          {" "}No hay registro posterior de estabilización ni de evaluación; el especialista decide.</span></div>}
+          <b>Descompensación grave: contactar al paciente.</b> Evento del {fmtHace(p.evaluacion?.fecha_evento, fecha)}, en el sistema desde el {fmt(p.evaluacion?.llego_al_sistema)}.
+          {" "}La prioridad ya se actualizó; el especialista puede cambiarla si corresponde.</span></div>}
         {p.riesgo_vital && !p.contactar_hoy && p.evaluacion?.cierre && <div className="mt-3 p-2.5 rounded bg-hlf-claro text-hlf text-[14px] flex gap-2"><Icono n="task_alt" className="text-[20px]" /><span>
           <b>Prioridad revisada: {p.evaluacion.cierre.texto}</b>{p.evaluacion.cierre.responsable && ` · ${p.evaluacion.cierre.responsable}`}{p.decision?.seguimiento && ` · seguimiento ${fmt(p.decision.seguimiento)}`}</span></div>}
-        {p.estado_revision === "requiere_revision" && <div className="mt-2 p-2.5 rounded bg-ambar-container text-ambar text-[14px] flex gap-2"><Icono n="rate_review" className="text-[20px]" /><span><b>Requiere nueva revisión:</b> {p.revision_vencida_por} después de la última revisión.</span></div>}
-        {p.estado_revision === "pendiente" && p.revision_sugerida?.length > 0 && <div className="mt-2 p-2.5 rounded bg-ambar-container/60 text-ambar text-[14px] flex gap-2"><Icono n="rate_review" className="text-[20px]" /><span><b>Revisión sugerida:</b> {[...new Set(p.revision_sugerida.map((s) => s.motivo))].join(" · ")}</span></div>}
+        {p.estado_revision === "requiere_revision" && <div className="mt-2 p-2.5 rounded bg-ambar-container text-ambar text-[14px] flex gap-2"><Icono n="rate_review" className="text-[20px]" /><span><b>Hay información nueva desde la última revisión:</b> {p.revision_vencida_por}. El especialista ve si mantiene su decisión.</span></div>}
+        {p.estado_revision === "pendiente" && avisos.length > 0 && <div className="mt-2 p-2.5 rounded bg-ambar-container/60 text-ambar text-[14px] flex gap-2"><Icono n="rate_review" className="text-[20px]" /><span><b>Aviso para el especialista:</b> {avisos.join(" · ")}</span></div>}
         <dl className="mt-3 grid grid-cols-[130px_1fr] gap-y-1 text-[14px]">
           <dt className="text-on-surface-variant">Especialidad</dt><dd>{p.especialidad}</dd>
           <dt className="text-on-surface-variant">Diagnóstico</dt><dd>{p.diagnostico_cie10} · {p.diagnostico_texto}</dd>
@@ -211,8 +213,8 @@ export function Ficha({ p, total, detalle, fecha, demo, onCambio, onAviso, onDes
 }
 
 function EstadoRevision({ p }) {
-  if (p.estado_revision === "requiere_revision") return <span className="text-ambar font-semibold">Requiere nueva revisión</span>;
-  if (p.estado_revision === "pendiente") return <span className="text-on-surface-variant">Pendiente{p.revision_sugerida?.length ? " · revisión sugerida" : ""}</span>;
+  if (p.estado_revision === "requiere_revision") return <span className="text-ambar font-semibold">Información nueva desde la revisión</span>;
+  if (p.estado_revision === "pendiente") return <span className="text-on-surface-variant">Vigente · {p.categoria_sistema !== p.prioridad_inicial ? "actualizada por el sistema" : "asignada en la SIC"}</span>;
   return <span className="text-verde font-semibold">{p.estado_revision === "ajustado" ? "Ajustada" : "Confirmada"}{p.revision?.usuario && ` · ${p.revision.usuario}`}</span>;
 }
 

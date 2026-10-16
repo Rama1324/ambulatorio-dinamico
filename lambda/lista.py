@@ -128,8 +128,9 @@ def _gestion(p, g, corte):
     c = p.get("contacto") or {}
     if c.get("resultado") == "citado":
         estado = "cita_reservada"
-    elif p.get("contactar_hoy") or p["estado_revision"] == "requiere_revision" or p.get("ajuste_manual_vencido") or (
-            p["estado_revision"] == "pendiente" and (p.get("revision_sugerida") or p["categoria_sistema"] != p["prioridad_inicial"])):
+    elif p["estado_revision"] == "requiere_revision" or p.get("ajuste_manual_vencido") or (p.get("rubrica") or {}).get("requiere_revision"):
+        # Solo lo que el sistema no puede resolver solo: un evento nuevo contradice lo que decidió una persona, o la
+        # evidencia sugiere BAJAR (eso nunca lo hace el sistema). Lo que el sistema sube ya rige: no espera a nadie.
         estado = "pendiente_revision"
     elif c.get("resultado") == "no_contesta":
         estado = "pendiente_contacto"
@@ -137,8 +138,13 @@ def _gestion(p, g, corte):
         estado = "pendiente_cita"
     g = g if g and g.get("fecha_corte", "0000") <= corte.isoformat() else {}
     seguimiento = g.get("seguimiento")
+    accion = ESTADOS_GESTION[estado][1]
+    if estado == "pendiente_cita" and p.get("contactar_hoy"):
+        accion = "Contactar hoy y citar con prioridad"
+    elif estado == "pendiente_cita" and p["categoria"] != p["prioridad_inicial"]:
+        accion = "Citar con la nueva prioridad"
     return {"estado": estado, "texto": ESTADOS_GESTION[estado][0],
-            "proxima_accion": g.get("proxima_accion") or ESTADOS_GESTION[estado][1], "accion_asignada": bool(g.get("proxima_accion")),
+            "proxima_accion": g.get("proxima_accion") or accion, "accion_asignada": bool(g.get("proxima_accion")),
             "responsable": g.get("responsable"), "seguimiento": seguimiento,
             "seguimiento_vencido": bool(seguimiento and seguimiento < corte.isoformat()),
             "motivo_pendiente": g.get("motivo_pendiente"), "motivo_texto": MOTIVOS_PENDIENTE.get(g.get("motivo_pendiente")),
