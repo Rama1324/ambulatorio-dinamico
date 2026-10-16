@@ -41,9 +41,9 @@ MOTIVOS_PENDIENTE = {"falta_cupo": "Falta de cupo", "contacto": "No se ha podido
 
 
 def catalogo():
-    """Diagnósticos de la lista (especialidad, sub-especialidad, CIE-10, texto), tal como vienen en el registro."""
-    import criterios
-    vistos = {d["diagnostico_cie10"]: d for d in criterios.catalogo()}
+    """Diagnósticos de la lista (especialidad, sub-especialidad, CIE-10, texto), tal como vienen en el registro. Solo se
+    ingresan pacientes de las especialidades y diagnósticos que tiene el registro del hospital."""
+    vistos = {}
     for p in perfiles_combinados()[0].values():
         le = p["lista_espera"]
         vistos[le["diagnostico_cie10"]] = {"especialidad": le["especialidad"], "sub_especialidad": le["sub_especialidad"],

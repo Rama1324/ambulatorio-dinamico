@@ -61,13 +61,13 @@ export function Criterios({ ia }) {
         <p className="text-[13px] text-on-surface-variant mt-2">Probado con Claude en 45 casos escritos a mano: 26 de 26 urgencias detectadas, 10 de 10 casos trampa sin falsa alarma (negaciones, paciente sin diabetes, aspirina sola, dolor de dedo).</p>
       </Caja>
       <Caja titulo="Criterios clínicos por enfermedad">
-        <p className="mb-2">Para 46 enfermedades de Oftalmología, Otorrinolaringología, Psiquiatría, Reumatología y Urología hay criterios de prioridad <b>dentro</b> de cada enfermedad (no solo por diagnóstico): por ejemplo, hipoacusia gradual → media; hipoacusia súbita de menos de 72 h → <b>urgencia</b>. La IA lee el motivo de la interconsulta o el informe, elige el criterio y copia la frase que lo respalda; el código verifica la frase y aplica el nivel.</p>
+        <p className="mb-2">Para los <b>17 diagnósticos del registro</b> (las 7 especialidades del hospital) hay criterios de prioridad <b>dentro</b> de cada enfermedad, no solo por diagnóstico (Queensland Clinical Prioritisation Criteria y NICE; la depresión usa criterios de psiquiatría): por ejemplo, lumbago con déficit neurológico → alta; lumbago con pérdida de control de esfínteres → <b>urgencia</b>. La IA lee el motivo de la interconsulta o el informe, elige el criterio y copia la frase exacta; el código verifica la cita y aplica el criterio.</p>
         <ul className="list-disc pl-5 space-y-1">
           <li>Solo <b>sube</b> la prioridad; si el criterio indica una menor, se mantiene (bajar lo decide el especialista).</li>
           <li>Si el texto no alcanza para decidir, <b>no se asigna baja</b>: queda la prioridad asignada.</li>
-          <li>Las <b>excepciones de urgencia</b> ("derivar hoy": torsión testicular, desprendimiento de retina agudo, riesgo suicida con plan…) ponen al paciente primero, en alta y con "contactar hoy".</li>
+          <li>Las <b>excepciones de urgencia</b> ("derivar hoy": sospecha de síndrome coronario agudo, síndrome de cauda equina, riesgo suicida con plan…) ponen al paciente primero, en alta y con "contactar hoy".</li>
         </ul>
-        <p className="text-[13px] text-on-surface-variant mt-2">Probado con Claude en 154 notas clínicas (una por nivel de cada enfermedad y una por cada urgencia): 97,8 % del nivel correcto, 0 casos clasificados más bajo de lo que corresponde, 16 de 16 urgencias detectadas y ninguna urgencia falsa.</p>
+        <p className="text-[13px] text-on-surface-variant mt-2">El clasificador se probó con Claude en 154 notas clínicas (una por nivel y una por urgencia, en 46 enfermedades): 97,8 % del nivel correcto, 0 casos clasificados más bajo de lo que corresponde, 16 de 16 urgencias detectadas y ninguna urgencia falsa.</p>
       </Caja>
       {ia && <Caja titulo="Algoritmo con IA: la IA lee, el código decide">
         <ol className="list-decimal pl-5 space-y-2">

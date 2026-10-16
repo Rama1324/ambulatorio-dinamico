@@ -258,6 +258,17 @@ def test_importar_excel_y_csv():
     assert p["especialidad"] == "Cardiología" and p["fecha_ingreso_lista"] == "2025-12-09"   # 46000 = fecha interna de Excel
     assert p["categoria"] == "alta" and p["riesgo_vital"]   # IC descompensada (pág. 85) tras la hospitalización importada
 
+def test_importar_especialidad_fuera_del_registro_no_entra():
+    excel = _xlsx({
+        "Pacientes": [["RUT", "Nombre", "Edad", "Género"], ["12.345.678-5", "Pedro Rojas", 40, "Masculino"]],
+        "Lista espera": [["RUT", "CIE10", "Especialidad", "Prioridad", "Fecha ingreso"], ["12.345.678-5", "F43", "Psicología", "MEDIA", 46000]],
+    })
+    s, rev = call("POST", "/importar", body={"archivos": [{"nombre": "psico.xlsx", "contenido_base64": excel}]})
+    assert s == 200 and rev["resumen"]["pacientes_nuevos"] == 0
+    assert any("Psicología" in a and "no se ingresa" in a for a in rev["avisos"])
+    s, r = call("POST", "/pacientes", body={"nombre": "X", "edad": 40, "sexo": "M", "diagnostico_cie10": "F43", "prioridad_inicial": "media"})
+    assert s == 400
+
 def test_novedades_comorbilidad_diagnostico_fallecimiento():
     _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
     p = next(x for x in d["pacientes"] if x["diagnostico_cie10"] == "M75" and x["lace"]["total"] == 0)

@@ -42,47 +42,49 @@ def test_json_completo_y_mapeado():
     assert len(kb["kb"]["especialidades"]) == 5 and set(criterios.CIE10) <= set(kb["por_id"]) and len(criterios.CIE10) == 46
     registro = {"I50", "I20", "I10", "J44", "J45", "K70", "K21", "E11", "E03", "E66", "G40", "G43", "F32", "F41", "M17", "M54", "M75"}
     assert registro <= set(kb["por_cie"])                                 # los 17 diagnósticos del registro tienen criterios
-    cat = {d["diagnostico_cie10"] for d in app.catalogo()["diagnosticos"]}
-    assert {"N40", "H33", "H91", "F31", "M32"} <= cat                      # se pueden ingresar pacientes de esas especialidades
+    cat = app.catalogo()["diagnosticos"]
+    assert {d["diagnostico_cie10"] for d in cat} == registro                # solo se ingresan diagnósticos del registro del hospital
+    assert {d["especialidad"] for d in cat} == {"Cardiología", "Traumatología", "Endocrinología", "Salud Mental", "Broncopulmonar",
+                                                "Neurología", "Gastroenterología"}
     assert criterios.enfermedad_de("F32")["id"] == "psiquiatria_07"        # la depresión del registro usa sus criterios
 
 
 def test_criterio_alta_sube_y_explica():
-    s, r = ingresar("N40", "media", "Paciente con HPB, 2 episodios de retención urinaria aguda que requirieron sonda.",
-                    responde("alta.0", "retención urinaria aguda"))
+    s, r = ingresar("M17", "media", "Gonartrosis derecha con masa de crecimiento rápido, sospecha de tumor.",
+                    responde("alta.0", "sospecha de tumor"))
     p = r["paciente"]
     assert s == 200 and p["categoria"] == "alta" and r["criterio"]["criterio_id"] == "alta.0"
-    assert any(x["factor"] == "criterio_clinico" and "retención urinaria aguda" in x["valor"] for x in p["razones"])
+    assert any(x["factor"] == "criterio_clinico" and "sospecha de tumor" in x["valor"] for x in p["razones"])
 
 
 def test_urgencia_prevalece_y_va_primero():
-    s, r = ingresar("H91", "baja", "Hipoacusia súbita de oído izquierdo de 24 horas de evolución.",
-                    responde("alta.0", "Hipoacusia súbita", "urgencia.0", "Hipoacusia súbita de oído izquierdo de 24 horas"))
+    s, r = ingresar("M54", "baja", "Lumbago con pérdida de control de esfínteres desde ayer.",
+                    responde("alta.0", "pérdida de control de esfínteres", "urgencia.0", "pérdida de control de esfínteres desde ayer"))
     p = r["paciente"]
     assert p["categoria"] == "alta" and p["urgencia_hoy"] and p["contactar_hoy"] and en_carril_de_urgencia(p)
     assert p["razones"][0]["factor"] == "urgencia"
 
 
 def test_criterio_baja_no_baja_a_nadie():
-    s, r = ingresar("N40", "media", "Síntomas leves, IPSS bajo, en manejo médico inicial.", responde("baja.0", "Síntomas leves, IPSS bajo"))
+    s, r = ingresar("M17", "media", "Dolor leve que responde a analgesia, en manejo médico inicial.", responde("baja.0", "Dolor leve que responde a analgesia"))
     assert r["paciente"]["categoria"] == "media"
     assert any("se mantiene media" in x["valor"] for x in r["paciente"]["razones"] if x["factor"] == "criterio_clinico")
 
 
 def test_cita_inventada_o_criterio_inexistente_no_cuenta():
-    s, r = ingresar("N40", "baja", "Control de próstata.", responde("alta.0", "retención urinaria aguda"))
+    s, r = ingresar("M17", "baja", "Control de rodilla.", responde("alta.0", "sospecha de tumor"))
     assert r["paciente"]["categoria"] == "baja" and r["criterio"]["nivel"] is None
-    s, r = ingresar("N40", "baja", "Control de próstata.", responde("alta.9", "Control de próstata"))
+    s, r = ingresar("M17", "baja", "Control de rodilla.", responde("alta.9", "Control de rodilla"))
     assert r["paciente"]["categoria"] == "baja"
 
 
 def test_informacion_insuficiente_no_asigna_baja():
-    s, r = ingresar("N40", "media", "Derivado a urología.", responde("no_determinable", ""))
+    s, r = ingresar("M17", "media", "Derivado a traumatología.", responde("no_determinable", ""))
     assert r["paciente"]["categoria"] == "media" and r["criterio"]["nivel"] is None
 
 
 def test_negacion_no_cumple_el_criterio():
-    s, r = ingresar("N40", "media", "Sin retención urinaria aguda. Síntomas moderados.", responde("alta.0", "retención urinaria aguda"))
+    s, r = ingresar("M17", "media", "Sin sospecha de tumor. Dolor moderado.", responde("alta.0", "sospecha de tumor"))
     assert r["paciente"]["categoria"] == "media"
 
 
@@ -104,6 +106,6 @@ def test_urgencia_transversal_de_psiquiatria_en_un_paciente_del_registro():
 
 
 def test_con_reglas_no_se_llama_a_la_ia():
-    s, r = app.post_paciente({"nombre": "Sin IA", "edad": 60, "sexo": "F", "diagnostico_cie10": "N40", "prioridad_inicial": "baja",
-                              "motivo_interconsulta": "retención urinaria aguda", "fecha_corte": CORTE.isoformat()})
+    s, r = app.post_paciente({"nombre": "Sin IA", "edad": 60, "sexo": "F", "diagnostico_cie10": "M17", "prioridad_inicial": "baja",
+                              "motivo_interconsulta": "sospecha de tumor", "fecha_corte": CORTE.isoformat()})
     assert s == 200 and r["criterio"] is None and r["paciente"]["categoria"] == "baja"

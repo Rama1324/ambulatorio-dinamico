@@ -371,6 +371,11 @@ def combinar(datos, existentes, catalogo):
         if falta:
             avisos.append(f"{pid}: no se puede ingresar a la lista, falta {', '.join(falta)} (venga en Pacientes / Lista de espera)")
             del perfs[pid]; res["pacientes_nuevos"] -= 1
+        elif catalogo and (le["diagnostico_cie10"] not in catalogo or le["especialidad"] != catalogo[le["diagnostico_cie10"]]["especialidad"]):
+            # solo especialidades y diagnósticos del registro del hospital: para otros no hay pacientes ni criterios validados
+            avisos.append(f"{pid}: {le['especialidad']} · {le['diagnostico_cie10']} no es una especialidad o diagnóstico del registro "
+                          f"del hospital ({', '.join(sorted({d['especialidad'] for d in catalogo.values()}))}): no se ingresa")
+            del perfs[pid]; res["pacientes_nuevos"] -= 1
 
     def agregar(tabla, clave_lista, clave, nuevo):
         sin = 0
