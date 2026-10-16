@@ -2,8 +2,10 @@
 # Uso, desde la raíz del repo (perfil AWS "hack" con credenciales vigentes):
 #   powershell -ExecutionPolicy Bypass -File scripts\deploy_aws.ps1            # backend + datos + página
 #   powershell -ExecutionPolicy Bypass -File scripts\deploy_aws.ps1 -SoloFront
+#   -Algoritmo reglas   publica sin IA (solo reglas); por defecto rubrica (IA lee + reglas deciden)
 param([switch]$SoloFront, [string]$Perfil = "hack", [string]$Region = "us-east-1",
-      [string]$Modelo = "us.anthropic.claude-sonnet-5", [string]$Stack = "ambulatorio-hlf", [string]$AppAmplify = "")
+      [string]$Modelo = "us.anthropic.claude-sonnet-5", [string]$Stack = "ambulatorio-hlf", [string]$AppAmplify = "",
+      [ValidateSet("reglas", "rubrica")][string]$Algoritmo = "rubrica")
 $ErrorActionPreference = "Stop"
 $aws = "C:\Program Files\Amazon\AWSCLIV2\aws.exe"
 $raiz = Split-Path -Parent $PSScriptRoot
@@ -24,14 +26,13 @@ if (-not $SoloFront) {
     & $aws s3 mb "s3://$art" --profile $Perfil --region $Region 2>$null | Out-Null
     & $aws cloudformation package --template-file "$b\template.yaml" --s3-bucket $art --output-template-file "$b\empaquetado.yaml" --profile $Perfil --region $Region | Out-Null
     & $aws cloudformation deploy --template-file "$b\empaquetado.yaml" --stack-name $Stack --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND `
-        --parameter-overrides ModelId=$Modelo BedrockRegion=$Region --profile $Perfil --region $Region
+        --parameter-overrides ModelId=$Modelo BedrockRegion=$Region Algoritmo=$Algoritmo --profile $Perfil --region $Region
 }
 $api = & $aws cloudformation describe-stacks --stack-name $Stack --profile $Perfil --region $Region --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text
 $bucket = & $aws cloudformation describe-stacks --stack-name $Stack --profile $Perfil --region $Region --query "Stacks[0].Outputs[?OutputKey=='BucketName'].OutputValue" --output text
 if (-not $SoloFront) {
     # 2) Datos (no van a git): perfiles.json al bucket privado
     & $aws s3 cp "$raiz\data\perfiles.json" "s3://$bucket/perfiles.json" --profile $Perfil --region $Region | Out-Null
-    & $aws s3 cp "$raiz\data\box.json" "s3://$bucket/box.json" --profile $Perfil --region $Region | Out-Null
     $salud = curl.exe -s "$api/health"
     if ($salud -notmatch '"ok": true') { throw "La API no responde bien: $salud" }
     Write-Host "API OK: $api" -ForegroundColor Green
