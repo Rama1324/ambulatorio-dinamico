@@ -37,7 +37,8 @@ ESTADOS_GESTION = {
     "cita_reservada": ("Cita reservada", "Confirmar asistencia"),
 }
 MOTIVOS_PENDIENTE = {"falta_cupo": "Falta de cupo", "contacto": "No se ha podido contactar", "antecedentes": "Faltan antecedentes o exámenes",
-                     "revision": "Espera revisión del especialista", "paciente": "Decisión o disponibilidad del paciente", "otro": "Otro (documentado)"}
+                     "revision": "Espera revisión del especialista", "paciente": "Decisión o disponibilidad del paciente",
+                     "revision_humana": "El paciente pidió que una persona revise su prioridad (Ley 21.719, art. 8 bis)", "otro": "Otro (documentado)"}
 
 
 def catalogo():

@@ -583,3 +583,32 @@ def test_evento_con_especialidad_da_puestos_de_esa_lista():
                                           "severidad": "grave", "especialidad": "Cardiología", "usuario": "Dr. Prueba"})
     assert s == 200 and "lista" not in r and r["posicion_antes"] == p["posicion"] and r["total"] == d["total"]
     assert r["paciente"]["comparacion"]["arriba"]["especialidad"] == "Cardiología"
+
+def test_paciente_pide_revision_humana_queda_para_el_especialista():
+    pid = "PAC-HLF-00028"
+    s, _ = call("POST", f"/pacientes/{pid}/gestion", body={"motivo_pendiente": "revision_humana", "usuario": "Secretaria Pérez",
+                                                           "nota": "llamó la hija", "fecha_corte": "2026-10-13"})
+    assert s == 200
+    g = fila(call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})[1], pid)["gestion"]
+    assert g["estado"] == "pendiente_revision" and "revisión humana" in g["proxima_accion"] and "8 bis" in g["motivo_texto"]
+    call("POST", f"/pacientes/{pid}/revision", body={"accion": "confirmar", "usuario": "Dra. Soto", "fecha_corte": "2026-10-13"})
+    assert fila(call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})[1], pid)["gestion"]["estado"] != "pendiente_revision"
+
+def test_la_ia_no_recibe_nombre_ni_rut():
+    import privacidad
+    t = privacidad.ocultar("Epicrisis. Paciente: Juan Pérez, RUT 12.345.678-5 (rut 123456785).\nPaciente con angina inestable.",
+                           ["Juan Pérez"], ["12.345.678-5"])
+    assert "Juan" not in t and "12.345.678" not in t and "123456785" not in t and "Paciente con angina inestable" in t
+    import lector_documento, rubrica
+    vistos = []
+    class Espia(rubrica.ClienteFalso):
+        def leer(self, sistema, texto, herramienta, max_tokens):
+            vistos.append(texto); return super().leer(sistema, texto, herramienta, max_tokens)
+    import os
+    try:
+        os.environ["ALGORITMO"] = "rubrica"; app._llm["cliente"] = Espia({"hallazgos": []})
+        pac = app.perfiles_combinados()[0]["PAC-HLF-00001"]["paciente"]
+        call("POST", "/pacientes/PAC-HLF-00001/informe", body={"texto": f"Control de {pac['nombre_fantasia']}, RUT 12.345.678-5. Sin novedades."})
+    finally:
+        os.environ.pop("ALGORITMO", None); app._llm["cliente"] = None
+    assert vistos and all(pac["nombre_fantasia"] not in v and "12.345.678-5" not in v for v in vistos)

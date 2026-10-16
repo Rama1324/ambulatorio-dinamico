@@ -131,7 +131,12 @@ def _enriquecer(r, perfil, revision, pos_ant, corte=None, contacto=None, decisio
 def _gestion(p, g, corte):
     """Estado de gestión calculado con lo registrado + responsable, próxima acción y seguimiento asignados por el equipo."""
     c = p.get("contacto") or {}
-    if c.get("resultado") == "citado":
+    g = g if g and g.get("fecha_corte", "0000") <= corte.isoformat() else {}
+    # el paciente pidió revisión humana y ningún especialista ha revisado desde entonces (Ley 21.719, art. 8 bis)
+    pide_humano = g.get("motivo_pendiente") == "revision_humana" and not ((p.get("revision") or {}).get("fecha", "") >= g.get("fecha", ""))
+    if pide_humano:
+        estado = "pendiente_revision"
+    elif c.get("resultado") == "citado":
         estado = "cita_reservada"
     elif p["estado_revision"] == "requiere_revision" or p.get("ajuste_manual_vencido") or (p.get("rubrica") or {}).get("requiere_revision"):
         # Solo lo que el sistema no puede resolver solo: un evento nuevo contradice lo que decidió una persona, o la
@@ -141,10 +146,11 @@ def _gestion(p, g, corte):
         estado = "pendiente_contacto"
     else:
         estado = "pendiente_cita"
-    g = g if g and g.get("fecha_corte", "0000") <= corte.isoformat() else {}
     seguimiento = g.get("seguimiento")
     accion = ESTADOS_GESTION[estado][1]
-    if estado == "pendiente_cita" and p.get("contactar_hoy"):
+    if pide_humano:
+        accion = "El paciente pidió revisión humana: el especialista revisa y confirma o cambia la prioridad"
+    elif estado == "pendiente_cita" and p.get("contactar_hoy"):
         accion = "Contactar hoy y citar con prioridad"
     elif estado == "pendiente_cita" and p["categoria"] != p["prioridad_inicial"]:
         accion = "Citar con la nueva prioridad"

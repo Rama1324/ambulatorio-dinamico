@@ -6,6 +6,7 @@ import time
 import uuid
 
 import informe
+import privacidad
 import puntaje
 from datos import ahora, fecha_de, guardar_evento, perfiles_combinados
 from evaluacion_ia import algoritmo_activo, cliente_llm, evaluar_y_guardar
@@ -93,12 +94,14 @@ def _informe_con_ia(pid, lectura, corte, perfs, avisos, dudoso, menciona, body):
     import lector_documento
     t0 = time.perf_counter()
     le = perfs[pid]["lista_espera"]
-    r = lector_documento.leer_documento(lectura.texto, cliente_llm(), diagnostico=f'{le["diagnostico_texto"]} ({le["diagnostico_cie10"]}, {le["especialidad"]})')
+    pac = perfs[pid]["paciente"]
+    texto_ia = privacidad.ocultar(lectura.texto, [pac.get("nombre_fantasia")], [pac.get("rut")])  # la IA no recibe nombre ni RUT
+    r = lector_documento.leer_documento(texto_ia, cliente_llm(), diagnostico=f'{le["diagnostico_texto"]} ({le["diagnostico_cie10"]}, {le["especialidad"]})')
     clasif = combs = None
     if not dudoso:
         pos0 = (fila_de(pid, corte) or {}).get("posicion")
-        clasif = _aplicar_criterios(pid, le["diagnostico_cie10"], lectura.texto, corte.isoformat(), body)
-        combs = _aplicar_combinaciones(pid, perfs[pid], lectura.texto, corte.isoformat(), body)
+        clasif = _aplicar_criterios(pid, le["diagnostico_cie10"], texto_ia, corte.isoformat(), body)
+        combs = _aplicar_combinaciones(pid, perfs[pid], texto_ia, corte.isoformat(), body)
     aceptados = r["aceptados"]
     ing = le["fecha_ingreso_lista"]
     viejos = [h for h in aceptados if h.get("fecha") and h["fecha"] < ing]

@@ -131,7 +131,8 @@ export function Contacto({ p, fecha, onListo, onAviso }) {
 
 // Gestión del caso: qué falta (estado calculado), quién se encarga, qué se hace y cuándo se vuelve a mirar.
 const MOTIVOS_PENDIENTE = [["falta_cupo", "Falta de cupo"], ["contacto", "No se ha podido contactar"], ["antecedentes", "Faltan antecedentes o exámenes"],
-  ["revision", "Espera revisión del especialista"], ["paciente", "Decisión o disponibilidad del paciente"], ["otro", "Otro (documentado)"]];
+  ["revision", "Espera revisión del especialista"], ["paciente", "Decisión o disponibilidad del paciente"],
+  ["revision_humana", "El paciente pidió que una persona revise su prioridad (Ley 21.719, art. 8 bis)"], ["otro", "Otro (documentado)"]];
 
 export function GestionCaso({ p, fecha, onListo, onAviso }) {
   const g = p.gestion || {};

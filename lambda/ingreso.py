@@ -4,6 +4,7 @@ import re
 import uuid
 
 import importar
+import privacidad
 import puntaje
 from catalogo import catalogo
 from datos import ahora, fecha_de, fecha_valida, guardar, guardar_evento, perfiles_combinados
@@ -68,6 +69,7 @@ def post_paciente(body):
     }
     guardar({"id_paciente": pid, "sk": "paciente#", "perfil": json.dumps(perfil, ensure_ascii=False)})
     motivo = (body.get("motivo_interconsulta") or "").strip()
+    motivo = privacidad.ocultar(motivo, [nombre], [rut])  # a la IA no va el nombre ni el RUT
     clasif = _aplicar_criterios(pid, dx["diagnostico_cie10"], motivo, ingreso, body)
     combs = _aplicar_combinaciones(pid, perfil, motivo, ingreso, body)
     data = lista(corte)

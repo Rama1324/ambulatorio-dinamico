@@ -16,6 +16,7 @@ from datetime import date
 
 from pydantic import ValidationError
 
+import privacidad
 from modelos import SUBTIPOS, EventoPropuesto, Lectura, LineaLeida, normalizar
 
 # Palabras clave → evento del registro, de lo más grave a lo menos grave
@@ -129,7 +130,7 @@ def sugerencia_bedrock(texto):
         from aws_config import CORTA
         r = boto3.client("bedrock-runtime", region_name=_region(), config=CORTA).converse(
             modelId=model_id, system=[{"text": PROMPT.format(vocab=json.dumps({t: list(s) for t, s in SUBTIPOS.items()}, ensure_ascii=False))}],
-            messages=[{"role": "user", "content": [{"text": texto}]}], inferenceConfig={"maxTokens": 1200})
+            messages=[{"role": "user", "content": [{"text": privacidad.ocultar(texto)}]}], inferenceConfig={"maxTokens": 1200})
         crudo = "".join(b.get("text", "") for b in r["output"]["message"]["content"])  # puede venir un bloque de razonamiento antes
         ev = json.loads(crudo[crudo.find("{"): crudo.rfind("}") + 1])
         if not ev.get("tipo_evento") or ev.get("tipo_evento") not in SUBTIPOS or ev.get("subtipo") not in SUBTIPOS[ev["tipo_evento"]]:
