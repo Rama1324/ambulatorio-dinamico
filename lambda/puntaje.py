@@ -56,6 +56,25 @@ FILA_ONCOLOGICA = {
 }
 PATRON_ONCOLOGICO = ("toda fila de cáncer activo o sospechoso de la tabla del HLF es prioridad alta (págs. 88, 94, 95, 111)",
                      "alta", "88, 94, 95, 111")
+# Valores físicamente posibles por tipo de medición: fuera de estos rangos el dato es inválido y no entra a ninguna regla
+RANGO_VALIDO = {"HbA1c": (3, 20), "glicemia": (20, 1500), "presion_sistolica": (50, 300), "presion_diastolica": (20, 200),
+                "saturacion_o2": (50, 100), "peak_flow": (30, 1000), "escala_dolor_eva": (0, 10), "PHQ9": (0, 27)}
+
+
+def valor_valido(m):
+    try:
+        v = float(m["valor"])
+    except (TypeError, ValueError, KeyError):
+        return False
+    lo, hi = RANGO_VALIDO.get(m.get("tipo_medicion"), (float("-inf"), float("inf")))
+    return lo <= v <= hi
+
+
+# Codificación ordinal de la prioridad (convención de software, no pesos clínicos ni probabilidades)
+PUNTAJE_PRIORIDAD = {"alta": 3, "media": 2, "baja": 1}
+# Razones que provienen de una regla con fuente (la prioridad quedó sustentada por una regla, cambie o no)
+FACTORES_REGLA = {"tabla_oficial", "riesgo_vital", "criterio_registro", "criterio_clinico", "combinacion", "urgencia", "oncologico"}
+
 # Mediciones que reflejan semanas o meses (no un momento): las únicas que pueden aparecer como razón de prioridad
 MEDICIONES_ESTABLES = ("HbA1c", "PHQ9")
 
@@ -300,8 +319,8 @@ def aplicar_registro(perfil, corte, categoria, razones):
         if n > 3:
             sube("media", "más de 3 exacerbaciones o consultas en urgencia en 12 meses", f"{n} en 12 meses")
     if cie in ("E11", "E10", "E13", "E14"):
-        serie = sorted([m for m in perfil.get("mediciones", []) if m["tipo_medicion"] == "HbA1c" and d(m["fecha_medicion"]) <= corte],
-                       key=lambda m: m["fecha_medicion"])[-2:]
+        serie = sorted([m for m in perfil.get("mediciones", []) if m["tipo_medicion"] == "HbA1c" and d(m["fecha_medicion"]) <= corte
+                        and valor_valido(m)], key=lambda m: m["fecha_medicion"])[-2:]
         if len(serie) == 2 and serie[1]["valor"] > serie[0]["valor"]:
             v = serie[1]["valor"]
             det = f'HbA1c {serie[0]["valor"]:g} → {v:g}% ({serie[1]["fecha_medicion"]})'
@@ -315,8 +334,8 @@ def aplicar_registro(perfil, corte, categoria, razones):
                         "fuente": f'{enf["niveles"]["baja"]["justificacion"]} · {enf["fuente_url"]}', "riesgo": enf.get("riesgo")})
         categoria = piso
     if cie in ("F32", "F33"):
-        phq = sorted([m for m in perfil.get("mediciones", []) if m["tipo_medicion"] == "PHQ9" and d(m["fecha_medicion"]) <= corte],
-                     key=lambda m: m["fecha_medicion"])
+        phq = sorted([m for m in perfil.get("mediciones", []) if m["tipo_medicion"] == "PHQ9" and d(m["fecha_medicion"]) <= corte
+                      and valor_valido(m)], key=lambda m: m["fecha_medicion"])
         if phq and phq[-1]["valor"] >= 16:
             razones.append({"factor": "alerta_clinica", "valor": f'PHQ-9 = {phq[-1]["valor"]:g} ({phq[-1]["fecha_medicion"]}): depresión más grave',
                             "fuente": "NICE NG222: PHQ-9 ≥ 16 = \"more severe depression\" (no cambia la prioridad por sí solo)",
@@ -422,7 +441,7 @@ def puntuar(perfil, corte):
         else:
             razones.append({"factor": "tabla_oficial", "valor": "la tabla del HLF no tiene fila para este diagnóstico descompensado: "
                                                                 "se mantiene la prioridad y se sugiere revisión clínica",
-                            "fuente": FUENTE_TABLA})
+                            "fuente": FUENTE_TABLA, "sin_regla": True})
     onco = regla_oncologica(eventos, le["especialidad"])
     if onco:
         categoria = categoria if ORDEN_CAT[categoria] >= ORDEN_CAT[onco["fila"][1]] else onco["fila"][1]
@@ -525,15 +544,28 @@ def puntuar(perfil, corte):
                         "riesgo": RIESGO_ESPERA + "."})
     medicion_alerta = False
     for tipo in MEDICIONES_ESTABLES:
-        serie = sorted([m for m in perfil.get("mediciones", []) if m["tipo_medicion"] == tipo and d(m["fecha_medicion"]) <= corte],
-                       key=lambda m: m["fecha_medicion"])[-2:]
+        serie = sorted([m for m in perfil.get("mediciones", []) if m["tipo_medicion"] == tipo and d(m["fecha_medicion"]) <= corte
+                        and valor_valido(m)], key=lambda m: m["fecha_medicion"])[-2:]
         if len(serie) == 2 and all(m["fuera_de_rango"] for m in serie):
             medicion_alerta = True
             razones.append({"factor": "medicion", "valor": f'{tipo} fuera de rango en dos mediciones seguidas: ' +
                             " y ".join(f'{m["valor"]:g} {m["unidad"]} ({m["fecha_medicion"]})' for m in serie),
                             "fuente": "Rangos de referencia del diccionario de datos HLF · medición estable (no signo vital)"})
 
+    # Estado de la evaluación (transparencia): ¿una regla con fuente sustenta la prioridad, o se mantiene la inicial?
+    con_regla = any(x["factor"] in FACTORES_REGLA and not x.get("sin_regla") for x in razones)
+    if con_regla:
+        estado_eval = "determinada"
+    elif eventos and (cie in FILA_DESCOMPENSADO or cie in criterios_registro()):
+        estado_eval = "evaluada_sin_cambio"   # hubo eventos, se evaluaron las reglas de su diagnóstico y no corresponde cambiar
+    elif eventos:
+        estado_eval = "sin_regla_aplicable"   # hubo eventos, pero su diagnóstico no tiene reglas
+    else:
+        estado_eval = "sin_evento_nuevo"      # no hay información posterior a la SIC: rige la prioridad inicial
     return {"id_paciente": perfil["id_paciente"], "excluido": False, "categoria": categoria,
+            "estado_evaluacion": estado_eval, "puntaje_inicial": PUNTAJE_PRIORIDAD.get(inicial),
+            "prioridad_propuesta": categoria if con_regla else None,
+            "puntaje_propuesto": PUNTAJE_PRIORIDAD[categoria] if con_regla else None,
             "estado_clinico": estado, "riesgo_vital": riesgo_vital, "urgencia_hoy": urgencia_hoy, "lace": lace,
             "urgencia_desde": urg_ev and {"fecha": urg_ev["fecha_evento"], "registrado": urg_ev.get("registrado")},
             "agudeza": agudeza(ult_desc) if estado == "descompensado" else 0, "letalidad": letalidad,

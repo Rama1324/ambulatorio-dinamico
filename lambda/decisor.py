@@ -63,10 +63,8 @@ def serie_medicion(perfil, tipo, corte):
     out = []
     for m in sorted(perfil.get("mediciones", []), key=lambda m: m["fecha_medicion"]):
         if m["tipo_medicion"] == tipo and m["fecha_medicion"] <= corte.isoformat():
-            try:
+            if puntaje.valor_valido(m):   # valores imposibles (saturación > 100%, PHQ-9 > 27…) no entran a ninguna regla
                 out.append((m["fecha_medicion"], float(m["valor"])))
-            except (TypeError, ValueError):
-                pass
     return out
 
 

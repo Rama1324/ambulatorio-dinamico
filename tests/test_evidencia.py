@@ -43,10 +43,33 @@ def test_epoc_con_mas_de_3_urgencias_en_12_meses_sube_a_media():
     assert r["categoria"] in ("media", "alta") and any(z["factor"] == "criterio_registro" and "4 en 12 meses" in z["valor"] for z in r["razones"])
 
 
-def test_cirrosis_nunca_queda_en_baja():
+def test_sin_piso_por_guia_extranjera():
+    """Que Queensland no tenga categoría 3 para cirrosis no sube a nadie: sin evento, rige la prioridad inicial."""
     p = perfil("K70")
     r = puntaje.puntuar(p, CORTE)
-    assert r["categoria"] != "baja" and any(z["factor"] == "piso" and "No category 3" in z["fuente"] for z in r["razones"])
+    assert r["categoria"] == "baja" and not any(z["factor"] == "piso" for z in r["razones"])
+    assert r["estado_evaluacion"] == "sin_evento_nuevo" and r["puntaje_inicial"] == 1 and r["puntaje_propuesto"] is None
+
+
+def test_estado_de_evaluacion_y_puntajes():
+    p = perfil("I50", "media")
+    p["eventos_clinicos"] = [ev("2026-10-01", "hospitalizacion", "ingreso hospitalario")]
+    r = puntaje.puntuar(p, CORTE)
+    assert r["estado_evaluacion"] == "determinada" and r["prioridad_propuesta"] == "alta" and r["puntaje_propuesto"] == 3 and r["puntaje_inicial"] == 2
+    q = perfil("M75", "media")                                   # evento que las reglas de su diagnóstico no cubren
+    q["eventos_clinicos"] = [ev("2026-10-01", "visita_urgencia", "triage ESI 2")]
+    r = puntaje.puntuar(q, CORTE)
+    assert r["estado_evaluacion"] == "evaluada_sin_cambio" and r["puntaje_propuesto"] is None and r["categoria"] == "media"
+    q["lista_espera"]["diagnostico_cie10"] = "Z99"               # diagnóstico sin ninguna regla
+    assert puntaje.puntuar(q, CORTE)["estado_evaluacion"] == "sin_regla_aplicable"
+
+
+def test_valores_imposibles_no_entran_a_las_reglas():
+    p = perfil("E11")
+    p["mediciones"] = [{"fecha_medicion": "2026-06-01", "tipo_medicion": "HbA1c", "valor": 8.0, "unidad": "%", "fuera_de_rango": True},
+                       {"fecha_medicion": "2026-09-01", "tipo_medicion": "HbA1c", "valor": 85.0, "unidad": "%", "fuera_de_rango": True}]
+    r = puntaje.puntuar(p, CORTE)
+    assert not any(z["factor"] == "criterio_registro" for z in r["razones"])   # 85% es imposible: no sube a nadie
 
 
 def test_plazo_de_referencia_vencido_se_explica_sin_mover_a_nadie():
