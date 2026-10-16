@@ -1,105 +1,169 @@
-# Instrucciones para Kiro: mejorar los criterios durante la noche (16-10-2026)
+# Instrucciones para Kiro: investigar y completar los criterios durante la noche (16-10-2026)
 
 Eres un agente que va a trabajar solo durante la noche en el proyecto **Ambulatorio Dinámico HLF**. Es una herramienta que
 reordena la lista de espera de consultas de especialidad del Hospital Clínico Dra. Eloísa Díaz Inzunza (La Florida, Chile)
-cuando un paciente empeora. El cierre de código es hoy a las **10:15** y el equipo revisa tu trabajo a las **08:00**.
-Antes de empezar, lee estos documentos:
+cuando un paciente empeora. El equipo revisa tu trabajo a las **08:00** y el cierre de código es a las **10:15**.
 
-- `docs/CRITERIO_PRIORIZACION.md`: qué buscamos, cómo decide el sistema y de dónde sale cada regla. **Léelo completo.**
-- `docs/CONTEXTO_PARA_CLAUDE.md`: estructura del código.
-- `lambda/conocimiento/criterios_registro.json` y `lambda/conocimiento/combinaciones_riesgo.json`: el formato que debes usar.
-- `lambda/conocimiento/diagnosticos_tabla_hlf.json`: los 176 diagnósticos de la tabla oficial del HLF que todavía no tienen criterios internos.
+**Tu trabajo es investigar y producir información, no programar el sistema.** Queremos el conjunto de criterios clínicos
+más completo y confiable posible para nuestras 7 especialidades, con pruebas que demuestren que funcionan.
+
+## Lee primero
+
+- `docs/CRITERIO_PRIORIZACION.md`: qué buscamos, cómo decide hoy el sistema y de dónde sale cada regla. **Léelo completo.**
+- `lambda/conocimiento/criterios_registro.json`: criterios de los 17 diagnósticos del registro (Queensland, NICE). Es el modelo de formato y de calidad.
+- `lambda/conocimiento/combinaciones_riesgo.json`: 44 combinaciones de riesgo, con su fuente.
+- `lambda/conocimiento/diagnosticos_tabla_hlf.json`: 176 diagnósticos y síntomas de la tabla oficial del HLF, sin criterios internos.
+- `lambda/puntaje.py` (`LETALIDAD_DX`): mortalidad con PMID de 10 diagnósticos.
+- `docs/investigacion/` y `docs/criterios_oficiales.md`: investigación ya hecha. No la repitas; compleméntala.
+
+Las 7 especialidades son **Cardiología, Broncopulmonar, Gastroenterología, Endocrinología (con Diabetología), Neurología,
+Salud Mental y Traumatología**, todas de adulto.
 
 ## Objetivo
 
-Que ningún paciente que empeora quede abajo en la lista por falta de un criterio. Lo hacemos con **reglas escritas, con
-fuente oficial y verificables**, que el código aplica. No con un modelo que "aprende".
+Que ningún paciente que empeora quede abajo en la lista por falta de un criterio. Para cada especialidad queremos saber,
+con fuente comprobable:
+
+1. **Qué enfermedades y síntomas** llegan a esa consulta: todos los de la tabla del HLF y los demás frecuentes en derivaciones.
+2. **Qué hace que cada uno sea alta, media o baja**, y qué lo vuelve **urgencia** ("derivar hoy").
+3. **Qué signos de alarma** (banderas rojas) indican deterioro, para cualquier diagnóstico.
+4. **Qué combinaciones** de enfermedades, fármacos o situaciones aumentan el riesgo (por ejemplo, anticoagulado + caída).
+5. **Qué tan grave es cada descompensación**: mortalidad o daño irreversible, con cifra y fuente, idealmente de Chile o Latinoamérica.
+6. **Cuándo un evento deja de ser relevante** (ventana de riesgo en días), con fuente.
 
 ## Reglas que no puedes romper
 
-1. **Trabaja solo en la rama `kiro/criterios-noche`.** No hagas commit en `main`. No publiques en AWS ni corras
+1. **No modifiques ningún archivo existente del repositorio:** ni código, ni JSON actuales, ni pruebas actuales, ni
+   documentos. Solo puedes **crear archivos nuevos** en estas carpetas:
+   - `lambda/conocimiento/propuestas_kiro/`: información, en JSON;
+   - `tests/kiro/`: pruebas nuevas;
+   - `scripts/kiro/`: scripts de evaluación nuevos;
+   - `docs/kiro/`: informes.
+2. **Trabaja solo en la rama `kiro/criterios-noche`.** No hagas commit en `main`. No publiques en AWS ni corras
    `scripts/deploy_aws.ps1`. No toques la base de datos (`limpiar_demo.py`, DynamoDB).
-2. **Solo agrega archivos nuevos** de conocimiento (JSON), pruebas y tu informe. No modifiques `puntaje.py`, `lista.py`,
-   `decisor.py` ni el front. Si crees que hay que cambiar código, escríbelo como propuesta en el informe.
-3. **Cada regla lleva una fuente oficial con cita textual y URL:** NICE, Queensland Clinical Prioritisation Criteria,
-   guías GES o MINSAL, sociedades científicas, o un artículo con PMID o DOI. Marca `"estado": "verificado"` solo si leíste
-   la cita en la fuente original; si no, usa `"guia_citada"`. **No inventes umbrales ni criterios.** Si no hay fuente,
-   no lo agregues y anótalo como pregunta para un médico.
-4. **Las reglas solo pueden subir la prioridad o marcar urgencia. Nunca bajar.** Una regla que dice "baja" sirve solo
-   como referencia.
+3. **Solo fuentes confiables y comprobables:**
+   - guías NICE;
+   - Queensland Clinical Prioritisation Criteria;
+   - guías GES y normas MINSAL;
+   - la tabla SSMSO 2025 del HLF;
+   - guías de sociedades científicas (ESC, GOLD, GINA, ADA, AASLD, ILAE, APA, AAOS…);
+   - artículos revisados por pares con **PMID o DOI**.
+
+   Cada dato lleva **URL y cita textual**. Marca `"estado": "verificado"` solo si leíste la cita en la fuente original;
+   si viene de una fuente secundaria, usa `"guia_citada"`. **No inventes nada.** Si no encuentras fuente, no lo agregues y
+   anótalo como pregunta para un médico. No uses blogs, Wikipedia ni sitios comerciales como fuente final.
+4. **Las reglas solo pueden subir la prioridad o marcar urgencia. Nunca bajar.** Un criterio de "baja" sirve solo como referencia.
 5. **No uses datos de pacientes.** El registro (`data/perfiles.json`) es sintético y no debe salir a ningún servicio
    externo. No ajustes pesos ni "aprendas" con esos datos, porque aprenderías los patrones del generador sintético.
+   Tus casos de prueba son textos clínicos ficticios escritos por ti.
 6. **Presupuesto de Amazon Bedrock: máximo USD 5** (unas 150 evaluaciones). Las credenciales están en el perfil AWS
-   `hack`; si vencieron, no las pidas: trabaja sin Bedrock.
-7. **No agregues librerías.** Escribe en español de Chile, claro y sin relleno.
-8. **Las pruebas existentes deben seguir pasando:** `python -m pytest -q tests` (hoy pasan 147).
+   `hack`; si vencieron, no las pidas: haz todas las pruebas sin Bedrock.
+7. **No instales librerías.** Escribe en español de Chile, claro y sin relleno.
+8. **Las pruebas actuales deben seguir pasando sin cambios:** `python -m pytest -q tests` (hoy pasan 147).
 
-## Método (repítelo para cada regla)
+## Método (repítelo para cada criterio)
 
-1. **Investigar:** busca el criterio en la fuente oficial y copia la frase exacta.
-2. **Redactar:** escribe la regla en el formato del archivo correspondiente.
-3. **Probar:** escribe al menos 4 casos de prueba:
+1. **Investigar:** busca el criterio en la fuente oficial y copia la frase exacta con su URL.
+2. **Contrastar con lo que ya tenemos:** compáralo con `criterios_registro.json`, la tabla del HLF y
+   `combinaciones_riesgo.json`.
+   - Si coincide, anótalo como "confirma".
+   - Si lo amplía, como "complementa".
+   - Si lo contradice, como "contradice". Explica la diferencia y cuál fuente tiene más autoridad (orden en
+     `docs/CRITERIO_PRIORIZACION.md` §3).
+3. **Redactar:** escribe la regla en el mismo formato que los archivos actuales.
+4. **Probar:** escribe al menos 5 casos de prueba por regla:
    - uno que cumple el criterio;
-   - uno negado ("se descarta…", "sin…");
+   - uno negado ("se descarta…", "sin…", "niega…");
    - uno ambiguo, que no debe asignar el criterio;
-   - uno con una trampa de fecha u otra persona (fecha de nacimiento, familiar).
-4. **Medir:** si el presupuesto lo permite, corre los casos con el clasificador existente (`lambda/criterios.py`,
-   `clasificar`) o con el de combinaciones (`lambda/combinaciones.py`).
-5. **Corregir o descartar:** si una regla da falsos positivos o falsos negativos, ajusta los términos. Si no se puede
-   hacer confiable, déjala fuera y anótala.
-6. **Registrar** en el informe qué hiciste y por qué.
+   - uno con trampa de fecha u otra persona (fecha de nacimiento, un familiar, un evento antiguo);
+   - uno que debería caer en otro nivel.
+5. **Medir:** corre los casos y calcula aciertos, falsos positivos y falsos negativos.
+6. **Corregir o descartar:** si una regla falla, ajústala y vuelve a medir. Si no se puede hacer confiable, déjala fuera y
+   explica por qué.
+7. **Registrar** todo en el informe.
 
 ## Tareas, en orden de prioridad
 
 ### T1. Banderas rojas transversales (lo más importante)
-Son síntomas o hallazgos que vuelven urgente a **cualquier** paciente, sin importar su diagnóstico. Por ejemplo:
-- sangrado digestivo (hematemesis, melena);
+Son síntomas o hallazgos que vuelven urgente o de alta prioridad a **cualquier** paciente, sin importar su diagnóstico.
+Por ejemplo:
+- sangrado digestivo;
 - déficit neurológico agudo;
 - dolor torácico en reposo;
 - ideación suicida con plan;
-- síntomas de sospecha de cáncer (NICE NG12: baja de peso inexplicada, disfagia progresiva, hemoptisis…);
-- fiebre en paciente inmunosuprimido;
+- síntomas de sospecha de cáncer (NICE NG12);
+- fiebre en inmunosuprimido;
 - síncope con esfuerzo;
-- disnea en reposo.
+- disnea en reposo;
+- síndrome de cauda equina.
 
-Archivo nuevo: `lambda/conocimiento/banderas_rojas.json`, con el **mismo formato de una entrada de
-`combinaciones_riesgo.json`** (`id`, `nombre`, `gatillo`, `gatillo_terminos`, `efecto` = `urgencia` o `alta`,
-`desenlace`, `fuente` {documento, cita, url}, `estado`, `letalidad` 1–4, `riesgo`). Pon `"base": {"descripcion": "cualquier
-paciente", "cie10": [], "terminos": []}` y `"transversal": true`. Meta: 25 a 40 banderas, todas con fuente.
+Archivo: `lambda/conocimiento/propuestas_kiro/banderas_rojas.json`. Usa el mismo formato que una entrada de
+`combinaciones_riesgo.json`, con `"base": {"descripcion": "cualquier paciente", "cie10": [], "terminos": []}` y
+`"transversal": true`. Meta: 30 a 50 banderas.
 
-### T2. Criterios internos para los diagnósticos de la tabla oficial
-Archivo nuevo: `lambda/conocimiento/criterios_tabla_hlf.json`, con el **mismo formato de una enfermedad de
-`criterios_registro.json`** (`id`, `enfermedad`, `niveles` {alta, media, baja} con `criterios_detallados` y
-`justificacion`, `excepciones_de_urgencia`, `fuente_url`, `riesgo`). Usa como clave el `codigo` `HLF-…` de
-`diagnosticos_tabla_hlf.json`. Empieza por las filas de **prioridad alta** y por los diagnósticos más comunes de cada
-especialidad. Meta: entre 30 y 50 diagnósticos bien hechos; es mejor tener menos que tener alguno inventado.
+### T2. Investigación completa por especialidad
+Un archivo por especialidad: `lambda/conocimiento/propuestas_kiro/criterios_<especialidad>.json`. Usa el mismo formato
+que una enfermedad de `criterios_registro.json`:
+- `id`, `enfermedad`, `cie10`; si es una fila de la tabla del HLF, también su `codigo` `HLF-…`;
+- `niveles` {alta, media, baja}, con `criterios_detallados` y `justificacion`;
+- `excepciones_de_urgencia`, `fuente_url` y `riesgo`;
+- `estado` y `relacion_con_lo_actual` (confirma, complementa o contradice).
 
-### T3. Casos de prueba
-Archivo nuevo: `tests/casos_criterios_noche.json`, con los casos del método (texto, regla esperada, nivel esperado y si
-debe marcar urgencia). Agrega `tests/test_criterios_noche.py`, que valide **sin Bedrock** lo siguiente:
-- que cada regla tenga fuente y URL;
-- que ninguna regla baje la prioridad;
-- que los términos del gatillo aparezcan en los casos positivos;
-- que el JSON se cargue.
+Cubre **todas** las enfermedades y síntomas de la tabla del HLF de esa especialidad y los demás motivos frecuentes de
+derivación. Empieza por los de prioridad alta. Prefiere pocos criterios bien hechos antes que muchos sin fuente.
 
-### T4. Informe para el equipo
-Archivo nuevo: `docs/kiro/INFORME_NOCHE.md`, con:
-- qué agregaste;
-- cuántas reglas están verificadas en la fuente original y cuántas no;
-- resultados de las pruebas y de la medición con Bedrock, si la hiciste;
-- preguntas abiertas para médicos del HLF;
-- qué recomiendas integrar antes de las 10:15 y qué dejar para después.
+### T3. Combinaciones, letalidad y ventanas de riesgo
+- `propuestas_kiro/combinaciones_nuevas.json`: combinaciones que faltan en `combinaciones_riesgo.json`, en el mismo formato.
+- `propuestas_kiro/letalidad.json`: por diagnóstico, nivel 1 a 4 (1 = más letal), con cifra, población y PMID/DOI.
+- `propuestas_kiro/ventanas_riesgo.json`: días que un evento sigue siendo relevante, por diagnóstico y tipo de evento, con fuente.
 
-## Lo que el equipo hará a las 08:00
+### T4. Muchas pruebas que demuestren que funciona
+1. **Casos:** `tests/kiro/casos.json`, con todos los casos del método (texto, regla esperada, nivel esperado, si debe
+   marcar urgencia). Meta: más de 300 casos.
+2. **Pruebas sin Bedrock:** `tests/kiro/test_propuestas.py`, que verifique:
+   - que cada JSON se cargue y tenga el formato de los archivos actuales;
+   - que cada regla tenga fuente con URL y cita;
+   - que ninguna regla baje la prioridad;
+   - que no haya `id` repetidos ni contradicciones sin explicar;
+   - que los términos del gatillo aparezcan en los casos positivos y no disparen en los negados.
+3. **Mismas pruebas que hacemos nosotros:** imita `tests/test_criterios.py` y `tests/test_combinaciones.py`. Usa
+   `rubrica.ClienteFalso` para simular la IA, pero **cargando tus archivos** desde un script propio en `scripts/kiro/`,
+   sin modificar `criterios.py` ni `combinaciones.py`.
+4. **Medición con la IA real** (si el presupuesto lo permite): imita `scripts/evaluar_criterios.py` y
+   `scripts/evaluar_combinaciones.py` en `scripts/kiro/evaluar_propuestas.py`. Clasifica una muestra de tus casos con
+   Bedrock y reporta:
+   - porcentaje de acierto;
+   - casos clasificados más bajo de lo debido (el error más grave);
+   - urgencias detectadas y urgencias falsas;
+   - estabilidad entre 3 lecturas.
+5. **Comparación con lo actual:** corre tus casos también contra los criterios que ya tenemos. Muestra cuántos casos
+   resuelve lo actual y cuántos más resuelven tus propuestas.
 
-El equipo revisa tu rama, corre las pruebas y decide qué integra. La integración en el motor (que `combinaciones.py` lea
-`banderas_rojas.json` y que `criterios.py` lea `criterios_tabla_hlf.json`) la hace el equipo, no tú.
+### T5. Informe completo
+Archivo: `docs/kiro/INFORME_NOCHE.md`. Debe incluir:
+- **Resumen** en 10 líneas: qué encontraste, cuánto mejora y qué recomiendas integrar antes de las 10:15.
+- **Por especialidad:** enfermedades y síntomas cubiertos, criterios nuevos, fuentes y qué confirma, complementa o
+  contradice lo actual.
+- **Banderas rojas, combinaciones, letalidad y ventanas,** con sus fuentes.
+- **Resultados de las pruebas,** con números: casos, aciertos, falsos positivos, falsos negativos, clasificaciones más
+  bajas de lo debido, y comparación con lo actual.
+- **Lista de fuentes** con URL, marcando cuáles verificaste en el original.
+- **Preguntas abiertas para médicos del HLF.**
+- **Qué no recomiendas integrar** y por qué.
+
+## Lo que hará el equipo a las 08:00
+
+El equipo revisa tu rama, corre tus pruebas y las actuales, y decide qué integra. Conectar tus archivos al motor (que el
+sistema lea las banderas rojas y los criterios nuevos) lo hace el equipo, no tú.
 
 ## Riesgos legales que debes respetar (Ley 21.719 de datos personales; Ley 20.584 de derechos del paciente)
 
 - Ningún dato de paciente, sintético o real, sale a un servicio externo distinto de Bedrock, que ya está en uso.
-- Las reglas deben poder explicarse con su fuente, porque cada cambio de posición debe ser explicable (art. 8 bis).
-- La inasistencia o el nivel socioeconómico **nunca** pueden subir ni bajar la prioridad clínica.
+- Cada regla debe poder explicarse con su fuente, porque cada cambio de posición de un paciente debe ser explicable (art. 8 bis).
+- La inasistencia, la comuna, la previsión o el nivel socioeconómico **nunca** pueden cambiar la prioridad clínica.
 - No conviertas el GES en una regla de orden: hoy el cálculo de plazos GES es aproximado. Anótalo como propuesta.
 
-Detente a las 07:45, haz commit en tu rama con un mensaje claro y deja el informe listo.
+## Horario
+
+Trabaja por bloques y haz commit en tu rama al terminar cada tarea, para no perder avance. Detente a las **07:45**, corre
+todas las pruebas (las actuales y las tuyas) y deja el informe listo.
