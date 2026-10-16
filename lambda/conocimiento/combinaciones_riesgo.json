@@ -727,7 +727,7 @@
     "edema"
    ],
    "letalidad": 2,
-   "riesgo": "La infección causa el 22% de las descompensaciones de insuficiencia cardíaca en Chile (ICARO, PMID 15332366); tras hospitalizarse, la mortalidad a 1 año es 24,5–29,6%."
+   "riesgo": "La infección causa el 22% de las descompensaciones de insuficiencia cardíaca en Chile (ICARO, PMID 15332366); tras hospitalizarse, la mortalidad a 1 año es 24,5% (IC95% 19,4–30,0%; Ciapponi 2016, PMID 27553287)."
   },
   {
    "id": "coronario_dolor_reposo",
@@ -1059,7 +1059,19 @@
     "matarse",
     "autolesi",
     "intento",
-    "pastillas"
+    "pastillas",
+    "carta de despedida",
+    "despedirse",
+    "tirarse",
+    "tirara",
+    "lanzarse",
+    "colgarse",
+    "ahorcar",
+    "hacerse dano",
+    "hacerle dano",
+    "matar",
+    "no quiere vivir",
+    "acabar con su vida"
    ],
    "letalidad": 2,
    "riesgo": "Tras un alta psiquiátrica, la tasa de suicidio es 1.132 por 100.000 pacientes-año en los primeros 3 meses y 2.078 si el ingreso fue por conducta suicida (Chung 2017, PMID 28564699); el riesgo se concentra al inicio."

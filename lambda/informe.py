@@ -51,7 +51,8 @@ def _frase(texto, inicio, fin):
 
 
 def _negado(texto, inicio):
-    ini = max(texto.rfind(".", 0, inicio), texto.rfind("\n", 0, inicio), texto.rfind(";", 0, inicio)) + 1
+    # corta también en ":" (lo que sigue a dos puntos es otra afirmación: "sin tratamiento por meses: hoy somnolienta")
+    ini = max(texto.rfind(".", 0, inicio), texto.rfind("\n", 0, inicio), texto.rfind(";", 0, inicio), texto.rfind(":", 0, inicio)) + 1
     return bool(NEGACION.search(" ".join(texto[ini:inicio].split()[-VENTANA_NEGACION:])))
 
 

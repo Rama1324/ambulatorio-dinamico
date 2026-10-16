@@ -255,7 +255,7 @@ def agudeza(ev):
 # Letalidad de una descompensación por diagnóstico (1 = más letal). Ordinal y aproximado; cifras verificadas en PubMed.
 LETALIDAD_DX = {
     "K70": (1, "cirrosis descompensada: hemorragia variceal 16% de mortalidad a 6 semanas (Reverter 2014, PMID 24148622); peritonitis bacteriana espontánea 31,5% a 1 mes y 66% a 1 año (Arvaniti 2010, PMID 20558165)"),
-    "I50": (2, "tras hospitalizarse por insuficiencia cardíaca, 24,5–29,6% de mortalidad a 1 año (ICARO Chile, PMID 15332366; Ciapponi 2016, PMID 27553287)"),
+    "I50": (2, "tras hospitalizarse por insuficiencia cardíaca, 24,5% de mortalidad a 1 año (IC95% 19,4–30,0%; Ciapponi 2016, PMID 27553287)"),
     "J44": (2, "tras una exacerbación hospitalizada de EPOC, 23% de mortalidad a 1 año, 35% si estuvo en UCI (Groenewegen 2003, PMID 12907529)"),
     "I20": (2, "infarto: 14,2% de mortalidad hospitalaria en Chile (Nazzal 2011); síndrome coronario agudo ≈7,9% a 6 meses (GRACE, PMID 17032691)"),
     "I10": (2, "emergencia hipertensiva: 12,5% de mortalidad hospitalaria y 38,9% a 12 meses (Guiga 2017, PMID 28866866)"),

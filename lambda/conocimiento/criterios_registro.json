@@ -14,7 +14,7 @@
       "I50"
      ],
      "fuente_url": "https://www.health.qld.gov.au/cpc/cardiology/heart-failure",
-     "riesgo": "Tras una hospitalización por insuficiencia cardíaca, la mortalidad a 1 año es 24,5–29,6% y la readmisión a 12 meses 31% (ICARO Chile, PMID 15332366; Ciapponi 2016, PMID 27553287). Un control antes de 7 días tras una urgencia reduce la mortalidad a 1 año (HR 0,92; Atzema 2018, PMID 30559279).",
+     "riesgo": "Tras una hospitalización por insuficiencia cardíaca, la mortalidad a 1 año es 24,5% (IC95% 19,4–30,0%) y la readmisión a 12 meses 31% (ICARO Chile, PMID 15332366; Ciapponi 2016, PMID 27553287). Un control antes de 7 días tras una urgencia reduce la mortalidad a 1 año (HR 0,92; Atzema 2018, PMID 30559279).",
      "niveles": {
       "alta": {
        "criterios_detallados": [

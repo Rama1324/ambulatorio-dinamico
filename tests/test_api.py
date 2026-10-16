@@ -635,3 +635,14 @@ def test_importar_pacientes_nuevos_en_una_sola_hoja():
     assert p["categoria"] == "alta" and p["especialidad"] == "Cardiología" and p["posicion"] <= d["total"]
     plantilla = app.handler({"requestContext": {"http": {"method": "GET"}}, "rawPath": "/plantillas/pacientes_nuevos"})
     assert plantilla["statusCode"] == 200 and "diagnostico_cie10" in plantilla["body"]
+
+def test_hallazgos_de_la_revision_de_kiro():
+    import informe, json as _j
+    t = "Paciente sin tratamiento por meses: hoy somnolienta y confusa."
+    assert not informe._negado(t, t.find("somnolienta"))          # la negación no cruza los dos puntos
+    t2 = "Se descarta neoplasia maligna."
+    assert informe._negado(t2, t2.find("neoplasia"))               # la negación en la misma frase sigue funcionando
+    filas = {d["diagnostico_texto"]: d for d in call("GET", "/catalogo")[1]["diagnosticos"]}
+    assert "Insulinoterapia" not in filas and "Diabetes gestacional con indicacion de insulinoterapia" in filas   # fila unida
+    comb = _j.load(open(os.path.join(RAIZ, "lambda", "conocimiento", "combinaciones_riesgo.json"), encoding="utf-8"))
+    assert "hacerle dano" in next(c for c in comb["combinaciones"] if c["id"] == "riesgo_suicida")["gatillo_terminos"]

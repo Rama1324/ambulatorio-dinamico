@@ -92,7 +92,7 @@ def test_la_descompensacion_explica_su_letalidad():
     p = perfil("I50", "media")
     p["eventos_clinicos"] = [ev("2026-10-01", "hospitalizacion", "ingreso hospitalario")]
     r = puntaje.puntuar(p, CORTE)
-    assert r["letalidad"] == 2 and any(z["factor"] in ("tabla_oficial", "riesgo_vital") and "24,5–29,6%" in (z.get("riesgo") or "") for z in r["razones"])
+    assert r["letalidad"] == 2 and any(z["factor"] in ("tabla_oficial", "riesgo_vital") and "24,5% de mortalidad a 1 año" in (z.get("riesgo") or "") for z in r["razones"])
 
 
 def test_combinacion_no_verificada_solo_alerta():

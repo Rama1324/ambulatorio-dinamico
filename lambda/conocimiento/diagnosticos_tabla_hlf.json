@@ -373,23 +373,12 @@
    "codigo": "HLF-END-04",
    "especialidad": "Endocrinología",
    "seccion_pdf": "DIABETOLOGÍA",
-   "texto": "Diabetes gestacional con indicacion de",
-   "texto_pdf": "DIABETES GESTACIONAL CON INDICACION DE",
+   "texto": "Diabetes gestacional con indicacion de insulinoterapia",
+   "texto_pdf": "DIABETES GESTACIONAL CON INDICACION DE INSULINOTERAPIA",
    "prioridad": "alta",
    "urgencia": false,
    "pagina": 94,
-   "verificacion": "texto y color de la celda coinciden"
-  },
-  {
-   "codigo": "HLF-END-05",
-   "especialidad": "Endocrinología",
-   "seccion_pdf": "DIABETOLOGÍA",
-   "texto": "Insulinoterapia",
-   "texto_pdf": "INSULINOTERAPIA",
-   "prioridad": "alta",
-   "urgencia": false,
-   "pagina": 94,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "fila unida (estaba partida en 2 líneas); verificada en la imagen de la página"
   },
   {
    "codigo": "HLF-END-06",
@@ -1781,23 +1770,12 @@
    "codigo": "HLF-TRA-03",
    "especialidad": "Traumatología",
    "seccion_pdf": "TRAUMATOLOGÍA Y ORTOPEDIA ADULTO",
-   "texto": "Endoprótesis total de cadera en mayores de 65 años por artrosis con",
-   "texto_pdf": "ENDOPRÓTESIS TOTAL DE CADERA EN MAYORES DE 65 AÑOS POR ARTROSIS CON",
+   "texto": "Endoprótesis total de cadera en mayores de 65 años por artrosis con limitación severa",
+   "texto_pdf": "ENDOPRÓTESIS TOTAL DE CADERA EN MAYORES DE 65 AÑOS POR ARTROSIS CON LIMITACIÓN SEVERA",
    "prioridad": "media",
    "urgencia": false,
    "pagina": 111,
-   "verificacion": "verificado en la imagen de la página"
-  },
-  {
-   "codigo": "HLF-TRA-04",
-   "especialidad": "Traumatología",
-   "seccion_pdf": "TRAUMATOLOGÍA Y ORTOPEDIA ADULTO",
-   "texto": "Limitación severa",
-   "texto_pdf": "LIMITACIÓN SEVERA",
-   "prioridad": "media",
-   "urgencia": false,
-   "pagina": 111,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "fila unida (estaba partida en 2 líneas); verificada en la imagen de la página"
   },
   {
    "codigo": "HLF-TRA-05",
