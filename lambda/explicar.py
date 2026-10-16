@@ -70,7 +70,7 @@ def explicar(paciente):
             messages=[{"role": "user", "content": [{"text": "Datos del paciente:\n" + json.dumps(_datos(paciente), ensure_ascii=False)}]}],
             inferenceConfig={"maxTokens": 300},  # los modelos Claude recientes no aceptan 'temperature'
         )
-        texto = r["output"]["message"]["content"][0]["text"].strip()
+        texto = "".join(b.get("text", "") for b in r["output"]["message"]["content"]).strip()  # puede venir un bloque de razonamiento antes
         if "validación clínica" not in texto:
             texto += " Propuesta sujeta a validación clínica."
         return texto, "bedrock"
