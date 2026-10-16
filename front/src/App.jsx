@@ -22,11 +22,12 @@ const EVENTOS = {
 };
 const FACTOR = {
   riesgo_vital: "Descompensación grave: evaluar", prioridad_inicial: "Priorización de la interconsulta", evento: "Evento posterior a la interconsulta",
-  tabla_oficial: "Tabla de priorización HLF", dias_espera: "Tiempo de espera", ges: "Garantía GES", medicion: "Última medición",
+  tabla_oficial: "Tabla de priorización HLF", dias_espera: "Tiempo de espera", ges: "Garantía GES", medicion: "Medición sostenida (no signo vital)",
   lace: "Puntaje LACE (experimental)", oncologico: "Hallazgo oncológico (informe)", ventana: "Vigencia del evento",
-  urgencia: "URGENCIA (criterio clínico)", criterio_clinico: "Criterio clínico de su enfermedad",
+  urgencia: "URGENCIA: derivar hoy", criterio_clinico: "Criterio clínico de su enfermedad",
+  combinacion: "Combinación de riesgo", alerta_combinacion: "Posible combinación de riesgo (revisar)",
 };
-const TIPO_EVENTO = { visita_urgencia: "Urgencia", hospitalizacion: "Hospitalización", examen_alterado: "Examen alterado", cambio_farmaco: "Cambio de fármaco", control_aps: "Control APS", hallazgo_oncologico: "Hallazgo oncológico", criterio_clinico: "Criterio clínico" };
+const TIPO_EVENTO = { visita_urgencia: "Urgencia", hospitalizacion: "Hospitalización", examen_alterado: "Examen alterado", cambio_farmaco: "Cambio de fármaco", control_aps: "Control APS", hallazgo_oncologico: "Hallazgo oncológico", criterio_clinico: "Criterio clínico", combinacion_riesgo: "Combinación de riesgo" };
 const POR_PAGINA = 25;
 // RUT chileno: dígito verificador módulo 11. Devuelve "12.345.678-5" o null.
 function validarRut(valor) {
@@ -788,6 +789,8 @@ function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso, onDes
         </div>
         {p.urgencia_hoy && <div className="mt-3 p-2.5 rounded bg-error text-on-error text-[14px] flex gap-2"><Icono n="emergency" className="text-[20px]" /><span>
           <b>Derivar hoy a urgencia.</b> {p.razones.find((r) => r.factor === "urgencia")?.valor}. No corresponde esperar una cita electiva.</span></div>}
+        {p.urgencia_cerrada && <div className="mt-3 p-2.5 rounded bg-hlf-claro text-hlf text-[14px] flex gap-2"><Icono n="task_alt" className="text-[20px]" /><span>
+          <b>Urgencia revisada</b>{p.urgencia_cerrada.responsable && ` por ${p.urgencia_cerrada.responsable}`}: sale del carril de urgencia y sigue en prioridad alta.</span></div>}
         {p.contactar_hoy && p.riesgo_vital && <div className="mt-3 p-2.5 rounded bg-error-container text-on-error-container text-[14px] flex gap-2"><Icono n="call" className="text-[20px]" /><span>
           <b>Descompensación grave: revisar su prioridad.</b> Evento del {fmt(p.evaluacion?.fecha_evento)}, en el sistema desde el {fmt(p.evaluacion?.llego_al_sistema)}.
           {p.evaluacion?.estado === "atrasada" ? <b> Atrasada: pasaron más de 72 h sin revisión.</b> : " Plazo: 72 h."} No hay registro posterior de estabilización ni de evaluación; el especialista decide.</span></div>}
@@ -994,7 +997,7 @@ function EvolucionPaciente({ p, fecha }) {
     v: `Prioridad ${ETIQUETA[p.categoria].toLowerCase()} (el sistema proponía ${ETIQUETA[p.categoria_sistema].toLowerCase()})`, d: `${p.revision?.motivo || ""}${p.revision?.usuario ? ` · ${p.revision.usuario}` : ""}` });
   if (p.grupo_proteccion) pasos.push({ icon: "shield_person", t: "Grupo de especial protección", v: p.grupo_proteccion, d: "MINSAL Ord. 536/2025, criterio 2: ordena antes dentro de la misma prioridad." });
   if (rz.ges) pasos.push({ icon: "verified", t: "Garantía GES", v: rz.ges.valor, d: `Fuente: ${rz.ges.fuente}` });
-  if (rz.medicion) pasos.push({ icon: "monitor_heart", t: "Medición fuera de rango", v: rz.medicion.valor, d: `Fuente: ${rz.medicion.fuente}` });
+  if (rz.medicion) pasos.push({ icon: "monitor_heart", t: "Medición sostenida fuera de rango", v: rz.medicion.valor, d: `Fuente: ${rz.medicion.fuente}` });
   if (rz.dias_espera) pasos.push({ icon: "schedule", t: "Tiempo de espera", v: rz.dias_espera.valor, d: `Fuente: ${rz.dias_espera.fuente}` });
   if (p.ajuste_manual) pasos.push({ icon: "swap_vert", t: "Ajuste manual de la posición",
     v: `N° ${p.ajuste_manual.posicion} en ${p.ajuste_manual.especialidad} (el sistema lo ponía en el N° ${p.ajuste_manual.posicion_anterior})`,
@@ -1991,6 +1994,18 @@ function Informe({ p, fecha, cargando, onConfirmar, onAviso, onRegistrado }) {
           <div className="text-[12px] opacity-80">{res.criterio.fuente} · solo sube la prioridad, nunca la baja.</div>
         </div>
       )}
+      {res?.combinaciones?.aplicadas?.length > 0 && (
+        <div className={`mt-3 rounded p-3 text-[14px] ${res.combinaciones.aplicadas.some((a) => a.efecto === "urgencia") ? "bg-error text-on-error" : "border border-error bg-error-container/40"}`}>
+          <b>Combinación de riesgo detectada</b>
+          {res.combinaciones.aplicadas.map((a) => (
+            <div key={a.id} className="text-[13px] mt-1">{a.efecto === "urgencia" ? "URGENCIA · " : "Prioridad alta · "}<b>{a.nombre}</b>: “{a.cita_gatillo}” → riesgo de {a.desenlace}
+              <div className="text-[12px] opacity-80">Fuente: {a.fuente.documento}{a.fuente.ubicacion ? `, ${a.fuente.ubicacion}` : ""}{a.estado === "guia_citada" ? " (verificar texto)" : ""}</div></div>
+          ))}
+        </div>
+      )}
+      {res?.combinaciones?.alertas?.length > 0 && res.combinaciones.alertas.map((a, i) => (
+        <div key={i} className="mt-2 rounded p-2 text-[13px] bg-ambar-container text-ambar"><b>Posible combinación de riesgo (no está en la lista):</b> {a.descripcion} · “{a.cita}”. Queda visible para el equipo; no cambia la prioridad.</div>
+      ))}
       {res?.informativos?.length > 0 && res.informativos.map((h, i) => (
         <p key={i} className="mt-2 text-[13px] text-on-surface-variant">ℹ “{h.cita}”: {h.nota}.</p>
       ))}
@@ -2430,7 +2445,7 @@ function Criterios({ ia }) {
           <li><b>Orden dentro de cada prioridad</b> (MINSAL, Ord. 536 del 21-03-2025): criterio médico (primero la descompensación grave, luego cualquier paciente descompensado: va antes que un paciente estable aunque este pertenezca a un grupo de protección), grupos de especial protección (PRAIS, NNA bajo protección del Estado, Valech, Rettig), antigüedad en lista mayor a 1 año y fecha de ingreso. {ia
             ? <>No se usa ningún puntaje adicional: <b>sin LACE</b>, solo la cascada oficial.</>
             : <>El <b>puntaje LACE</b> es experimental: solo desempata a pacientes con la misma prioridad y antigüedad.</>}</li>
-          <li><b>Observaciones</b> que no cambian el orden: posible incumplimiento GES (a verificar, porque el plazo corre desde un hito que el registro no trae); 2 inasistencias consecutivas (posible causal de egreso 8); última medición fuera de rango.</li>
+          <li><b>Observaciones</b> que no cambian el orden: posible incumplimiento GES (a verificar, porque el plazo corre desde un hito que el registro no trae); 2 inasistencias consecutivas (posible causal de egreso 8); HbA1c o PHQ-9 fuera de rango en dos mediciones seguidas. Los signos vitales (presión, saturación, glicemia capilar, dolor) no se usan como razón: cambian en minutos.</li>
           <li><b>Egreso por fallecimiento</b> (causal 9, Manual de Gestión de la Demanda SSMSO).</li>
         </ol>
       </Caja>
@@ -2454,6 +2469,17 @@ function Criterios({ ia }) {
       </Caja>
       <Caja titulo="El motivo del evento importa">
         <p>Una urgencia o una hospitalización solo sube la prioridad si es por <b>la enfermedad por la que el paciente espera</b> (o una complicación de ella). Una amputación por un accidente en un paciente que espera cardiología <b>no</b> cambia su prioridad de cardiología: queda como alerta para revisar si necesita otra derivación. Las urgencias se clasifican por triage: ESI 1-2 grave, ESI 3 moderada, ESI 4-5 leve (un dolor de dedo no sube a nadie). La IA lee el motivo y la relación en el informe; en las planillas se pueden cargar en las columnas <i>motivo</i> y <i>relacionado</i>.</p>
+      </Caja>
+      <Caja titulo="Combinaciones de riesgo: lo que juntas es más grave">
+        <p className="mb-2">Una condición menor puede ser grave según quién la tenga. El sistema revisa <b>31 combinaciones</b> de una condición de base del paciente con un evento o hallazgo, cada una con su fuente: diabetes + lesión en el pie (pie diabético), anticoagulado + golpe en la cabeza, quimioterapia + fiebre, cáncer + dolor de espalda con debilidad, cirrosis + sangrado, adulto mayor + caída con dolor de cadera, embarazo + presión alta, insuficiencia renal + potasio alto, entre otras.</p>
+        <ul className="list-disc pl-5 space-y-1">
+          <li>La IA marca la combinación copiando la frase; el código verifica que la base esté en el registro del paciente (o en una frase del texto), que el gatillo esté escrito y no negado, y que hable de lo que dice el gatillo.</li>
+          <li>Efecto: <b>urgencia</b> (derivar hoy, primero en la lista) o <b>prioridad alta</b>. Nunca baja a nadie.</li>
+          <li>Red de seguridad: si la IA ve una combinación peligrosa que no está en la lista, queda como <b>alerta visible</b> para el equipo.</li>
+          <li>Entre pacientes descompensados de la misma prioridad, va primero el evento más grave: UCI o C1 antes que hospitalización o C2.</li>
+          <li>Los <b>signos vitales</b> (presión, saturación, glicemia capilar, dolor) no justifican la prioridad: cambian en minutos.</li>
+        </ul>
+        <p className="text-[13px] text-on-surface-variant mt-2">Probado con Claude en 45 casos escritos a mano: 26 de 26 urgencias detectadas, 10 de 10 casos trampa sin falsa alarma (negaciones, paciente sin diabetes, aspirina sola, dolor de dedo).</p>
       </Caja>
       <Caja titulo="Criterios clínicos por enfermedad">
         <p className="mb-2">Para 46 enfermedades de Oftalmología, Otorrinolaringología, Psiquiatría, Reumatología y Urología hay criterios de prioridad <b>dentro</b> de cada enfermedad (no solo por diagnóstico): por ejemplo, hipoacusia gradual → media; hipoacusia súbita de menos de 72 h → <b>urgencia</b>. La IA lee el motivo de la interconsulta o el informe, elige el criterio y copia la frase que lo respalda; el código verifica la frase y aplica el nivel.</p>

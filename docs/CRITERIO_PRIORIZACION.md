@@ -108,9 +108,9 @@ pacientes en la evaluación). Si la IA lee mal o falla, se usan las reglas y que
 - Criterios por enfermedad: 154 notas, 97,8 % correcto, 0 casos clasificados más bajo de lo debido, 16 de 16 urgencias
   detectadas, 0 urgencias falsas.
 
-## 6. Lo que pidió el hospital y todavía falta
-Estas observaciones vienen directamente del HLF. Son la dirección correcta, y **el sistema actual no las cumple del
-todo**.
+## 6. Lo que pidió el hospital (implementado el 15-10-2026)
+Estas observaciones vienen directamente del HLF. Ya están implementadas, con tests y evaluadas con Claude real; lo que
+sigue describe el razonamiento y cómo quedó.
 
 ### 6.1 Razonar con combinaciones de enfermedades
 Una condición leve en una persona sana puede ser grave en otra. **El riesgo está en la combinación**, no en cada
@@ -125,20 +125,29 @@ diagnóstico por separado. Ejemplos del tipo de razonamiento que se espera:
 - **Adulto mayor frágil + caída** → fractura de cadera y pérdida de la autonomía.
 - **Depresión + consumo de alcohol, o + pérdida reciente** → mayor riesgo suicida.
 
-**Hoy:** las comorbilidades solo se usan en el índice LACE (desempate, y no en el modo con IA) y como dato informativo
-para la IA. **No hay reglas de combinación.** La forma de agregarlas sin romper los principios: una tabla de
-**combinaciones de riesgo** (condición A + condición o evento B → nivel o alerta), **cada una con su fuente** (guía MINSAL
-o GES, guía internacional, consenso), aplicada por el código; la IA solo detecta en el texto que se cumplen A y B,
-citando la frase. Las combinaciones sin fuente quedan marcadas "a validar por médico" y solo generan una alerta, no
-suben la prioridad.
+**Cómo quedó** (`lambda/combinaciones.py` + `lambda/conocimiento/combinaciones_riesgo.json`):
+- **31 combinaciones**, cada una con su fuente: 19 verificadas en el texto oficial (tabla del HLF en imagen, NICE NG232,
+  CG151, NG234, CG124, CG103, CG150, NG12, GINA) y 12 con la guía identificada pero sin el texto oficial abierto, marcadas
+  `guia_citada` para verificar.
+- **Verificación:** la IA marca la combinación copiando la frase. El código exige que la condición de base esté en el
+  registro del paciente (diagnóstico, comorbilidades, edad) o en una frase verificada del texto; que la frase del
+  gatillo esté textual, no negada y con un término obligatorio del gatillo; y que 2 de 3 lecturas coincidan.
+- **Efecto:** urgencia (derivar hoy) o prioridad alta. Nunca baja.
+- **Red de seguridad:** si la IA ve una combinación peligrosa que no está en la lista, queda una alerta visible para el
+  equipo. Si la IA falla, queda una alerta "no se pudo revisar este texto".
+- **Evaluación con Claude real** en 45 casos escritos a mano: 26 de 26 urgencias detectadas y 10 de 10 casos trampa sin
+  falsa alarma (`docs/algoritmo/EVALUACION_COMBINACIONES.md`).
+- **Límite:** solo se revisan textos (informes, motivo de la interconsulta). Los eventos del registro del hospital no
+  traen texto ni fármacos, así que una combinación con un dato que solo está en otro sistema no se ve hasta que llega un
+  texto.
 
 ### 6.2 Los signos vitales no justifican la prioridad
 El hospital dijo que, en las razones de por qué una persona cambia de lugar en la lista, **los signos vitales sirven de
 poco: en 30 minutos pueden ser otros**. Una presión o una saturación tomadas un día no describen el riesgo de las
 semanas que la persona va a esperar.
 
-**Hoy:** la ficha muestra "Última medición fuera de rango" (presión, saturación, glicemia…) como una razón más. **Hay que
-sacarla de las razones de prioridad.**
+**Cómo quedó:** los signos vitales ya no son razón de prioridad. Solo cuentan HbA1c y PHQ-9 cuando las dos últimas
+mediciones están fuera de rango (`puntaje.MEDICIONES_ESTABLES`).
 
 **Qué sí sirve:**
 - mediciones **estables** o **tendencias** (HbA1c, que refleja 3 meses; PHQ-9; función renal; FEV1);
@@ -157,10 +166,13 @@ riesgo de morir o de un daño irreversible**:
 - **Ejemplos de urgencias graves pero de menor mortalidad:** dolor intenso no complicado, crisis de ansiedad, cólico
   renal sin infección.
 
-**Hoy:** el sistema distingue grave, moderada y leve (ESI) y si el evento tiene relación con su enfermedad, pero **no
-ordena las urgencias graves entre sí por mortalidad**. La forma de hacerlo sin romper los principios: **una escala de
-riesgo vital por tipo de evento o hallazgo, con fuente** (mortalidad a 30 o 90 días publicada; categorización C1–C5), que
-el código usa como criterio de orden dentro de la categoría, justo después de "derivar hoy".
+**Cómo quedó:**
+- **Orden:** urgencia "derivar hoy" (criterios y combinaciones) → descompensación grave → **agudeza del evento** (UCI o
+  ESI/C1 = 3; hospitalización, ESI/C2 o descompensación grave = 2; moderada = 1) → cualquier descompensado → grupos de
+  protección → antigüedad.
+- **Salida del carril de urgencia:** sale cuando el especialista registra una decisión, una revisión o un ajuste
+  posterior. Sigue en alta, porque nunca baja.
+- **Pendiente:** ordenar por mortalidad específica de cada diagnóstico, con datos chilenos.
 
 ## 7. Cómo debe razonar una IA que ayude a mejorar estos criterios
 1. **Piensa en desenlaces:** ¿qué le puede pasar a esta persona si espera semanas o meses? (muerte, amputación, ceguera,

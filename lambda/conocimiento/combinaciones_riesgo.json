@@ -1,0 +1,1108 @@
+{
+ "version": "combinaciones_v1.1",
+ "fecha": "2026-10-15",
+ "objeto": "Combinaciones de una condición de base del paciente (diagnóstico, comorbilidad, edad, embarazo, fármaco) con un evento o hallazgo, que juntas aumentan el riesgo de muerte o daño irreversible. La IA solo detecta en el texto que se cumplen la base y el gatillo, citando la frase; el código verifica y aplica el efecto.",
+ "efectos": {
+  "urgencia": "Derivar hoy: prioridad alta, primero en la lista, contactar hoy.",
+  "alta": "Sube a prioridad alta (nunca baja).",
+  "alerta": "Visible para el equipo clínico; no cambia la prioridad por sí sola."
+ },
+ "estados": {
+  "verificado": "Texto leído en el documento oficial (cita textual).",
+  "guia_citada": "Recomendación de la guía indicada; el texto oficial no se pudo abrir: verificar."
+ },
+ "combinaciones": [
+  {
+   "id": "pie_diabetico_lesion",
+   "nombre": "Diabetes + lesión en el pie",
+   "base": {
+    "descripcion": "diabetes",
+    "cie10": [
+     "E10",
+     "E11",
+     "E13",
+     "E14"
+    ],
+    "terminos": [
+     "diabet",
+     "dm2",
+     "dm1",
+     "dm 2",
+     "dm 1"
+    ]
+   },
+   "gatillo": "herida, úlcera, uña encarnada, ampolla, callo ulcerado o cambio de color en el pie",
+   "efecto": "alta",
+   "desenlace": "infección profunda, osteomielitis y amputación",
+   "fuente": {
+    "documento": "IWGDF 2023, Guías de prevención y manejo de la enfermedad del pie relacionada con la diabetes",
+    "url": "https://iwgdfguidelines.org/guidelines-2023/",
+    "cita": "Una úlcera en el pie de una persona con diabetes requiere evaluación y manejo por un equipo especializado."
+   },
+   "estado": "guia_citada",
+   "gatillo_terminos": [
+    "pie",
+    "ortejo",
+    "una",
+    "plantar",
+    "talon",
+    "dedo del pie",
+    "ampolla",
+    "callo"
+   ]
+  },
+  {
+   "id": "pie_diabetico_infeccion",
+   "nombre": "Diabetes + infección o necrosis en el pie",
+   "base": {
+    "descripcion": "diabetes",
+    "cie10": [
+     "E10",
+     "E11",
+     "E13",
+     "E14"
+    ],
+    "terminos": [
+     "diabet",
+     "dm2",
+     "dm1",
+     "dm 2",
+     "dm 1"
+    ]
+   },
+   "gatillo": "pie con signos de infección (enrojecimiento extendido, pus, mal olor, fiebre), necrosis o gangrena",
+   "efecto": "urgencia",
+   "desenlace": "sepsis y amputación mayor",
+   "fuente": {
+    "documento": "IWGDF/IDSA 2023, Guía de infección del pie diabético, recomendación 20",
+    "url": "https://iwgdfguidelines.org/wp-content/uploads/2023/07/IWGDF-2023-04-Infection-Guideline.pdf",
+    "cita": "Persona con diabetes, enfermedad arterial periférica y úlcera infectada o gangrena: evaluación urgente por cirugía y cirugía vascular."
+   },
+   "estado": "guia_citada",
+   "gatillo_terminos": [
+    "pus",
+    "purulent",
+    "mal olor",
+    "celulitis",
+    "necros",
+    "gangren",
+    "negro",
+    "fiebre",
+    "infecc",
+    "secrecion"
+   ]
+  },
+  {
+   "id": "dm_cetoacidosis",
+   "nombre": "Diabetes + signos de cetoacidosis o estado hiperosmolar",
+   "base": {
+    "descripcion": "diabetes",
+    "cie10": [
+     "E10",
+     "E11",
+     "E13",
+     "E14"
+    ],
+    "terminos": [
+     "diabet",
+     "dm2",
+     "dm1",
+     "dm 2",
+     "dm 1"
+    ]
+   },
+   "gatillo": "vómitos persistentes, respiración rápida y profunda, cetonas positivas, glicemia muy elevada con deshidratación o compromiso de conciencia",
+   "efecto": "urgencia",
+   "desenlace": "muerte por cetoacidosis o coma hiperosmolar",
+   "fuente": {
+    "documento": "Tabla de priorización SSMSO 2025, HLF, Diabetología",
+    "ubicacion": "pág. 94",
+    "cita": "DM2 CON CETOACIDOSIS (CAD) → ALTA- URGENCIA; HIPERGLUCEMIA HIPEROSMOLAR → ALTA"
+   },
+   "estado": "verificado",
+   "gatillo_terminos": [
+    "vomit",
+    "ceton",
+    "cetoacidosis",
+    "respiracion rapida",
+    "kussmaul",
+    "hiperglic",
+    "hiperglu",
+    "glicemia",
+    "deshidrat",
+    "conciencia",
+    "hiperosmolar"
+   ]
+  },
+  {
+   "id": "dm_hipoglucemia_grave",
+   "nombre": "Diabetes + hipoglucemias graves o recurrentes",
+   "base": {
+    "descripcion": "diabetes",
+    "cie10": [
+     "E10",
+     "E11",
+     "E13",
+     "E14"
+    ],
+    "terminos": [
+     "diabet",
+     "dm2",
+     "dm1",
+     "dm 2",
+     "dm 1"
+    ]
+   },
+   "gatillo": "hipoglucemias con pérdida de conciencia, convulsión o que requieren ayuda de terceros, o hipoglucemias repetidas",
+   "efecto": "alta",
+   "desenlace": "muerte o daño neurológico por hipoglucemia",
+   "fuente": {
+    "documento": "Tabla de priorización SSMSO 2025, HLF, Diabetología y Endocrinología adulto",
+    "ubicacion": "pág. 94",
+    "cita": "DM1 CON HIPOGLUCEMIAS RECURRENTES → ALTA; HIPOGLUCEMIA GRAVE RECURRENTE → ALTA"
+   },
+   "estado": "verificado",
+   "gatillo_terminos": [
+    "hipogluc",
+    "hipoglic"
+   ]
+  },
+  {
+   "id": "anticoagulado_tec",
+   "nombre": "Anticoagulado o antiagregado + golpe en la cabeza",
+   "base": {
+    "descripcion": "uso de anticoagulante o antiagregante (excepto aspirina sola)",
+    "cie10": [],
+    "terminos": [
+     "anticoagul",
+     "warfarin",
+     "acenocumarol",
+     "neosintrom",
+     "rivaroxaban",
+     "apixaban",
+     "dabigatran",
+     "edoxaban",
+     "heparina",
+     "enoxaparina",
+     "clopidogrel",
+     "ticagrelor",
+     "prasugrel"
+    ]
+   },
+   "gatillo": "caída o golpe en la cabeza (TEC), aunque no tenga síntomas",
+   "efecto": "urgencia",
+   "desenlace": "hemorragia intracraneal que solo se ve en un TAC",
+   "fuente": {
+    "documento": "NICE NG232 Head injury, recomendación 1.5.13",
+    "url": "https://www.nice.org.uk/guidance/ng232/chapter/Recommendations",
+    "cita": "For people who have sustained a head injury and have no other indications for a CT head scan, but are on anticoagulant treatment (including vitamin K antagonists, direct-acting oral anticoagulants (DOACs), heparin and low molecular weight heparins) or antiplatelet treatment (excluding aspirin monotherapy), consider doing a CT head scan: within 8 hours"
+   },
+   "estado": "verificado",
+   "gatillo_terminos": [
+    "cabeza",
+    "craneo",
+    "tec",
+    "frontal",
+    "occipital",
+    "parietal",
+    "temporal",
+    "encefalocraneano"
+   ]
+  },
+  {
+   "id": "anticoagulado_sangrado",
+   "nombre": "Anticoagulado + sangrado importante",
+   "base": {
+    "descripcion": "uso de anticoagulante",
+    "cie10": [],
+    "terminos": [
+     "anticoagul",
+     "warfarin",
+     "acenocumarol",
+     "neosintrom",
+     "rivaroxaban",
+     "apixaban",
+     "dabigatran",
+     "edoxaban",
+     "heparina",
+     "enoxaparina"
+    ]
+   },
+   "gatillo": "sangrado digestivo (vómito con sangre, deposiciones negras), hematuria franca, sangrado que no se detiene",
+   "efecto": "urgencia",
+   "desenlace": "hemorragia grave",
+   "fuente": {
+    "documento": "Tabla de priorización SSMSO 2025, HLF, Gastroenterología adulto (úlcera gástrica complicada ALTA) y NICE CG124 1.2.2 (la anticoagulación es una condición a corregir de inmediato)",
+    "ubicacion": "pág. 95",
+    "cita": "ÚLCERA GÁSTRICA COMPLICADA → ALTA"
+   },
+   "estado": "guia_citada",
+   "gatillo_terminos": [
+    "sangr",
+    "hematemesis",
+    "melena",
+    "negra",
+    "hematuria",
+    "rectorragia",
+    "hemorrag"
+   ]
+  },
+  {
+   "id": "inmunosuprimido_fiebre",
+   "nombre": "Quimioterapia o inmunosupresión + fiebre",
+   "base": {
+    "descripcion": "quimioterapia, neutropenia, trasplante o fármacos inmunosupresores",
+    "cie10": [],
+    "terminos": [
+     "quimioterap",
+     "neutropen",
+     "inmunosupres",
+     "trasplant",
+     "metotrexato",
+     "biologico",
+     "corticoides en dosis altas",
+     "prednisona"
+    ]
+   },
+   "gatillo": "fiebre o sensación de enfermedad aguda",
+   "efecto": "urgencia",
+   "desenlace": "sepsis neutropénica (mortalidad 2–21 %)",
+   "fuente": {
+    "documento": "NICE CG151 Neutropenic sepsis",
+    "url": "https://www.nice.org.uk/guidance/cg151/chapter/1-Guidance",
+    "cita": "Neutropenic sepsis is a ... medical emergency that requires immediate hospital investigation and treatment."
+   },
+   "estado": "verificado",
+   "gatillo_terminos": [
+    "fiebre",
+    "febril",
+    "calofr",
+    "temperatura",
+    "38",
+    "39"
+   ]
+  },
+  {
+   "id": "cancer_compresion_medular",
+   "nombre": "Cáncer (actual o previo) + síntomas de compresión medular",
+   "base": {
+    "descripcion": "cáncer actual o antecedente de cáncer",
+    "cie10": [
+     "C"
+    ],
+    "terminos": [
+     "cancer",
+     "cáncer",
+     "neoplasia",
+     "carcinoma",
+     "metastasis",
+     "metástasis",
+     "tumor maligno",
+     "linfoma",
+     "mieloma"
+    ]
+   },
+   "gatillo": "dolor de espalda con debilidad de piernas, alteración de la sensibilidad, de la marcha, o de la vejiga o el intestino",
+   "efecto": "urgencia",
+   "desenlace": "paraplejia irreversible",
+   "fuente": {
+    "documento": "NICE NG234 Spinal metastases and metastatic spinal cord compression, recomendación 1.3.2",
+    "url": "https://www.nice.org.uk/guidance/ng234/chapter/Recommendations",
+    "cita": "Immediately contact the MSCC coordinator if a person with a past or current diagnosis of cancer presents with the symptoms or signs of cord compression listed in box 1. Treat this as an oncological emergency."
+   },
+   "estado": "verificado",
+   "gatillo_terminos": [
+    "debilidad",
+    "pierna",
+    "marcha",
+    "orin",
+    "vejiga",
+    "esfinter",
+    "sensibilidad",
+    "paraplej",
+    "incontin",
+    "camina"
+   ]
+  },
+  {
+   "id": "cancer_dolor_espalda",
+   "nombre": "Cáncer (actual o previo) + dolor de espalda sugerente de metástasis",
+   "base": {
+    "descripcion": "cáncer actual o antecedente de cáncer",
+    "cie10": [
+     "C"
+    ],
+    "terminos": [
+     "cancer",
+     "cáncer",
+     "neoplasia",
+     "carcinoma",
+     "metastasis",
+     "metástasis",
+     "tumor maligno",
+     "linfoma",
+     "mieloma"
+    ]
+   },
+   "gatillo": "dolor de espalda progresivo, nocturno, en banda o que empeora al toser, sin déficit neurológico",
+   "efecto": "alta",
+   "desenlace": "metástasis vertebral con riesgo de compresión medular",
+   "fuente": {
+    "documento": "NICE NG234, recomendación 1.3.3",
+    "url": "https://www.nice.org.uk/guidance/ng234/chapter/Recommendations",
+    "cita": "Seek advice through the MSCC coordinator (within 24 hours) if a person with a past or current diagnosis of cancer presents with pain with the characteristics suggesting spinal metastases"
+   },
+   "estado": "verificado",
+   "gatillo_terminos": [
+    "espalda",
+    "dorsal",
+    "lumbar",
+    "columna",
+    "vertebr"
+   ]
+  },
+  {
+   "id": "lumbago_cauda_equina",
+   "nombre": "Dolor lumbar + signos de cauda equina",
+   "base": {
+    "descripcion": "dolor lumbar o ciática",
+    "cie10": [
+     "M54",
+     "M51",
+     "M48"
+    ],
+    "terminos": [
+     "lumbago",
+     "lumbalgia",
+     "ciatica",
+     "ciática",
+     "dolor lumbar",
+     "hernia del nucleo",
+     "hernia lumbar"
+    ]
+   },
+   "gatillo": "pérdida de control de la orina o las deposiciones, adormecimiento en la zona genital o perineal (silla de montar), debilidad progresiva en ambas piernas o ciática bilateral",
+   "efecto": "urgencia",
+   "desenlace": "parálisis e incontinencia permanentes",
+   "fuente": {
+    "documento": "NICE CKS Back pain – low (without radiculopathy), signos de alarma de síndrome de cauda equina",
+    "url": "https://cks.nice.org.uk/topics/back-pain-low-without-radiculopathy/diagnosis/red-flag-symptoms-signs/",
+    "cita": "Síndrome de cauda equina: emergencia; derivación inmediata ante alteración vesical, intestinal o anestesia en silla de montar."
+   },
+   "estado": "guia_citada",
+   "gatillo_terminos": [
+    "orin",
+    "vejiga",
+    "esfinter",
+    "genital",
+    "perine",
+    "silla de montar",
+    "bilateral",
+    "ambas piernas",
+    "incontin",
+    "deposicion"
+   ]
+  },
+  {
+   "id": "adulto_mayor_caida_cadera",
+   "nombre": "Persona de 65 años o más + caída con dolor de cadera o sin poder caminar",
+   "base": {
+    "descripcion": "edad 65 años o más, o fragilidad",
+    "cie10": [],
+    "terminos": [
+     "fragil",
+     "frágil",
+     "adulto mayor"
+    ],
+    "edad_min": 65
+   },
+   "gatillo": "caída con dolor de cadera o ingle, o que no puede caminar o apoyar la pierna",
+   "efecto": "urgencia",
+   "desenlace": "fractura de cadera (mortalidad y pérdida de la autonomía si se retrasa la cirugía)",
+   "fuente": {
+    "documento": "NICE CG124 Hip fracture, recomendación 1.2.1",
+    "url": "https://www.nice.org.uk/guidance/cg124/chapter/Recommendations",
+    "cita": "Perform surgery on the day of, or the day after, admission."
+   },
+   "estado": "verificado",
+   "gatillo_terminos": [
+    "cadera",
+    "ingle",
+    "femur",
+    "no puede caminar",
+    "no puede apoyar",
+    "no camina",
+    "no logra caminar",
+    "no logra apoyar"
+   ]
+  },
+  {
+   "id": "adulto_mayor_confusion",
+   "nombre": "Persona de 65 años o más + confusión de inicio reciente",
+   "base": {
+    "descripcion": "edad 65 años o más",
+    "cie10": [],
+    "terminos": [
+     "adulto mayor"
+    ],
+    "edad_min": 65
+   },
+   "gatillo": "confusión, desorientación, somnolencia o agitación de inicio reciente (horas o días)",
+   "efecto": "urgencia",
+   "desenlace": "delirium por una causa médica grave (infección, deshidratación, fármacos)",
+   "fuente": {
+    "documento": "NICE CG103 Delirium, recomendación 1.3.1",
+    "url": "https://www.nice.org.uk/guidance/cg103/chapter/Recommendations",
+    "cita": "At presentation, assess people at risk for recent (within hours or days) changes or fluctuations that may indicate delirium."
+   },
+   "estado": "verificado",
+   "gatillo_terminos": [
+    "confus",
+    "desorient",
+    "somnol",
+    "agitad",
+    "delirium",
+    "no reconoce",
+    "conducta"
+   ]
+  },
+  {
+   "id": "embarazo_hipertension",
+   "nombre": "Embarazo + presión alta o síntomas de preeclampsia",
+   "base": {
+    "descripcion": "embarazo",
+    "cie10": [
+     "O",
+     "Z33",
+     "Z34",
+     "Z35"
+    ],
+    "terminos": [
+     "embaraz",
+     "gestante",
+     "semanas de gestacion",
+     "semanas de gestación",
+     "cursando embarazo"
+    ]
+   },
+   "gatillo": "presión 140/90 o más, dolor de cabeza intenso, alteraciones visuales, dolor en la parte alta del abdomen o hinchazón brusca",
+   "efecto": "urgencia",
+   "desenlace": "eclampsia, hemorragia cerebral, muerte materna y fetal",
+   "fuente": {
+    "documento": "MINSAL, Guía Perinatal 2015, Síndrome hipertensivo del embarazo",
+    "url": "https://www.minsal.cl/sites/default/files/files/GUIA%20PERINATAL_2015_%20PARA%20PUBLICAR.pdf",
+    "cita": "Hipertensión en el embarazo: PA ≥ 140/90; la preeclampsia severa requiere hospitalización."
+   },
+   "estado": "guia_citada",
+   "gatillo_terminos": [
+    "presion",
+    "140",
+    "150",
+    "160",
+    "cefalea",
+    "vision",
+    "puntos luminosos",
+    "epigastr",
+    "edema",
+    "hinchaz",
+    "proteinuria"
+   ]
+  },
+  {
+   "id": "embarazo_teratogeno",
+   "nombre": "Embarazo + fármaco que daña al feto",
+   "base": {
+    "descripcion": "embarazo",
+    "cie10": [
+     "O",
+     "Z33",
+     "Z34",
+     "Z35"
+    ],
+    "terminos": [
+     "embaraz",
+     "gestante",
+     "semanas de gestacion",
+     "semanas de gestación"
+    ]
+   },
+   "gatillo": "uso de valproato, isotretinoína, warfarina, metotrexato, IECA/ARA II u otro fármaco teratogénico",
+   "efecto": "alta",
+   "desenlace": "malformaciones fetales",
+   "fuente": {
+    "documento": "EMA / MINSAL, alertas de seguridad de valproato e isotretinoína en el embarazo",
+    "url": "https://www.ema.europa.eu/en/medicines/human/referrals/valproate-related-substances-0",
+    "cita": "El valproato no debe usarse en el embarazo salvo que no haya alternativa."
+   },
+   "estado": "guia_citada",
+   "gatillo_terminos": [
+    "valpro",
+    "isotretinoin",
+    "warfarin",
+    "metotrexato",
+    "enalapril",
+    "losartan",
+    "ieca",
+    "ara ii",
+    "teratog",
+    "acenocumarol"
+   ]
+  },
+  {
+   "id": "erc_hiperkalemia",
+   "nombre": "Enfermedad renal + potasio alto o uremia",
+   "base": {
+    "descripcion": "enfermedad renal crónica o diálisis",
+    "cie10": [
+     "N18",
+     "N19",
+     "N17"
+    ],
+    "terminos": [
+     "insuficiencia renal",
+     "enfermedad renal",
+     "erc",
+     "dialisis",
+     "diálisis",
+     "hemodialisis",
+     "hemodiálisis"
+    ]
+   },
+   "gatillo": "potasio de 6 o más, síntomas de uremia (vómitos, confusión, sangrado) o disminución brusca de la orina",
+   "efecto": "urgencia",
+   "desenlace": "arritmia y paro cardíaco",
+   "fuente": {
+    "documento": "Tabla de priorización SSMSO 2025, HLF, Nefrología adulto",
+    "ubicacion": "pág. 102",
+    "cita": "HIPERKALEMIA SEVERA → ALTA; UREMIA SINTOMÁTICA → ALTA; INJURIA RENAL AGUDA (IRA) CON OLIGURIA → ALTA; ALTERACIONES ELECTROLÍTICAS GRAVES → ALTA"
+   },
+   "estado": "verificado",
+   "gatillo_terminos": [
+    "potasio",
+    "kalemia",
+    "urem",
+    "oliguria",
+    "orina",
+    "debilidad muscular"
+   ]
+  },
+  {
+   "id": "cirrosis_hemorragia",
+   "nombre": "Cirrosis o daño hepático + sangrado digestivo",
+   "base": {
+    "descripcion": "cirrosis o daño hepático crónico",
+    "cie10": [
+     "K70",
+     "K74",
+     "K76",
+     "I85"
+    ],
+    "terminos": [
+     "cirrosis",
+     "daño hepatico",
+     "daño hepático",
+     "hepatopatia",
+     "hepatopatía",
+     "varices esofagicas",
+     "várices esofágicas"
+    ]
+   },
+   "gatillo": "vómito con sangre, deposiciones negras o con sangre",
+   "efecto": "urgencia",
+   "desenlace": "hemorragia por várices (alta mortalidad a 6 semanas)",
+   "fuente": {
+    "documento": "Baveno VII (2022): endoscopia dentro de 12 h en hemorragia variceal aguda; tabla SSMSO HLF pág. 95: cirrosis hepática descompensada ALTA",
+    "url": "https://doi.org/10.1016/j.jhep.2021.12.022",
+    "cita": "Endoscopia dentro de las 12 horas de la presentación, tras reanimación."
+   },
+   "estado": "guia_citada",
+   "gatillo_terminos": [
+    "sangr",
+    "hematemesis",
+    "melena",
+    "negra",
+    "hemorrag"
+   ]
+  },
+  {
+   "id": "cirrosis_infeccion_encefalopatia",
+   "nombre": "Cirrosis + fiebre con dolor abdominal o confusión",
+   "base": {
+    "descripcion": "cirrosis o daño hepático crónico",
+    "cie10": [
+     "K70",
+     "K74",
+     "K76"
+    ],
+    "terminos": [
+     "cirrosis",
+     "daño hepatico",
+     "daño hepático",
+     "hepatopatia",
+     "hepatopatía"
+    ]
+   },
+   "gatillo": "fiebre, dolor abdominal o aumento de la ascitis; confusión, somnolencia o cambio de conducta",
+   "efecto": "urgencia",
+   "desenlace": "peritonitis bacteriana espontánea o encefalopatía hepática",
+   "fuente": {
+    "documento": "EASL Clinical Practice Guidelines 2018, manejo de la cirrosis descompensada; tabla SSMSO HLF pág. 95: cirrosis hepática descompensada ALTA",
+    "url": "https://doi.org/10.1016/j.jhep.2018.03.024",
+    "cita": "Paracentesis diagnóstica ante signos de infección o deterioro en pacientes con cirrosis y ascitis."
+   },
+   "estado": "guia_citada",
+   "gatillo_terminos": [
+    "fiebre",
+    "dolor abdominal",
+    "ascitis",
+    "confus",
+    "somnol",
+    "conducta",
+    "encefalopat"
+   ]
+  },
+  {
+   "id": "ic_infeccion",
+   "nombre": "Insuficiencia cardíaca + infección respiratoria",
+   "base": {
+    "descripcion": "insuficiencia cardíaca",
+    "cie10": [
+     "I50"
+    ],
+    "terminos": [
+     "insuficiencia cardiaca",
+     "insuficiencia cardíaca"
+    ]
+   },
+   "gatillo": "neumonía, bronquitis o influenza, o aumento de la falta de aire o del edema",
+   "efecto": "alta",
+   "desenlace": "descompensación cardíaca",
+   "fuente": {
+    "documento": "ESC 2021 Heart Failure Guidelines, factores precipitantes de la insuficiencia cardíaca aguda (infección)",
+    "url": "https://doi.org/10.1093/eurheartj/ehab368",
+    "cita": "Las infecciones son un precipitante frecuente de la insuficiencia cardíaca aguda."
+   },
+   "estado": "guia_citada",
+   "gatillo_terminos": [
+    "neumon",
+    "bronquit",
+    "influenza",
+    "infeccion respiratoria",
+    "disnea",
+    "edema"
+   ]
+  },
+  {
+   "id": "coronario_dolor_reposo",
+   "nombre": "Enfermedad coronaria o factores de riesgo + dolor torácico en reposo",
+   "base": {
+    "descripcion": "angina, cardiopatía coronaria, infarto previo, diabetes o hipertensión",
+    "cie10": [
+     "I20",
+     "I21",
+     "I22",
+     "I25",
+     "I10",
+     "E11"
+    ],
+    "terminos": [
+     "angina",
+     "coronari",
+     "infarto",
+     "cardiopatia isquemica",
+     "cardiopatía isquémica"
+    ]
+   },
+   "gatillo": "dolor u opresión en el pecho en reposo, prolongado o de reciente aparición, o que aumenta",
+   "efecto": "urgencia",
+   "desenlace": "infarto agudo de miocardio",
+   "fuente": {
+    "documento": "Tabla de priorización SSMSO 2025, HLF, Cardiología adulto (angina inestable ALTA) y Guía GES IAM con supradesnivel (MINSAL)",
+    "ubicacion": "pág. 85",
+    "cita": "ANGINA INESTABLE → ALTA"
+   },
+   "estado": "verificado",
+   "gatillo_terminos": [
+    "dolor",
+    "opresi",
+    "pecho",
+    "torac"
+   ]
+  },
+  {
+   "id": "neuro_deficit_subito",
+   "nombre": "Cualquier paciente + déficit neurológico súbito",
+   "base": {
+    "descripcion": "cualquier paciente (más riesgo con hipertensión, diabetes, fibrilación auricular)",
+    "cie10": [],
+    "terminos": [],
+    "cualquiera": true
+   },
+   "gatillo": "debilidad o adormecimiento brusco de un lado del cuerpo, dificultad brusca para hablar, desviación de la boca o pérdida brusca de la visión",
+   "efecto": "urgencia",
+   "desenlace": "accidente cerebrovascular (tiempo dependiente)",
+   "fuente": {
+    "documento": "NICE CG150 Headaches, recomendación 1.1.1 (déficit neurológico de inicio reciente: evaluación adicional) y Guía GES ACV isquémico (MINSAL)",
+    "url": "https://www.nice.org.uk/guidance/cg150/chapter/Recommendations",
+    "cita": "new‑onset neurological deficit"
+   },
+   "estado": "verificado",
+   "gatillo_terminos": [
+    "debilidad",
+    "adormec",
+    "hablar",
+    "habla",
+    "boca",
+    "vision",
+    "hemipar",
+    "paralisis",
+    "fuerza"
+   ]
+  },
+  {
+   "id": "cefalea_alarma",
+   "nombre": "Cefalea con signos de alarma",
+   "base": {
+    "descripcion": "cualquier paciente, incluida migraña conocida",
+    "cie10": [],
+    "terminos": [],
+    "cualquiera": true
+   },
+   "gatillo": "cefalea súbita que llega al máximo en menos de 5 minutos, cefalea que empeora con fiebre, con déficit neurológico, alteración de conciencia o tras un golpe reciente; o cefalea nueva en inmunosuprimido o con antecedente de cáncer",
+   "efecto": "urgencia",
+   "desenlace": "hemorragia subaracnoidea, meningitis o tumor",
+   "fuente": {
+    "documento": "NICE CG150 Headaches, recomendación 1.1.1",
+    "url": "https://www.nice.org.uk/guidance/cg150/chapter/Recommendations",
+    "cita": "worsening headache with fever sudden‑onset headache reaching maximum intensity within 5 minutes new‑onset neurological deficit ... impaired level of consciousness recent (typically within the past 3 months) head trauma ... compromised immunity ... a history of malignancy known to metastasise to the brain"
+   },
+   "estado": "verificado",
+   "gatillo_terminos": [
+    "cefalea",
+    "dolor de cabeza"
+   ]
+  },
+  {
+   "id": "epilepsia_crisis_prolongada",
+   "nombre": "Epilepsia + crisis prolongada o en racimo",
+   "base": {
+    "descripcion": "epilepsia",
+    "cie10": [
+     "G40",
+     "G41"
+    ],
+    "terminos": [
+     "epilep",
+     "convulsion",
+     "convulsión"
+    ]
+   },
+   "gatillo": "crisis de más de 5 minutos, crisis repetidas sin recuperar la conciencia entre ellas, o primera crisis tras un golpe",
+   "efecto": "urgencia",
+   "desenlace": "estado epiléptico (daño neurológico y muerte)",
+   "fuente": {
+    "documento": "ILAE 2015, definición operacional de estado epiléptico (t1 = 5 minutos)",
+    "url": "https://doi.org/10.1111/epi.13121",
+    "cita": "Para crisis tónico-clónicas, el tratamiento debe iniciarse a los 5 minutos."
+   },
+   "estado": "guia_citada",
+   "gatillo_terminos": [
+    "crisis",
+    "convuls"
+   ]
+  },
+  {
+   "id": "glaucoma_agudo",
+   "nombre": "Ojo rojo doloroso con visión borrosa (posible glaucoma agudo)",
+   "base": {
+    "descripcion": "cualquier paciente (más riesgo con glaucoma de ángulo estrecho)",
+    "cie10": [],
+    "terminos": [],
+    "cualquiera": true
+   },
+   "gatillo": "dolor ocular intenso con ojo rojo, visión borrosa o halos, con náuseas o vómitos",
+   "efecto": "urgencia",
+   "desenlace": "ceguera por glaucoma agudo de ángulo cerrado",
+   "fuente": {
+    "documento": "NICE CG150 Headaches, recomendación 1.1.1 (síntomas y signos de glaucoma agudo de ángulo estrecho: evaluación adicional)",
+    "url": "https://www.nice.org.uk/guidance/cg150/chapter/Recommendations",
+    "cita": "symptoms and signs of acute narrow angle glaucoma"
+   },
+   "estado": "verificado",
+   "gatillo_terminos": [
+    "ojo",
+    "ocular",
+    "halos",
+    "vision"
+   ]
+  },
+  {
+   "id": "tiroides_crisis",
+   "nombre": "Enfermedad tiroidea o suprarrenal + crisis",
+   "base": {
+    "descripcion": "hipo o hipertiroidismo, insuficiencia suprarrenal o uso crónico de corticoides",
+    "cie10": [
+     "E03",
+     "E05",
+     "E27"
+    ],
+    "terminos": [
+     "hipotiroid",
+     "hipertiroid",
+     "graves",
+     "suprarrenal",
+     "corticoides cronicos",
+     "corticoides crónicos"
+    ]
+   },
+   "gatillo": "confusión, somnolencia o hipotermia (hipotiroidismo); fiebre, agitación o taquicardia marcada (hipertiroidismo); vómitos, hipotensión o debilidad extrema (suprarrenal)",
+   "efecto": "urgencia",
+   "desenlace": "coma mixedematoso, tormenta tiroidea o crisis suprarrenal",
+   "fuente": {
+    "documento": "Tabla de priorización SSMSO 2025, HLF, Endocrinología adulto",
+    "ubicacion": "pág. 94",
+    "cita": "CRISIS SUPRARRENAL AGUDA → ALTA; TORMENTA TIROIDEA → ALTA; MIXEDEMA SEVERO → ALTA"
+   },
+   "estado": "verificado",
+   "gatillo_terminos": [
+    "fiebre",
+    "agitac",
+    "taquicard",
+    "confus",
+    "somnol",
+    "hipotermi",
+    "vomit",
+    "hipotens",
+    "debilidad"
+   ]
+  },
+  {
+   "id": "cancer_hipercalcemia",
+   "nombre": "Cáncer + hipercalcemia",
+   "base": {
+    "descripcion": "cáncer",
+    "cie10": [
+     "C"
+    ],
+    "terminos": [
+     "cancer",
+     "cáncer",
+     "neoplasia",
+     "carcinoma",
+     "mieloma",
+     "metastasis",
+     "metástasis"
+    ]
+   },
+   "gatillo": "calcio elevado, confusión, sed intensa, vómitos o constipación severa",
+   "efecto": "urgencia",
+   "desenlace": "arritmia, falla renal y coma",
+   "fuente": {
+    "documento": "Tabla de priorización SSMSO 2025, HLF, Endocrinología adulto",
+    "ubicacion": "pág. 94",
+    "cita": "HIPERCALCEMIA MALIGNA → ALTA"
+   },
+   "estado": "verificado",
+   "gatillo_terminos": [
+    "calcio",
+    "hipercalc",
+    "confus",
+    "sed",
+    "vomit",
+    "constip"
+   ]
+  },
+  {
+   "id": "articulacion_septica",
+   "nombre": "Articulación roja, caliente y dolorosa con fiebre",
+   "base": {
+    "descripcion": "cualquier paciente (más riesgo con prótesis, artrosis, diabetes o inmunosupresión)",
+    "cie10": [],
+    "terminos": [],
+    "cualquiera": true
+   },
+   "gatillo": "una articulación roja, caliente, hinchada y muy dolorosa, con o sin fiebre, de inicio agudo",
+   "efecto": "urgencia",
+   "desenlace": "artritis séptica (destrucción de la articulación y sepsis)",
+   "fuente": {
+    "documento": "Criterios clínicos por especialidad (dataset_gravedad_por_especialidad.json), Reumatología, artritis agudas",
+    "cita": "Monoartritis aguda con sospecha de artritis séptica — requiere descarte urgente y punción articular"
+   },
+   "estado": "verificado",
+   "gatillo_terminos": [
+    "articul",
+    "rodilla",
+    "cadera",
+    "tobillo",
+    "hombro",
+    "codo",
+    "muneca",
+    "caliente",
+    "roja",
+    "hinchad"
+   ]
+  },
+  {
+   "id": "depresion_alcohol_perdida",
+   "nombre": "Depresión o ansiedad + consumo de alcohol o drogas, o pérdida reciente",
+   "base": {
+    "descripcion": "depresión, trastorno ansioso u otro trastorno mental",
+    "cie10": [
+     "F32",
+     "F33",
+     "F41",
+     "F31",
+     "F43"
+    ],
+    "terminos": [
+     "depresi",
+     "ansiedad",
+     "trastorno bipolar"
+    ]
+   },
+   "gatillo": "consumo problemático de alcohol o drogas, pérdida reciente (duelo, separación, trabajo), aislamiento o intento previo",
+   "efecto": "alta",
+   "desenlace": "suicidio",
+   "fuente": {
+    "documento": "NICE NG225 Self-harm (2022): evaluación de riesgo y necesidades psicosociales; OMS, factores de riesgo de suicidio",
+    "url": "https://www.nice.org.uk/guidance/ng225/chapter/Recommendations",
+    "cita": "Factores asociados a mayor riesgo: consumo de sustancias, pérdidas recientes, intentos previos."
+   },
+   "estado": "guia_citada",
+   "gatillo_terminos": [
+    "alcohol",
+    "droga",
+    "consumo",
+    "muerte de",
+    "duelo",
+    "separac",
+    "perdida",
+    "aislad",
+    "intento"
+   ]
+  },
+  {
+   "id": "riesgo_suicida",
+   "nombre": "Ideación suicida con plan, intento reciente o autolesión grave",
+   "base": {
+    "descripcion": "cualquier paciente",
+    "cie10": [],
+    "terminos": [],
+    "cualquiera": true
+   },
+   "gatillo": "ideación suicida activa con plan o intención, intento reciente o autolesiones de gravedad creciente",
+   "efecto": "urgencia",
+   "desenlace": "suicidio",
+   "fuente": {
+    "documento": "Criterios clínicos por especialidad, Psiquiatría, excepción transversal",
+    "cita": "Riesgo suicida activo con plan e intencionalidad, intento reciente ... Derivación inmediata a urgencia/SAPU; no gestionar como interconsulta electiva."
+   },
+   "estado": "verificado",
+   "gatillo_terminos": [
+    "suicid",
+    "quitarse la vida",
+    "matarse",
+    "autolesi",
+    "intento",
+    "pastillas"
+   ]
+  },
+  {
+   "id": "asma_epoc_grave",
+   "nombre": "Asma o EPOC + crisis grave o urgencias repetidas",
+   "base": {
+    "descripcion": "asma o EPOC",
+    "cie10": [
+     "J44",
+     "J45",
+     "J46"
+    ],
+    "terminos": [
+     "asma",
+     "epoc",
+     "enfermedad pulmonar obstructiva"
+    ]
+   },
+   "gatillo": "hospitalización o consultas repetidas en urgencia por crisis, habla entrecortada, labios morados o somnolencia",
+   "efecto": "alta",
+   "desenlace": "crisis respiratoria fatal",
+   "fuente": {
+    "documento": "GINA 2024, Summary Guide, Box 4-3 (pág. 38) · Tabla SSMSO HLF pág. 95: EPOC grave no controlado y asma grave no controlada ALTA",
+    "ubicacion": "GINA pág. 37–38",
+    "cita": "Consider early referral for specialist advice after hospitalization, or for patients with repeated emergency visits for asthma."
+   },
+   "estado": "verificado",
+   "gatillo_terminos": [
+    "urgencia",
+    "hospitaliz",
+    "crisis",
+    "exacerb",
+    "cianosis",
+    "morad",
+    "somnol",
+    "entrecortad"
+   ]
+  },
+  {
+   "id": "perdida_peso_inexplicada",
+   "nombre": "Pérdida de peso inexplicada con síntomas digestivos o sangrado",
+   "base": {
+    "descripcion": "cualquier paciente",
+    "cie10": [],
+    "terminos": [],
+    "cualquiera": true
+   },
+   "gatillo": "baja de peso no intencionada junto a dolor abdominal, sangrado rectal, dificultad para tragar o vómitos persistentes",
+   "efecto": "alta",
+   "desenlace": "cáncer digestivo no diagnosticado",
+   "fuente": {
+    "documento": "NICE NG12 Suspected cancer: recognition and referral, recomendaciones 1.2–1.3 (cánceres digestivos)",
+    "url": "https://www.nice.org.uk/guidance/ng12/chapter/Recommendations-organised-by-site-of-cancer",
+    "cita": "unexplained weight loss and abdominal pain ... (referral using a suspected cancer pathway)"
+   },
+   "estado": "verificado",
+   "gatillo_terminos": [
+    "peso",
+    "adelgaz"
+   ]
+  },
+  {
+   "id": "erge_alarma",
+   "nombre": "Reflujo o dispepsia + signos de alarma",
+   "base": {
+    "descripcion": "reflujo gastroesofágico o dispepsia",
+    "cie10": [
+     "K21",
+     "K30",
+     "K29"
+    ],
+    "terminos": [
+     "reflujo",
+     "erge",
+     "dispepsia",
+     "gastritis"
+    ]
+   },
+   "gatillo": "dificultad progresiva para tragar, baja de peso, vómito con sangre, deposiciones negras o anemia",
+   "efecto": "alta",
+   "desenlace": "cáncer de esófago o estómago, o sangrado digestivo",
+   "fuente": {
+    "documento": "NICE NG12 Suspected cancer, recomendación 1.2.1 (disfagia → derivación por sospecha de cáncer de esófago o estómago) · Tabla SSMSO HLF pág. 95: esófago de Barrett con displasia ALTA, úlcera gástrica complicada ALTA",
+    "url": "https://www.nice.org.uk/guidance/ng12/chapter/Recommendations-organised-by-site-of-cancer",
+    "cita": "Offer urgent direct access upper gastrointestinal endoscopy ... to assess for oesophageal cancer in people with dysphagia"
+   },
+   "estado": "guia_citada",
+   "gatillo_terminos": [
+    "tragar",
+    "disfagia",
+    "peso",
+    "sangre",
+    "hematemesis",
+    "melena",
+    "negra",
+    "anemia"
+   ]
+  }
+ ],
+ "gatillo_terminos": "El código exige que la frase citada como gatillo contenga al menos uno de estos términos (sin tildes, minúsculas): así la IA no puede atribuir un gatillo a una frase que habla de otra cosa."
+}

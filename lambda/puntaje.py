@@ -56,6 +56,8 @@ FILA_ONCOLOGICA = {
 }
 PATRON_ONCOLOGICO = ("toda fila de cáncer activo o sospechoso de la tabla del HLF es prioridad alta (págs. 88, 94, 95, 111)",
                      "alta", "88, 94, 95, 111")
+# Mediciones que reflejan semanas o meses (no un momento): las únicas que pueden aparecer como razón de prioridad
+MEDICIONES_ESTABLES = ("HbA1c", "PHQ9")
 DIAS_EVALUACION = 3  # KPI del hospital: reevaluación clínica < 72 h tras un evento
 
 # Garantía GES de oportunidad: atención por especialista (días). auge.minsal.cl/problemasdesalud/index/<N°>
@@ -142,7 +144,7 @@ def d(s): return date.fromisoformat(s)
 def descompensa(ev):
     """Evento que el propio dataset etiqueta como descompensación o severidad grave
     (urgencia ESI 2, descompensación, hospitalización, UCI). Un hallazgo oncológico no es una descompensación."""
-    if ev.get("tipo_evento") in ("hallazgo_oncologico", "criterio_clinico") or no_relacionado(ev):
+    if ev.get("tipo_evento") in ("hallazgo_oncologico", "criterio_clinico", "combinacion_riesgo") or no_relacionado(ev):
         return False
     return ev.get("severidad") == "grave" or "descompensaci" in (ev.get("subtipo") or "").lower()
 
@@ -189,6 +191,41 @@ def aplicar_criterio(categoria, c, razones):
         razones.insert(0, {"factor": "urgencia", "valor": e.get("texto_urgencia") or e["detalle"], "fuente": fuente})
         nueva = "alta"
     return nueva
+
+
+def regla_combinacion(eventos):
+    """Combinaciones de riesgo verificadas (combinaciones.py): urgencias, subidas a alta y alertas no listadas."""
+    ev = [e for e in eventos if e.get("tipo_evento") == "combinacion_riesgo"]
+    return {"eventos": ev, "urgencia": any(e.get("urgencia") for e in ev)} if ev else None
+
+
+def aplicar_combinacion(categoria, c, razones, senales):
+    """Solo sube. Urgencia: alta y primera razón. Alerta no listada: razón visible + señal para el equipo (no cambia)."""
+    for e in c["eventos"]:
+        fuente = e.get("fuente") or "Combinaciones de riesgo"
+        if e.get("texto_urgencia"):
+            razones.insert(0, {"factor": "urgencia", "valor": f'combinación de riesgo · {e["texto_urgencia"]}', "fuente": fuente})
+        if e.get("texto_criterio"):
+            sube = ORDEN_CAT["alta"] > ORDEN_CAT[categoria]
+            razones.append({"factor": "combinacion", "valor": e["texto_criterio"] + (" → prioridad alta" if sube else " (ya es alta)"), "fuente": fuente})
+        if e.get("nivel_criterio") == "alta":
+            categoria = "alta"
+        for a in e.get("alertas", []):
+            razones.append({"factor": "alerta_combinacion", "valor": f'{a["descripcion"]}: "{a["cita"]}" · no está en la lista de combinaciones con fuente',
+                            "fuente": "Detectado por la IA en el texto (red de seguridad, sin regla con fuente)"})
+            senales.append({"motivo": f'posible combinación de riesgo no listada: {a["descripcion"]}', "fecha": e["fecha_evento"],
+                            "registrado": e.get("registrado")})
+    return categoria
+
+
+def agudeza(ev):
+    """Gravedad del evento para ordenar entre descompensados de la misma prioridad (categorización de urgencia C1–C5 / ESI):
+    3 = UCI o ESI/C1 (emergencia vital inmediata) · 2 = hospitalización, ESI/C2 o descompensación grave · 1 = moderada."""
+    if not ev:
+        return 0
+    if ev.get("subtipo") in ("ingreso UCI", "triage ESI 1"):
+        return 3
+    return 2 if ev.get("severidad") == "grave" else 1
 
 
 def razon_oncologica(o):
@@ -296,7 +333,14 @@ def puntuar(perfil, corte):
     crit = regla_criterio(eventos)
     if crit:
         categoria = aplicar_criterio(categoria, crit, razones)
-    urgencia_hoy = bool(crit and crit["urgencia"])
+    comb = regla_combinacion(eventos)
+    alertas_comb = []
+    if comb:
+        categoria = aplicar_combinacion(categoria, comb, razones, alertas_comb)
+    urgencia_hoy = bool((crit and crit["urgencia"]) or (comb and comb["urgencia"]))
+    # la última urgencia (para saber si el especialista ya la revisó después: así sale del carril de urgencia)
+    urg_ev = max((e for e in eventos if e.get("urgencia") and e.get("tipo_evento") in ("criterio_clinico", "combinacion_riesgo")),
+                 key=lambda e: (e["fecha_evento"], e.get("registrado") or ""), default=None)
     if riesgo_vital:
         razones.insert(0, {"factor": "riesgo_vital",
                            "valor": f'Descompensación grave ({fila[0]}) sin registro posterior de estabilización: su prioridad '
@@ -348,6 +392,7 @@ def puntuar(perfil, corte):
             senales.append({"motivo": f'evento grave sin relación con {le["diagnostico_texto"]}: {e.get("motivo") or e["subtipo"]} '
                                       "(no cambia esta prioridad; revisar si requiere otra derivación)",
                             "fecha": e["fecha_evento"], "registrado": e.get("registrado")})
+    senales += alertas_comb
     if onco:
         senales.append({"motivo": f'hallazgo oncológico: {onco["evento"]["subtipo"]} (prioridad alta por tabla HLF)',
                         "fecha": onco["evento"]["fecha_evento"], "registrado": onco["evento"].get("registrado")})
@@ -363,16 +408,23 @@ def puntuar(perfil, corte):
     no_show = sum(1 for c in citas if c["estado_cita"] == "no_asistio")
     consecutivas = inasistencias_consecutivas(citas)
 
-    meds = sorted([m for m in perfil.get("mediciones", []) if d(m["fecha_medicion"]) <= corte], key=lambda m: m["fecha_medicion"])
-    ult_med = meds[-1] if meds else None
-    medicion_alerta = bool(ult_med and ult_med["fuera_de_rango"])
-    if medicion_alerta:
-        razones.append({"factor": "medicion", "valor": f'{ult_med["tipo_medicion"]} = {ult_med["valor"]:g} {ult_med["unidad"]} '
-                                                      f'fuera de rango ({ult_med["fecha_medicion"]})',
-                        "fuente": "Rangos de referencia del diccionario de datos HLF"})
+    # Solo mediciones ESTABLES y SOSTENIDAS justifican: los signos vitales (presión, saturación, glicemia capilar, peak flow,
+    # dolor) cambian en minutos y no describen el riesgo de las semanas de espera (observación del HLF). HbA1c refleja ~3
+    # meses y el PHQ-9 las últimas 2 semanas: cuentan si las DOS últimas están fuera de rango.
+    medicion_alerta = False
+    for tipo in MEDICIONES_ESTABLES:
+        serie = sorted([m for m in perfil.get("mediciones", []) if m["tipo_medicion"] == tipo and d(m["fecha_medicion"]) <= corte],
+                       key=lambda m: m["fecha_medicion"])[-2:]
+        if len(serie) == 2 and all(m["fuera_de_rango"] for m in serie):
+            medicion_alerta = True
+            razones.append({"factor": "medicion", "valor": f'{tipo} fuera de rango en dos mediciones seguidas: ' +
+                            " y ".join(f'{m["valor"]:g} {m["unidad"]} ({m["fecha_medicion"]})' for m in serie),
+                            "fuente": "Rangos de referencia del diccionario de datos HLF · medición estable (no signo vital)"})
 
     return {"id_paciente": perfil["id_paciente"], "excluido": False, "categoria": categoria,
-            "estado_clinico": estado, "riesgo_vital": riesgo_vital, "urgencia_hoy": urgencia_hoy, "lace": lace, "antiguedad_mayor_1_anio": antiguo, "dias_espera": dias_espera,
+            "estado_clinico": estado, "riesgo_vital": riesgo_vital, "urgencia_hoy": urgencia_hoy, "lace": lace,
+            "urgencia_desde": urg_ev and {"fecha": urg_ev["fecha_evento"], "registrado": urg_ev.get("registrado")},
+            "agudeza": agudeza(ult_desc) if estado == "descompensado" else 0, "antiguedad_mayor_1_anio": antiguo, "dias_espera": dias_espera,
             "ges": ges_info, "medicion_alerta": medicion_alerta, "senales": senales, "grupo_proteccion": grupo, "acg": acg,
             "fecha_descompensacion": ult_desc["fecha_evento"] if estado == "descompensado" else None,
             "dias_desde_descompensacion": (corte - d(ult_desc["fecha_evento"])).days if estado == "descompensado" else None,
@@ -384,7 +436,8 @@ def clave_orden(r, categoria=None):
     """MINSAL Ord. 536/2025: criterio médico (categoría, descompensación grave y cualquier descompensación vigente)
     → grupos de especial protección → antigüedad > 1 año → LACE (componente experimental, solo desempata) → orden de llegada.
     El criterio médico va antes que el grupo de protección: un descompensado no queda bajo uno estable de la misma prioridad."""
-    return (-ORDEN_CAT[categoria or r["categoria"]], not r.get("urgencia_hoy"), not r["riesgo_vital"], r.get("estado_clinico") != "descompensado", not r.get("grupo_proteccion"),
+    return (-ORDEN_CAT[categoria or r["categoria"]], not r.get("urgencia_hoy"), not r["riesgo_vital"], -r.get("agudeza", 0),
+            r.get("estado_clinico") != "descompensado", not r.get("grupo_proteccion"),
             not r["antiguedad_mayor_1_anio"], -r["lace"]["total"], -r["dias_espera"], r["id_paciente"])
 
 

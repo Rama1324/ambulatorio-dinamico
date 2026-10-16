@@ -31,6 +31,12 @@ def ingresar(cie, prioridad, motivo, cli, nombre="Prueba criterios"):
         app._llm["cliente"] = None
 
 
+def en_carril_de_urgencia(p):
+    """Todos los que van antes también son urgencia (los tests comparten la memoria: puede haber otras urgencias)."""
+    lista = app.lista(CORTE)["pacientes"]
+    return all(q["urgencia_hoy"] for q in lista[:p["posicion"] - 1])
+
+
 def test_json_completo_y_mapeado():
     kb = criterios.cargar()
     assert len(kb["por_id"]) == 46 and set(criterios.CIE10) == set(kb["por_id"])
@@ -51,7 +57,7 @@ def test_urgencia_prevalece_y_va_primero():
     s, r = ingresar("H91", "baja", "Hipoacusia súbita de oído izquierdo de 24 horas de evolución.",
                     responde("alta.0", "Hipoacusia súbita", "urgencia.0", "Hipoacusia súbita de oído izquierdo de 24 horas"))
     p = r["paciente"]
-    assert p["categoria"] == "alta" and p["urgencia_hoy"] and p["contactar_hoy"] and p["posicion"] == 1
+    assert p["categoria"] == "alta" and p["urgencia_hoy"] and p["contactar_hoy"] and en_carril_de_urgencia(p)
     assert p["razones"][0]["factor"] == "urgencia"
 
 
@@ -92,7 +98,7 @@ def test_urgencia_transversal_de_psiquiatria_en_un_paciente_del_registro():
     finally:
         os.environ.pop("ALGORITMO", None)
         app._llm["cliente"] = None
-    assert r["criterio"]["urgencia"] and r["paciente"]["urgencia_hoy"] and r["paciente"]["posicion"] == 1
+    assert r["criterio"]["urgencia"] and r["paciente"]["urgencia_hoy"] and en_carril_de_urgencia(r["paciente"])
 
 
 def test_con_reglas_no_se_llama_a_la_ia():

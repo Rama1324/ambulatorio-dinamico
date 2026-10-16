@@ -25,6 +25,8 @@ SUBTIPOS = {
     "hallazgo_oncologico": {"cáncer confirmado": "grave", "sospecha de cáncer": "grave"},
     # Resultado de los criterios clínicos por enfermedad (criterios.py): solo sube la prioridad; "urgencia" = derivar hoy
     "criterio_clinico": {"prioridad alta": "moderada", "prioridad media": "leve", "prioridad baja": "leve", "urgencia": "grave"},
+    # Combinación de riesgo (combinaciones.py): base del paciente + evento/hallazgo; solo sube; "alerta" no cambia la prioridad
+    "combinacion_riesgo": {"urgencia": "grave", "prioridad alta": "moderada", "alerta": "leve"},
 }
 CONFIANZA_MINIMA = 90.0   # % por línea bajo el cual se marca para revisar
 CONFIANZA_LEGIBLE = 80.0  # % promedio bajo el cual se pide repetir la foto
@@ -86,7 +88,7 @@ class EventoPropuesto(BaseModel):
     """Evento clínico detectado en un informe. Se valida contra el documento y la fecha de corte (context)."""
     model_config = ConfigDict(extra="ignore")
 
-    tipo_evento: Literal["hospitalizacion", "visita_urgencia", "examen_alterado", "cambio_farmaco", "control_aps", "hallazgo_oncologico", "criterio_clinico"]
+    tipo_evento: Literal["hospitalizacion", "visita_urgencia", "examen_alterado", "cambio_farmaco", "control_aps", "hallazgo_oncologico", "criterio_clinico", "combinacion_riesgo"]
     subtipo: str
     severidad: Literal["leve", "moderada", "grave"]
     fecha_evento: Optional[date] = None

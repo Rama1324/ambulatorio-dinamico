@@ -246,6 +246,7 @@ def _enriquecer(r, perfil, revision, pos_ant, corte=None, contacto=None, decisio
         "estado_clinico": r["estado_clinico"],
         "riesgo_vital": r["riesgo_vital"],
         "urgencia_hoy": bool(r.get("urgencia_hoy")),
+        "agudeza": r.get("agudeza", 0),
         "lace": r["lace"],
         "antiguedad_mayor_1_anio": r["antiguedad_mayor_1_anio"],
         "ges": r["ges"],
@@ -290,6 +291,17 @@ def _enriquecer(r, perfil, revision, pos_ant, corte=None, contacto=None, decisio
     def posterior(x):
         return bool(x) and x.get("fecha_corte", "0000") <= corte_iso and \
             x["fecha_corte"] >= (r.get("fecha_descompensacion") or "") and x["fecha"] >= (r.get("registro_descompensacion") or "")
+    # Urgencia ("derivar hoy"): sale del carril cuando el especialista registra una decisión, una revisión o un ajuste
+    # DESPUÉS de la urgencia. Sigue en prioridad alta (no baja); solo deja de estar primero y de pedir contacto hoy.
+    if r.get("urgencia_hoy") and r.get("urgencia_desde"):
+        u = r["urgencia_desde"]
+        def tras_urgencia(x):
+            return bool(x) and u["fecha"] <= x.get("fecha_corte", "0000") <= corte_iso and x["fecha"] >= (u.get("registrado") or "")
+        quien = next(((n, x) for n, x in (("decision", decision), ("revision", revision), ("ajuste_manual", ajuste)) if tras_urgencia(x)), None)
+        if quien:
+            out["urgencia_hoy"] = False
+            out["urgencia_cerrada"] = {"por": quien[0], "fecha": quien[1]["fecha"], "responsable": quien[1].get("responsable") or quien[1].get("usuario")}
+            out["contactar_hoy"] = r["riesgo_vital"]
     if contacto and contacto.get("fecha_corte", "0000") <= corte_iso:
         out["contacto"] = contacto
     if decision and decision.get("fecha_corte", "0000") <= corte_iso:
@@ -314,7 +326,7 @@ def _enriquecer(r, perfil, revision, pos_ant, corte=None, contacto=None, decisio
         out["evaluacion"] = {"estado": "evaluada" if cierre else ("atrasada" if en_revision > puntaje.DIAS_EVALUACION else "pendiente"),
                              "dias_desde_evento": dias, "fecha_evento": r.get("fecha_descompensacion"), "llego_al_sistema": llegada,
                              "dias_en_revision": en_revision, "plazo_dias": puntaje.DIAS_EVALUACION, "cierre": cierre}
-        out["contactar_hoy"] = not cierre or bool(r.get("urgencia_hoy"))
+        out["contactar_hoy"] = not cierre or out["urgencia_hoy"]
     return out
 
 
@@ -854,10 +866,27 @@ def post_paciente(body):
         "eventos_clinicos": [], "mediciones": [], "citaciones": [],
     }
     guardar({"id_paciente": pid, "sk": "paciente#", "perfil": json.dumps(perfil, ensure_ascii=False)})
-    clasif = _aplicar_criterios(pid, dx["diagnostico_cie10"], (body.get("motivo_interconsulta") or "").strip(), ingreso, body)
+    motivo = (body.get("motivo_interconsulta") or "").strip()
+    clasif = _aplicar_criterios(pid, dx["diagnostico_cie10"], motivo, ingreso, body)
+    combs = _aplicar_combinaciones(pid, perfil, motivo, ingreso, body)
     data = lista(corte)
     fila = next((p for p in data["pacientes"] if p["id_paciente"] == pid), None)
-    return 200, {"id_paciente": pid, "paciente": fila, "criterio": clasif}
+    return 200, {"id_paciente": pid, "paciente": fila, "criterio": clasif, "combinaciones": combs}
+
+
+def _aplicar_combinaciones(pid, perfil, texto, fecha, body):
+    """Combinaciones de riesgo (combinaciones.py): Claude marca base + gatillo citando el texto; el código verifica contra el
+    registro del paciente; el resultado queda como evento y la regla de puntaje lo aplica (solo sube)."""
+    import combinaciones
+    if not (texto and algoritmo_activo() == "rubrica"):
+        return None
+    d = combinaciones.detectar(texto, perfil, cliente_llm())
+    ev = combinaciones.evento(d, fecha)
+    if ev:
+        ev.update(id_evento="EV-COMB-" + uuid.uuid4().hex[:6].upper(), registrado=datetime.now(timezone.utc).isoformat(timespec="microseconds"),
+                  usuario=body.get("usuario", "equipo clínico"))
+        guardar({"id_paciente": pid, "sk": f"evento#{ev['fecha_evento']}#{ev['id_evento']}", "evento": json.dumps(ev, ensure_ascii=False)})
+    return d
 
 
 def _aplicar_criterios(pid, cie, texto, fecha, body):
@@ -1263,17 +1292,18 @@ def _informe_con_ia(pid, lectura, corte, perfs, avisos, dudoso, menciona, body):
     t0 = time.perf_counter()
     le = perfs[pid]["lista_espera"]
     r = lector_documento.leer_documento(lectura.texto, cliente_llm(), diagnostico=f'{le["diagnostico_texto"]} ({le["diagnostico_cie10"]}, {le["especialidad"]})')
-    clasif = None
+    clasif = combs = None
     if not dudoso:
         pos0 = next((p["posicion"] for p in lista(corte)["pacientes"] if p["id_paciente"] == pid), None)
         clasif = _aplicar_criterios(pid, le["diagnostico_cie10"], lectura.texto, corte.isoformat(), body)
+        combs = _aplicar_combinaciones(pid, perfs[pid], lectura.texto, corte.isoformat(), body)
     aceptados = r["aceptados"]
     if dudoso and aceptados:  # identidad o legibilidad en duda: nada se registra solo
         r["propuestos"] = [{**h, "motivo": "no se pudo confirmar que el documento sea de este paciente o es poco legible"} for h in aceptados] + r["propuestos"]
         aceptados = []
     existentes = {(e["fecha_evento"], e["tipo_evento"], e["subtipo"], e.get("motivo") or "") for e in perfs[pid].get("eventos_clinicos", [])}
     registrados, pos_antes, fila = [], None, None
-    if clasif and (clasif["nivel"] or clasif["urgencia"]):
+    if (clasif and (clasif["nivel"] or clasif["urgencia"])) or (combs and (combs["aplicadas"] or combs["alertas"])):
         pos_antes = pos0
         fila = next((p for p in lista(corte)["pacientes"] if p["id_paciente"] == pid), None)
     if aceptados:
@@ -1307,9 +1337,9 @@ def _informe_con_ia(pid, lectura, corte, perfs, avisos, dudoso, menciona, body):
            "descartados": [{"subtipo": d["tipo"], "motivo": d["motivo"], "cita": d["cita"]} for d in r["descartados"]],
            "informativos": r["informativos"], "advertencias": avisos, "identidad_en_documento": menciona,
            "otro_paciente": any("otro paciente" in a for a in avisos), "fuente": "ia",
-           "ia": {k: r[k] for k in ("version", "lecturas", "errores", "tokens_entrada", "tokens_salida")}, "criterio": clasif,
+           "ia": {k: r[k] for k in ("version", "lecturas", "errores", "tokens_entrada", "tokens_salida")}, "criterio": clasif, "combinaciones": combs,
            "segundos": round(time.perf_counter() - t0, 1)}
-    if not registrados and not propuestas and not (clasif and (clasif["nivel"] or clasif["urgencia"])):
+    if not registrados and not propuestas and not (clasif and (clasif["nivel"] or clasif["urgencia"])) and not (combs and combs["aplicadas"]):
         out["mensaje"] = ("La IA no encontró en el informe un hallazgo que cambie la prioridad (cáncer, hospitalización, "
                           "descompensación, examen alterado o cambio de tratamiento)." +
                           (" Hubo un error al leerlo: " + r["errores"][0] if r["errores"] else ""))
