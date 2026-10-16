@@ -19,6 +19,7 @@ if (-not $SoloFront) {
     $b = Join-Path $env:TEMP ("hlf_build_" + (Get-Date -Format "yyyyMMdd_HHmmss"))
     New-Item -ItemType Directory -Force "$b\lambda_pkg" | Out-Null
     Get-ChildItem "$raiz\lambda\*.py" | Where-Object Name -ne "local_server.py" | Copy-Item -Destination "$b\lambda_pkg\"
+    Copy-Item "$raiz\lambda\conocimiento" -Destination "$b\lambda_pkg\conocimiento" -Recurse   # criterios, combinaciones y rúbrica (JSON)
     python -m pip install -q -r "$raiz\lambda\requirements.txt" --platform manylinux2014_aarch64 --python-version 3.12 `
         --implementation cp --only-binary=:all: --target "$b\lambda_pkg"
     [IO.File]::WriteAllText("$b\template.yaml", (Get-Content "$raiz\template.yaml" -Raw).Replace("CodeUri: lambda/", "CodeUri: lambda_pkg/"),
@@ -35,6 +36,8 @@ if (-not $SoloFront) {
     & $aws s3 cp "$raiz\data\perfiles.json" "s3://$bucket/perfiles.json" --profile $Perfil --region $Region | Out-Null
     $salud = curl.exe -s "$api/health"
     if ($salud -notmatch '"ok": true') { throw "La API no responde bien: $salud" }
+    $lista = curl.exe -s "$api/pacientes"   # /health no lee los criterios: la lista sí
+    if ($lista -notmatch '"pacientes"') { throw "La lista no carga: $($lista.Substring(0, [Math]::Min(300, $lista.Length)))" }
     Write-Host "API OK: $api" -ForegroundColor Green
 }
 
