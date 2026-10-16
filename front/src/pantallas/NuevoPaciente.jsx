@@ -41,13 +41,13 @@ export function NuevoPaciente({ fecha, esp, onCerrar, onListo }) {
   };
   const campo = "h-9 px-2 border border-outline-variant rounded bg-surface-container-lowest w-full";
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onCerrar}>
-      <div className="bg-surface-container-lowest rounded max-w-xl w-full" onClick={(e) => e.stopPropagation()}>
-        <div className="px-4 py-2.5 border-b border-outline-variant flex justify-between items-center">
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-2 sm:p-4" onClick={onCerrar}>
+      <div className="bg-surface-container-lowest rounded max-w-xl w-full max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-2rem)] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="shrink-0 px-4 py-2.5 border-b border-outline-variant flex justify-between items-center">
           <h2 className="font-semibold">Ingresar interconsulta a la lista de espera</h2>
           <button onClick={onCerrar} className="text-on-surface-variant"><Icono n="close" /></button>
         </div>
-        <div className="p-4 grid grid-cols-2 gap-3 text-[14px]">
+        <div className="p-4 grid grid-cols-2 gap-3 text-[14px] overflow-y-auto min-h-0">
           <Filtro label="Nombre del paciente"><input value={f.nombre} onChange={set("nombre")} className={campo} autoFocus /></Filtro>
           <Filtro label="RUT">
             <input value={f.rut} onChange={set("rut")} onBlur={() => rutOk && setF({ ...f, rut: rutOk })} placeholder="12.345.678-5" inputMode="text"
@@ -84,7 +84,7 @@ export function NuevoPaciente({ fecha, esp, onCerrar, onListo }) {
           <Filtro label="Riesgo ACG (si se conoce)"><select value={f.acg} onChange={set("acg")} className={campo}><option value="">Sin dato</option>{cat?.acg.map((a) => <option key={a.nivel} value={a.nivel}>{a.nivel} · {a.texto}</option>)}</select></Filtro>
         </div>
         {error && <p className="px-4 text-error text-[13px]">{error}</p>}
-        <div className="px-4 py-3 border-t border-outline-variant flex justify-end gap-2">
+        <div className="shrink-0 px-4 py-3 border-t border-outline-variant flex justify-end gap-2">
           <button onClick={onCerrar} className="px-4 py-2 rounded border border-outline-variant font-semibold">Cancelar</button>
           <button disabled={!valido || enviando} onClick={guardar} className="px-4 py-2 rounded bg-primary text-on-primary font-semibold disabled:opacity-40">{enviando ? "Ingresando…" : "Ingresar y priorizar"}</button>
         </div>

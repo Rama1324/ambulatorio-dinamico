@@ -50,7 +50,7 @@ function Camara({ onFoto, onCerrar }) {
   };
   const subir = async (e) => { const f = e.target.files?.[0]; if (f) onFoto(await fotoABase64(f)); };
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={onCerrar}>
+    <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4 overflow-y-auto" onClick={onCerrar}>
       <div className="bg-surface-container-lowest rounded max-w-2xl w-full" onClick={(e) => e.stopPropagation()}>
         <div className="px-4 py-2.5 border-b border-outline-variant flex justify-between items-center">
           <h2 className="font-semibold">Fotografiar documento</h2>
