@@ -134,10 +134,17 @@ def guardar_evento(pid, ev):
     guardar({"id_paciente": pid, "sk": f"evento#{ev['fecha_evento']}#{ev['id_evento']}", "evento": json.dumps(ev, ensure_ascii=False)})
 
 
+class EntradaInvalida(ValueError):
+    """Dato mal formado en la solicitud: el handler responde 400, no 500."""
+
+
 def fecha_de(qs):
     """Fecha de corte de la consulta o del cuerpo de la solicitud; si no viene, hoy."""
     f = (qs or {}).get("fecha_corte")
-    return date.fromisoformat(f) if f else hoy()
+    try:
+        return date.fromisoformat(f) if f else hoy()
+    except (TypeError, ValueError):
+        raise EntradaInvalida(f"fecha_corte inválida: {f!r} (formato AAAA-MM-DD)")
 
 
 def fecha_valida(valor, corte, campo="fecha"):

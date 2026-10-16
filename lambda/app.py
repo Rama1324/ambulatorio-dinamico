@@ -106,7 +106,10 @@ def handler(event, context=None):
         method = event.get("requestContext", {}).get("http", {}).get("method") or event.get("httpMethod", "GET")
         path = (event.get("rawPath") or event.get("path") or "/").rstrip("/") or "/"
         qs = event.get("queryStringParameters") or {}
-        body = json.loads(event.get("body") or "{}") if event.get("body") else {}
+        try:
+            body = json.loads(event.get("body") or "{}") if event.get("body") else {}
+        except ValueError:
+            return _resp(400, {"error": "el cuerpo de la solicitud no es JSON válido"})
         partes = [p for p in path.split("/") if p]
         if method == "GET" and len(partes) == 2 and partes[0] == "plantillas" and partes[1] in importar.TABLAS:
             return {"statusCode": 200, "headers": {**CORS, "Content-Type": "text/csv; charset=utf-8",
@@ -114,5 +117,7 @@ def handler(event, context=None):
                     "body": importar.plantilla_csv(partes[1])}
         r = _rutear(method, partes, qs, body)
         return _resp(*r) if r else _resp(404, {"error": f"ruta no encontrada: {method} {path}"})
+    except datos.EntradaInvalida as e:
+        return _resp(400, {"error": str(e)})
     except Exception as e:  # nunca devolver 502 sin CORS: el front no podría leer el error
         return _resp(500, {"error": str(e)})

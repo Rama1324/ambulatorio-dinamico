@@ -167,6 +167,12 @@ def test_detalle():
     s, d = call("GET", "/pacientes/PAC-HLF-00001")
     assert s == 200 and d["mediciones"]
 
+def test_entrada_mal_formada_da_400():
+    assert call("GET", "/pacientes", {"fecha_corte": "hola"})[0] == 400
+    assert call("GET", "/kpis", {"fecha_corte": "2026-13-45"})[0] == 400
+    r = app.handler({"requestContext": {"http": {"method": "POST"}}, "rawPath": "/eventos", "body": "{no es json"})
+    assert r["statusCode"] == 400
+
 def test_ingresar_paciente_nuevo():
     s, cat = call("GET", "/catalogo")
     assert s == 200 and any(d["diagnostico_cie10"] == "I50" for d in cat["diagnosticos"])
