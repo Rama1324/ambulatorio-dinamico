@@ -68,9 +68,11 @@ def explicar(paciente):
             modelId=model_id,
             system=[{"text": PROMPT_SISTEMA}],
             messages=[{"role": "user", "content": [{"text": "Datos del paciente:\n" + json.dumps(_datos(paciente), ensure_ascii=False)}]}],
-            inferenceConfig={"maxTokens": 300},  # los modelos Claude recientes no aceptan 'temperature'
+            inferenceConfig={"maxTokens": 1200},  # holgado: el razonamiento también gasta tokens. Sin 'temperature' (no la aceptan)
         )
         texto = "".join(b.get("text", "") for b in r["output"]["message"]["content"]).strip()  # puede venir un bloque de razonamiento antes
+        if r.get("stopReason") == "max_tokens" and "." in texto:
+            texto = texto[:texto.rindex(".") + 1]  # cortado: dejar solo oraciones completas
         if "validación clínica" not in texto:
             texto += " Propuesta sujeta a validación clínica."
         return texto, "bedrock"

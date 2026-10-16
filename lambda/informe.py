@@ -127,7 +127,7 @@ def sugerencia_bedrock(texto):
         import boto3
         r = boto3.client("bedrock-runtime", region_name=_region()).converse(
             modelId=model_id, system=[{"text": PROMPT.format(vocab=json.dumps({t: list(s) for t, s in SUBTIPOS.items()}, ensure_ascii=False))}],
-            messages=[{"role": "user", "content": [{"text": texto}]}], inferenceConfig={"maxTokens": 300})
+            messages=[{"role": "user", "content": [{"text": texto}]}], inferenceConfig={"maxTokens": 1200})
         crudo = "".join(b.get("text", "") for b in r["output"]["message"]["content"])  # puede venir un bloque de razonamiento antes
         ev = json.loads(crudo[crudo.find("{"): crudo.rfind("}") + 1])
         if not ev.get("tipo_evento") or ev.get("tipo_evento") not in SUBTIPOS or ev.get("subtipo") not in SUBTIPOS[ev["tipo_evento"]]:

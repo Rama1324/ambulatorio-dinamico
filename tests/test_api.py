@@ -163,6 +163,17 @@ def test_explicar_plantilla():
     s, d = call("POST", "/pacientes/PAC-HLF-00002/explicar", body={"fecha_corte": "2026-08-10"})
     assert s == 200 and "validación clínica" in d["explicacion_ia"] and "Angina inestable" in d["explicacion_ia"]
 
+def test_explicar_cortado_por_tokens_deja_oraciones_completas(monkeypatch):
+    import types, explicar
+    class Cliente:
+        def converse(self, **kw):
+            return {"stopReason": "max_tokens", "output": {"message": {"content": [
+                {"reasoningContent": {}}, {"text": "Sube a prioridad alta por angina inestable. Este evento aún no ha sido (evaluación de"}]}}}
+    monkeypatch.setitem(sys.modules, "boto3", types.SimpleNamespace(client=lambda *a, **k: Cliente()))
+    monkeypatch.setenv("MODEL_ID", "falso")
+    texto, fuente = explicar.explicar(fila(call("GET", "/pacientes")[1], "PAC-HLF-00002"))
+    assert fuente == "bedrock" and "(evaluación de" not in texto and texto.endswith("Propuesta sujeta a validación clínica.")
+
 def test_detalle():
     s, d = call("GET", "/pacientes/PAC-HLF-00001")
     assert s == 200 and d["mediciones"]
