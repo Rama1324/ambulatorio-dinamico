@@ -102,6 +102,7 @@ export function Ficha({ p, total, detalle, fecha, demo, esp, onCambio, onAviso, 
       </div>
 
       {tab === "resumen" && <>
+      <ResumenEquipo resumen={resumen} cargando={cargando === "ia"} onPedir={pedirResumen} />
       <Caja titulo={`Por qué está en el N° ${p.posicion} y cómo se ha movido`}>
         <EvolucionPaciente p={p} fecha={fecha} esp={esp && esp !== "Todas" ? esp : null} />
       </Caja>
@@ -150,15 +151,17 @@ export function Ficha({ p, total, detalle, fecha, demo, esp, onCambio, onAviso, 
           ))}
         </ul>
       </Caja>
-      <Caja titulo="Puntaje LACE (experimental, solo desempate)">
+      <details className="bg-surface-container-lowest border border-outline-variant rounded px-4 py-2.5 text-[14px]">
+        <summary className="cursor-pointer font-semibold text-[15px]">Puntaje LACE (experimental)</summary>
+        <p className="text-[12px] text-on-surface-variant mt-1 mb-2">Solo desempata dentro de la misma prioridad cuando el sistema usa las reglas; con el algoritmo de IA no entra al orden.</p>
         <BoletaLace lace={p.lace} />
-      </Caja>
+      </details>
       </>}
 
       {tab === "resumen" && (
         <>
           <Caja titulo="Revisión de la prioridad (especialista)">
-            <p className="text-[13px] text-on-surface-variant mb-2">¿Está de acuerdo con la prioridad {ETIQUETA[p.categoria].toLowerCase()} que propone el sistema? Su respuesta se usa para medir la concordancia (kappa).</p>
+            <p className="text-[13px] text-on-surface-variant mb-2">¿Está de acuerdo con la prioridad {ETIQUETA[p.categoria].toLowerCase()} que propone el sistema? Su respuesta queda registrada a su nombre y sirve para medir cuánto coincide el sistema con los especialistas.</p>
             <div className="flex gap-2">
               <button onClick={confirmar} disabled={cargando} className="flex-1 py-2 rounded bg-primary text-on-primary font-semibold disabled:opacity-50">Confirmar prioridad</button>
               <button onClick={() => setAjuste(ajuste ? null : { categoria: p.categoria, motivo: "" })} className="flex-1 py-2 rounded border border-primary text-primary font-semibold">Cambiar prioridad</button>
@@ -172,13 +175,6 @@ export function Ficha({ p, total, detalle, fecha, demo, esp, onCambio, onAviso, 
                 <button disabled={ajuste.motivo.trim().length < 20 || !ajuste.motivo} onClick={guardarAjuste} className="py-2 rounded bg-primary text-on-primary font-semibold disabled:opacity-40">Guardar cambio</button>
               </div>
             )}
-          </Caja>
-
-          <Caja titulo="Resumen para el equipo" accion={<button onClick={pedirResumen} disabled={cargando} className="text-[13px] text-primary font-semibold disabled:opacity-50">{cargando === "ia" ? "Redactando…" : resumen ? "Actualizar" : "Generar"}</button>}>
-            {resumen ? <>
-              <p className="text-[14px] leading-relaxed">{resumen.explicacion_ia}</p>
-              <p className="text-[12px] text-on-surface-variant mt-2">Texto redactado automáticamente a partir del fundamento ({resumen.fuente === "bedrock" ? "Amazon Bedrock" : "plantilla"}). No modifica la prioridad.</p>
-            </> : <p className="text-[13px] text-on-surface-variant">Redacta en lenguaje simple el fundamento, por ejemplo para contactar al paciente.</p>}
           </Caja>
         </>
       )}
@@ -222,6 +218,45 @@ export function Ficha({ p, total, detalle, fecha, demo, esp, onCambio, onAviso, 
         </ol>
       </Caja>}
     </>
+  );
+}
+
+// Resumen para el equipo: la historia del paciente en lenguaje simple y qué hacer (distinto del "por qué está en el N°").
+const SECCIONES_RESUMEN = [["en_pocas_palabras", "person", "En pocas palabras"], ["mientras_esperaba", "history", "Qué pasó mientras esperaba"],
+  ["por_que_importa", "warning", "Por qué importa"], ["que_hacer", "task_alt", "Qué hacer ahora"], ["que_falta", "help", "Qué falta saber"]];
+function ResumenEquipo({ resumen, cargando, onPedir }) {
+  const r = resumen?.resumen;
+  return (
+    <Caja titulo="Resumen para el equipo" className="border-primary/40"
+      accion={r && <button onClick={onPedir} disabled={cargando} className="text-[13px] text-primary font-semibold disabled:opacity-50">{cargando ? "Redactando…" : "Actualizar"}</button>}>
+      {!r ? (
+        <div className="flex flex-col gap-2">
+          <p className="text-[13px] text-on-surface-variant">Explica en lenguaje simple quién es, qué le pasó mientras esperaba, por qué importa y qué hacer ahora. Sirve para llamar al paciente o para pasar el caso.</p>
+          <button onClick={onPedir} disabled={cargando} className="self-start px-4 py-2 rounded bg-primary text-on-primary font-semibold disabled:opacity-60 flex items-center gap-1.5">
+            <Icono n="summarize" className="text-[18px]" />{cargando ? "Redactando (unos 10 segundos)…" : "Generar resumen"}</button>
+          {cargando && <div className="flex flex-col gap-2 animate-pulse" aria-hidden="true">{[0, 1, 2].map((i) => <div key={i} className="h-4 rounded bg-surface-container-high/60" />)}</div>}
+        </div>
+      ) : (
+        <div className={`flex flex-col gap-3 ${cargando ? "opacity-50" : ""}`}>
+          {SECCIONES_RESUMEN.map(([k, icono, titulo]) => {
+            const v = r[k];
+            if (!v || (Array.isArray(v) && !v.length)) return null;
+            return (
+              <section key={k}>
+                <h3 className={`text-[13px] font-semibold flex items-center gap-1 mb-0.5 ${k === "que_hacer" ? "text-primary" : k === "por_que_importa" ? "text-error" : ""}`}>
+                  <Icono n={icono} className="text-[17px]" />{titulo}</h3>
+                {Array.isArray(v)
+                  ? <ul className="list-disc pl-6 text-[14px] space-y-0.5">{v.map((x, i) => <li key={i}>{x}</li>)}</ul>
+                  : <p className="text-[14px] leading-relaxed">{v}</p>}
+              </section>
+            );
+          })}
+          <p className="text-[12px] text-on-surface-variant border-t border-outline-variant/60 pt-2">
+            {resumen.fuente === "bedrock" ? "Redactado por IA (Amazon Bedrock) solo con los datos registrados; la IA no recibe nombre ni RUT." : "Armado automáticamente con los datos registrados."}
+            {" "}No cambia la prioridad. Propuesta sujeta a validación clínica.</p>
+        </div>
+      )}
+    </Caja>
   );
 }
 

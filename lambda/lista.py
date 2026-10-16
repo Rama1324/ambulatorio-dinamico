@@ -332,5 +332,6 @@ def post_explicar(pid, corte):
     d = detalle(pid, corte)
     if not d or not d["paciente"]:
         return 404, {"error": "paciente no está en la lista a esa fecha"}
-    texto, fuente = explicar.explicar(d["paciente"])
-    return 200, {"id_paciente": pid, "explicacion_ia": texto, "fuente": fuente}
+    secciones, fuente = explicar.resumen_equipo(d, corte)
+    texto = " ".join([secciones["en_pocas_palabras"], *secciones["mientras_esperaba"], secciones["por_que_importa"], *secciones["que_hacer"]])
+    return 200, {"id_paciente": pid, "resumen": secciones, "explicacion_ia": texto + " Propuesta sujeta a validación clínica.", "fuente": fuente}

@@ -164,7 +164,10 @@ def test_ges():
 
 def test_explicar_plantilla():
     s, d = call("POST", "/pacientes/PAC-HLF-00002/explicar", body={"fecha_corte": "2026-08-10"})
-    assert s == 200 and "validación clínica" in d["explicacion_ia"] and "Angina inestable" in d["explicacion_ia"]
+    r = d["resumen"]
+    assert s == 200 and "validación clínica" in d["explicacion_ia"] and d["fuente"] == "plantilla"
+    assert set(r) == {"en_pocas_palabras", "mientras_esperaba", "por_que_importa", "que_hacer", "que_falta"}
+    assert "hospitalización" in " ".join(r["mientras_esperaba"]) and r["que_hacer"] and "Violeta" not in d["explicacion_ia"]
 
 def test_explicar_cortado_por_tokens_deja_oraciones_completas(monkeypatch):
     import types, explicar
