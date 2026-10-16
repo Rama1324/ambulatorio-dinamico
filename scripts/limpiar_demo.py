@@ -4,7 +4,8 @@ No toca perfiles.json (está en S3).
 
 Uso, desde la raíz del repo (perfil AWS "hack" con credenciales vigentes):
   python scripts/limpiar_demo.py            # muestra cuántos registros hay, no borra
-  python scripts/limpiar_demo.py --borrar   # borra todo
+  python scripts/limpiar_demo.py --borrar   # borra lo registrado en la demo; conserva las evaluaciones de la IA
+  python scripts/limpiar_demo.py --borrar --todo   # borra también las evaluaciones de la IA (habría que volver a correr el barrido)
 """
 import collections
 import sys
@@ -26,6 +27,12 @@ while True:
         break
     kw["ExclusiveStartKey"] = r["LastEvaluatedKey"]
 
+# Las evaluaciones de la IA sobre pacientes del registro (barrido nocturno, ~USD 0,03 c/u) se conservan: si después se
+# borra un evento de la demo, su firma deja de coincidir y esa evaluación ya no se usa. Con --todo se borran también.
+if "--todo" not in sys.argv:
+    conservar = [i for i in items if i["sk"].startswith("evaluacion#") and i["id_paciente"].startswith("PAC-HLF")]
+    items = [i for i in items if i not in conservar]
+    print(f"Se conservan {len(conservar)} evaluaciones de la IA (usar --todo para borrarlas)")
 tipos = collections.Counter(i["sk"].split("#")[0] for i in items)
 print(f"Tabla {nombre}: {len(items)} registros " + (str(dict(tipos)) if items else ""))
 if "--borrar" not in sys.argv:
