@@ -1,3 +1,4 @@
+import { LoQueNoVe } from "./LoQueNoVe";
 import { Fragment, useEffect, useState } from "react";
 import * as api from "../api";
 import { descargarExcel } from "../excel";
@@ -224,6 +225,8 @@ export function Indicadores({ fecha, data, esp, setEsp, onVer }) {
           <button onClick={exportar} className="h-10 px-4 rounded bg-primary text-on-primary font-semibold flex items-center gap-1"><Icono n="download" className="text-[18px]" />Exportar todo a Excel</button>
         </div>
       </div>
+
+      <LoQueNoVe data={data} esp={esp} onVer={onVer} />
 
       <Seccion titulo="Metas del hospital" sub="Los tres indicadores que fijó el HLF para el desafío. Se miden con lo registrado en la herramienta.">
         <div className="grid gap-4 lg:grid-cols-3">
