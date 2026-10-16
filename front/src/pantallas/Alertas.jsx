@@ -97,7 +97,7 @@ export function Alertas({ vitales, todosPacientes, fecha, esp, setEsp, onVer, on
           )}
         </Caja>
 
-        <Caja titulo={`Avisar al especialista (${aRevisar.length})`} className="lg:col-span-5 border-l-4 border-l-ambar">
+        <Caja titulo={`Descompensados sin fila en la tabla: revisión clínica (${aRevisar.length})`} className="lg:col-span-5 border-l-4 border-l-ambar">
           <p className="text-[13px] text-on-surface-variant mb-2">Se descompensaron después de la interconsulta, pero la tabla del HLF no define cuánto sube su prioridad. No se les cambia solo: el especialista debe revisarlos y confirmar o cambiar su prioridad.</p>
           {aRevisar.length === 0 && <p className="text-[13px] text-on-surface-variant">Sin avisos{esp !== "Todas" && ` en ${esp}`}.</p>}
           {agrupar(aRevisar).map(([nombreEsp, grupo]) => (

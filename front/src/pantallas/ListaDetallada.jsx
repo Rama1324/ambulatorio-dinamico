@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import * as api from "../api";
 import { descargarExcel } from "../excel";
 import { Filtro, Icono, Prioridad } from "../componentes/comunes";
-import { ESPECIALIDADES, ETIQUETA, ESTILO_GESTION, EVAL_TXT, FACTOR } from "../constantes";
+import { ESPECIALIDADES, ETIQUETA, ESTILO_GESTION, EVAL_TXT, FACTOR, ordenLista, plural } from "../constantes";
 import { fmt, fmtHace, hace } from "../util";
 
 const POR_PAGINA = 25;
@@ -101,7 +101,7 @@ export function ListaDetallada({ data, fecha, esp, setEsp, filtros, setFiltros, 
           <tr className="bg-surface-container-low text-[13px] text-on-surface-variant border-b border-outline-variant">
             <th className="py-2 px-3 font-semibold w-14">N°</th><th className="py-2 px-2 font-semibold">Prioridad</th>
             <th className="py-2 px-3 font-semibold">Paciente / diagnóstico</th><th className="py-2 px-3 font-semibold text-right">Espera</th>
-            <th className="py-2 px-3 font-semibold">Estado de gestión</th><th className="py-2 px-3 font-semibold">Próxima acción · responsable</th>
+            <th className="py-2 px-3 font-semibold">Estado de gestión</th><th className="py-2 px-3 font-semibold">Próxima acción</th>
             <th className="py-2 px-2"><span className="sr-only">Detalle</span></th>
           </tr>
         </thead>
@@ -143,7 +143,7 @@ export function ListaDetallada({ data, fecha, esp, setEsp, filtros, setFiltros, 
                     </div>
                   </td>
                   <td className="py-2 px-3 align-top text-right whitespace-nowrap">
-                    <div className={`text-[17px] font-bold leading-tight ${p.dias_espera > 365 ? "text-error" : ""}`}>{p.dias_espera} días</div>
+                    <div className="text-[17px] font-bold leading-tight">{p.dias_espera} días</div>
                     <div className="text-[12px] text-on-surface-variant">desde {fmt(p.fecha_ingreso_lista)}</div>
                   </td>
                   <td className="py-2 px-3 align-top text-[13px]">
@@ -152,8 +152,8 @@ export function ListaDetallada({ data, fecha, esp, setEsp, filtros, setFiltros, 
                   </td>
                   <td className="py-2 px-3 align-top text-[13px]">
                     <div>{g.proxima_accion || "—"}</div>
-                    <div className={g.responsable ? "text-on-surface-variant" : "text-ambar"}>{g.responsable || "Sin responsable"}
-                      {g.seguimiento && <span className={g.seguimiento_vencido ? "text-error font-semibold" : ""}> · {g.seguimiento_vencido ? "seguimiento vencido" : "seguimiento"} {fmt(g.seguimiento)}</span>}</div>
+                    {(g.responsable || g.seguimiento) && <div className="text-on-surface-variant">{g.responsable}
+                      {g.seguimiento && <span className={g.seguimiento_vencido ? "text-error font-semibold" : ""}>{g.responsable ? " · " : ""}{g.seguimiento_vencido ? "seguimiento vencido" : "seguimiento"} {fmt(g.seguimiento)}</span>}</div>}
                   </td>
                   <td className="py-2 px-2 align-top text-right">
                     <button onClick={(e) => { e.stopPropagation(); setSel(p.id_paciente); }} className="text-[13px] text-primary font-semibold whitespace-nowrap hover:underline">Ver detalle</button>
@@ -166,7 +166,7 @@ export function ListaDetallada({ data, fecha, esp, setEsp, filtros, setFiltros, 
       </table>
       {filtrados.length === 0 && <p className="p-6 text-on-surface-variant">No hay pacientes con esos filtros.</p>}
       <div className="px-3 py-2 flex items-center justify-between text-[13px] text-on-surface-variant bg-surface-container-low">
-        <span>{actualizando ? "Actualizando…" : `${filtrados.length} pacientes`} · orden: prioridad, descompensación grave, grupo de protección, más de 1 año en espera, LACE (desempate experimental), fecha de ingreso, ajustes manuales</span>
+        <span>{actualizando ? "Actualizando…" : plural(filtrados.length, "paciente", "pacientes")} · {ordenLista(data.pacientes.some((p) => p.algoritmo === "rubrica"))} Un ajuste manual del equipo prevalece.</span>
         <div className="flex items-center gap-2">
           <button disabled={pagina === 0} onClick={() => setPagina(pagina - 1)} className="px-2 py-1 border border-outline-variant rounded bg-surface-container-lowest disabled:opacity-40">Anterior</button>
           <span>{pagina + 1} / {paginas}</span>

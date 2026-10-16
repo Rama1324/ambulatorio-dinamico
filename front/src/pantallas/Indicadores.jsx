@@ -171,7 +171,7 @@ export function Indicadores({ fecha, data, esp, setEsp, onVer }) {
       <div className="flex items-start justify-between gap-2">
         <h3 className="font-semibold text-[15px]">{titulo}</h3>
         <span className={`text-[12px] font-semibold rounded px-2 py-0.5 whitespace-nowrap ${estado === "ok" ? "bg-hlf-claro text-hlf" : estado === "mal" ? "bg-ambar-container text-ambar" : "bg-surface-container text-on-surface-variant"}`}>
-          {estado === "ok" ? "✓ En meta" : estado === "mal" ? "Bajo la meta" : estado === "diseño" ? "Por diseño" : "Aún sin datos"}</span>
+          {estado === "ok" ? "✓ En meta" : estado === "mal" ? "Bajo la meta" : estado === "diseño" ? "Automática" : "Aún sin datos"}</span>
       </div>
       <div className="text-[34px] font-bold text-primary-container mt-1 leading-tight">{valor}</div>
       <div className="text-[13px] text-on-surface-variant">Meta del hospital: <b>{meta}</b></div>
@@ -204,7 +204,7 @@ export function Indicadores({ fecha, data, esp, setEsp, onVer }) {
     { nombre: "Mayores saltos", filas: [["Paciente", "RUT / ID", "Especialidad", "Diagnóstico", "N° anterior", "N° actual", "Subió", "Evento", "Fecha del evento"],
       ...subieron.map((p) => [p.nombre_fantasia, p.rut || p.id_paciente, p.especialidad, p.diagnostico_texto, p.posicion_anterior, p.posicion, p.salto,
         clasificarEvento(p.evento_causa) || "", fmt(p.evento_causa?.fecha_evento)])] },
-    { nombre: "Trabajo pendiente", filas: [["Indicador", "Valor"], ["Decisión del especialista", tp.por_estado.pendiente_revision], ["Pendientes de contacto", tp.por_estado.pendiente_contacto],
+    { nombre: "Trabajo pendiente", filas: [["Indicador", "Valor"], ["Decisión del especialista", tp.por_estado.pendiente_revision], ["Sin respuesta al llamar", tp.por_estado.pendiente_contacto],
       ["Pendientes de cita", tp.por_estado.pendiente_cita], ["Con cita reservada", tp.por_estado.cita_reservada], ["Sin responsable", tp.sin_responsable],
       ["Seguimiento vencido", tp.seguimiento_vencido], ["Ajustes manuales vigentes", k.ajustes_manuales.vigentes], ["Ajustes sin efecto por evento nuevo", k.ajustes_manuales.sin_efecto_por_evento],
       ["Llamadas registradas", co.intentos], ["Llamadas con respuesta", co.efectivos], ["Egresos por fallecimiento (causal 9)", k.egresos.fallecidos], ["Atendidos en consulta nueva", k.egresos.atendidos]] },
@@ -228,7 +228,7 @@ export function Indicadores({ fecha, data, esp, setEsp, onVer }) {
 
       <Seccion titulo="Metas del hospital" sub="Los tres indicadores que fijó el HLF para el desafío. Se miden con lo registrado en la herramienta.">
         <div className="grid gap-4 lg:grid-cols-3">
-          <Meta titulo="Actualización tras un evento" valor="al instante" meta="inmediata" estado="diseño"
+          <Meta titulo="Actualización tras un evento" valor="automática" meta="reevaluar en menos de 72 h" estado="diseño"
             detalle={<>Cada evento, informe o paciente nuevo recalcula la lista en milisegundos.{re.evaluados
               ? <> El especialista revisó la prioridad en una mediana de {num(re.mediana_horas)} h ({re.evaluados} revisadas; {re.sin_evaluar} sin revisar).</> : null}
               {" "}Hoy hay <b>{re.descompensados_en_lista}</b> descompensaciones graves: {re.evaluacion_hecha} revisadas y <b className={re.evaluacion_pendiente ? "text-error" : ""}>{re.evaluacion_pendiente} por revisar</b>.</>} />
@@ -237,9 +237,9 @@ export function Indicadores({ fecha, data, esp, setEsp, onVer }) {
             detalle={cc.revisiones
               ? <>{cc.acuerdo_pct}% de acuerdo en {cc.revisiones} revisiones (confirmar = acuerdo; cambiar = desacuerdo).{!cc.suficiente && ` Con menos de ${cc.n_recomendado} revisiones el kappa es solo orientativo.`}</>
               : <>Todavía no hay revisiones. Se calcula cuando los especialistas confirman o cambian la prioridad que propone el sistema (se recomiendan al menos {cc.n_recomendado}).</>} />
-          <Meta titulo="Cobertura con criterio común" valor={`${k.cobertura.pct}%`} meta="100% de la lista"
+          <Meta titulo="Solicitudes incluidas en el orden" valor={`${k.cobertura.pct}%`} meta="100% de la lista con criterio común"
             estado={k.cobertura.pct === 100 ? "ok" : "mal"}
-            detalle={<>{k.cobertura.evaluados} de {k.cobertura.en_espera} pacientes ordenados con el mismo criterio: {k.cobertura.criterio}.</>} />
+            detalle={<>{k.cobertura.evaluados} de {k.cobertura.en_espera} solicitudes están ordenadas con el mismo criterio: {k.cobertura.criterio}. No significa que todas hayan sido reevaluadas por un especialista.</>} />
         </div>
       </Seccion>
 
@@ -250,7 +250,7 @@ export function Indicadores({ fecha, data, esp, setEsp, onVer }) {
           <Tarjeta titulo="Esperan más de 1 año" valor={es.mas_de_1_anio} tono="ambar" sub={`${pct(es.mas_de_1_anio, fin.total)}% · ${es.mas_de_500_dias} con más de 500 días`} />
           <Tarjeta titulo="Mediana de espera" valor={`${num(es.mediana_dias, 0)} días`} sub={`Máxima: ${es.maxima_dias} días`} />
           <Tarjeta titulo="Descompensaciones graves" valor={fin.graves} tono="rojo" sub={`${re.evaluacion_hecha} revisadas · ${re.evaluacion_pendiente} por revisar`} />
-          <Tarjeta titulo="Egresos del período" valor={fin.egresos - ini.egresos} tono="verde" sub={`${fin.atendidos - ini.atendidos} atendidos · ${fin.fallecidos - ini.fallecidos} fallecidos`} />
+          <Tarjeta titulo="Subieron de prioridad" valor={data.pacientes.filter((p) => ({ alta: 3, media: 2, baja: 1 })[p.categoria] > ({ alta: 3, media: 2, baja: 1 })[p.prioridad_inicial]).length} tono="rojo" sub="desde la prioridad que tenían al ingresar, por eventos clínicos posteriores" />
         </div>
       </Seccion>
 
@@ -261,7 +261,7 @@ export function Indicadores({ fecha, data, esp, setEsp, onVer }) {
               <th className="py-2 px-3 text-left font-semibold">Especialidad</th><th className="px-2 font-semibold">En espera</th><th className="px-2 font-semibold">Alta</th>
               <th className="px-2 font-semibold">Más de 1 año</th><th className="px-2 font-semibold">Más de 500 días</th><th className="px-2 font-semibold">Mediana</th>
               <th className="px-2 font-semibold">Máxima</th><th className="px-2 font-semibold">Desc. graves</th><th className="px-2 font-semibold">Pend. revisión</th>
-              <th className="px-2 font-semibold">Sin responsable</th><th className="px-3 font-semibold">Egresos</th></tr></thead>
+              <th className="px-3 font-semibold">Egresos</th></tr></thead>
             <tbody>
               {k.por_especialidad.map((r) => (
                 <tr key={r.especialidad} onClick={() => setEsp(esp === r.especialidad ? "Todas" : r.especialidad)} tabIndex={0}
@@ -274,7 +274,7 @@ export function Indicadores({ fecha, data, esp, setEsp, onVer }) {
                   <td className="px-2">{num(r.mediana_dias, 0)} d</td><td className="px-2">{r.maxima_dias} d</td>
                   <td className="px-2">{r.graves ? <span className={r.graves_sin_revisar ? "text-error font-semibold" : ""}>{r.graves}{r.graves_sin_revisar ? ` (${r.graves_sin_revisar} sin revisar)` : ""}</span> : "0"}</td>
                   <td className={`px-2 ${r.pendientes_revision ? "text-ambar" : ""}`}>{r.pendientes_revision}</td>
-                  <td className="px-2">{r.sin_responsable}</td><td className="px-3">{r.egresos}</td>
+                  <td className="px-3">{r.egresos}</td>
                 </tr>
               ))}
               {(() => { const r = k.total_hospital; return (
@@ -282,7 +282,7 @@ export function Indicadores({ fecha, data, esp, setEsp, onVer }) {
                   <td className="py-2 px-3 text-left">Todo el hospital</td><td className="px-2">{r.en_espera}</td><td className="px-2">{r.alta}</td>
                   <td className="px-2">{r.mas_de_1_anio} <span className="text-[12px] text-on-surface-variant">({pct(r.mas_de_1_anio, r.en_espera)}%)</span></td>
                   <td className="px-2">{r.mas_de_500_dias}</td><td className="px-2">{num(r.mediana_dias, 0)} d</td><td className="px-2">{r.maxima_dias} d</td>
-                  <td className="px-2">{r.graves}</td><td className="px-2">{r.pendientes_revision}</td><td className="px-2">{r.sin_responsable}</td><td className="px-3">{r.egresos}</td>
+                  <td className="px-2">{r.graves}</td><td className="px-2">{r.pendientes_revision}</td><td className="px-3">{r.egresos}</td>
                 </tr>); })()}
             </tbody>
           </table>
@@ -340,7 +340,7 @@ export function Indicadores({ fecha, data, esp, setEsp, onVer }) {
         </Seccion>
       </div>
 
-      <Seccion titulo={`Mayores saltos en la lista (${subieron.length})`} sub="Pacientes que avanzaron 10 o más puestos en las últimas dos semanas, con el evento que lo explica. Clic para ver su ficha.">
+      {subieron.length > 0 && <Seccion titulo={`Mayores saltos en la lista (${subieron.length})`} sub="Pacientes que avanzaron 10 o más puestos en las últimas dos semanas, con el evento que lo explica. Clic para ver su ficha.">
         {subieron.length === 0 ? <p className="text-[13px] text-on-surface-variant">Nadie avanzó 10 o más puestos en las últimas dos semanas.</p> : (
           <div className="flex flex-col gap-2">
             {subieron.slice(0, verSaltos).map((p) => (
@@ -364,14 +364,16 @@ export function Indicadores({ fecha, data, esp, setEsp, onVer }) {
               {verSaltos > 5 ? "Ver menos" : `Ver los ${subieron.length}`}</button>}
           </div>
         )}
-      </Seccion>
+      </Seccion>}
 
-      <Seccion titulo="Trabajo pendiente y seguimiento" sub="Lo que falta hacer con los pacientes de la lista y lo que ya se registró.">
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <details className="bg-surface-container-lowest border border-outline-variant rounded group">
+        <summary className="px-4 py-3 cursor-pointer text-[16px] font-semibold flex items-center gap-2">
+          <Icono n="expand_more" className="text-[20px] group-open:rotate-180 transition-transform" />Gestión y seguimiento (llamadas, responsables, ajustes)</summary>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 p-4 pt-0">
           <Caja titulo="Gestión de los casos">
             <div className="text-[14px] space-y-1">
               <Fila t="Decisión del especialista" v={tp.por_estado.pendiente_revision} c="text-ambar" />
-              <Fila t="Pendientes de contacto" v={tp.por_estado.pendiente_contacto} />
+              <Fila t="Sin respuesta al llamar" v={tp.por_estado.pendiente_contacto} />
               <Fila t="Pendientes de cita" v={tp.por_estado.pendiente_cita} />
               <Fila t="Con cita reservada" v={tp.por_estado.cita_reservada} c="text-hlf" />
               <Fila t="Sin responsable asignado" v={tp.sin_responsable} c={tp.sin_responsable ? "text-ambar" : ""} />
@@ -401,7 +403,7 @@ export function Indicadores({ fecha, data, esp, setEsp, onVer }) {
             </div>
           </Caja>
         </div>
-      </Seccion>
+      </details>
 
       <details className="bg-surface-container-lowest border border-outline-variant rounded group">
         <summary className="px-4 py-3 cursor-pointer text-[16px] font-semibold flex items-center gap-2">

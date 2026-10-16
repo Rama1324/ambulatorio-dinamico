@@ -121,11 +121,12 @@ export default function App() {
 
       <div className="bg-surface-container-high border-b border-outline-variant">
         <div className="max-w-[1400px] mx-auto px-6 py-1.5 text-[13px] flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className="font-semibold flex items-center gap-1"><Icono n="database" className="text-[16px]" />Datos sintéticos de demostración: no son pacientes reales</span>
+          <span className="font-semibold flex items-center gap-1"><Icono n="database" className="text-[16px]" />Demo · Datos sintéticos</span>
           <span className="text-on-surface-variant">·</span>
-          <span>{tiempoReal ? <>Lista calculada al <b>{fmt(fecha)}</b> (hoy en Chile) · registro del hospital al <b>{fmt(info?.registro_al || "2026-10-13")}</b>
-            {info?.datos_hasta && <> (último dato clínico: {fmt(info.datos_hasta)})</>} + lo registrado en la herramienta</>
-            : <>Fecha anterior: lista calculada al <b>{fmt(fecha)}</b>, solo con registros hasta esa fecha.</>}</span>
+          <span>{tiempoReal ? <>Lista al <b>{fmt(fecha)}</b></> : <>Fecha anterior: lista al <b>{fmt(fecha)}</b>, solo con registros hasta esa fecha</>}</span>
+          {tiempoReal && <details className="relative"><summary className="cursor-pointer text-primary">Información de los datos</summary>
+            <div className="absolute z-30 mt-1 w-[420px] max-w-[90vw] p-3 rounded border border-outline-variant bg-surface-container-lowest shadow text-[13px]">
+              No son pacientes reales. Registro del hospital al <b>{fmt(info?.registro_al || "2026-10-13")}</b>{info?.datos_hasta && <> (último dato clínico: {fmt(info.datos_hasta)})</>}, más lo registrado en esta herramienta. La lista se calcula con la fecha de hoy en Chile.</div></details>}
         </div>
       </div>
 
@@ -175,7 +176,7 @@ export default function App() {
         }} />}
         {vista === "lista" && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-            <div className={`${paciente ? "lg:col-span-7 xl:col-span-8" : "lg:col-span-12"} flex flex-col gap-4`}>
+            <div className={`${paciente ? "lg:col-span-6 xl:col-span-7" : "lg:col-span-12"} flex flex-col gap-4`}>
               <ListaDetallada data={data} fecha={fecha} esp={esp} setEsp={setEsp} filtros={filtros} setFiltros={setFiltros} sel={sel} setSel={setSel}
                 destacado={destacado} demo={demo} actualizando={actualizando} onIngresar={() => setNuevo(true)}>
                 {nuevo && <NuevoPaciente fecha={fecha} esp={esp} onCerrar={() => setNuevo(false)} onListo={async (r) => {
@@ -186,7 +187,7 @@ export default function App() {
               </ListaDetallada>
             </div>
 
-            {paciente && <aside className="lg:col-span-5 xl:col-span-4 lg:sticky lg:top-4 flex flex-col gap-3 [&>*]:shrink-0 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto lg:overflow-x-hidden" aria-label="Detalle del paciente" id="ficha">
+            {paciente && <aside className="lg:col-span-6 xl:col-span-5 lg:sticky lg:top-4 flex flex-col gap-3 [&>*]:shrink-0 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto lg:overflow-x-hidden" aria-label="Detalle del paciente" id="ficha">
               <button onClick={() => setSel(null)} className="self-end text-[13px] text-on-surface-variant hover:text-on-surface flex items-center gap-1"><Icono n="close" className="text-[18px]" />Cerrar detalle</button>
               <Ficha key={paciente.id_paciente} p={paciente} total={data.total} detalle={detalle} fecha={fecha} demo={demo} esp={esp} onCambio={cargar} onAviso={mostrarAviso} onVer={setSel}
                 onDestacar={(id) => { setDestacado(id); setTimeout(() => setDestacado(null), 3000); }} />

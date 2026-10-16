@@ -56,8 +56,8 @@ def post_paciente(body):
     pid = "PAC-NUEVO-" + uuid.uuid4().hex[:5].upper()
     perfil = {
         "id_paciente": pid,
-        "paciente": {"nombre_fantasia": nombre, "rut": rut, "edad": edad, "sexo": body["sexo"], "comuna": body.get("comuna") or "La Florida",
-                     "prevision": body.get("prevision") or "FONASA B", "nivel_socioeconomico": "", "fallecido": False,
+        "paciente": {"nombre_fantasia": nombre, "rut": rut, "edad": edad, "sexo": body["sexo"], "comuna": body.get("comuna") or "Sin dato",
+                     "prevision": body.get("prevision") or "Sin dato", "nivel_socioeconomico": "", "fallecido": False,
                      "fecha_defuncion": None,
                      "grupo_proteccion": body.get("grupo_proteccion") if body.get("grupo_proteccion") in puntaje.GRUPOS_PROTECCION else None,
                      "acg": body.get("acg") if body.get("acg") in puntaje.ACG_NIVELES else None},

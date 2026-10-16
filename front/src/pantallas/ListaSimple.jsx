@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { descargarExcel } from "../excel";
 import { Filtro, Icono, Prioridad } from "../componentes/comunes";
-import { ESPECIALIDADES, ETIQUETA } from "../constantes";
+import { ESPECIALIDADES, ETIQUETA, plural } from "../constantes";
 import { fmt } from "../util";
 
 // Decisión clínica ante una descompensación grave: la registra un profesional identificado, con seguimiento.
@@ -66,7 +66,7 @@ export function ListaSimple({ data, fecha, esp, setEsp, actualizando, onVer }) {
         {filas.length === 0 && <p className="p-6 text-on-surface-variant">No hay pacientes con esa búsqueda.</p>}
       </section>
       <div className="flex flex-wrap items-center justify-between gap-2 text-[14px] text-on-surface-variant">
-        <span>{actualizando ? "Actualizando…" : `${filas.length} pacientes`} · lista al {fmt(fecha)}</span>
+        <span>{actualizando ? "Actualizando…" : plural(filas.length, "paciente", "pacientes")} · lista al {fmt(fecha)}</span>
         <div className="flex items-center gap-2">
           <button disabled={pagina === 0} onClick={() => setPagina(pagina - 1)} className="px-3 py-1.5 border border-outline-variant rounded bg-surface-container-lowest disabled:opacity-40">Anterior</button>
           <span>Página {pagina + 1} de {paginas}</span>

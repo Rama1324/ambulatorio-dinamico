@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import * as api from "../api";
 import { Caja, Icono, Prioridad } from "../componentes/comunes";
-import { ESTILO_GESTION, ETIQUETA, FACTOR, TIPO_EVENTO } from "../constantes";
+import { ESTILO_GESTION, ETIQUETA, FACTOR, TIPO_EVENTO, ordenLista } from "../constantes";
 import { AjusteManual, Contacto, DecisionClinica, GestionCaso, Novedad } from "./Acciones";
 import { EvolucionPaciente } from "./Evolucion";
 import { Informe } from "./Informe";
@@ -68,6 +68,7 @@ export function Ficha({ p, total, detalle, fecha, demo, esp, onCambio, onAviso, 
           </div>
           <Prioridad cat={p.categoria} />
         </div>
+        <Resultado p={p} total={total} esp={esp} fecha={fecha} onFundamento={() => setTab("puntaje")} />
         {p.urgencia_hoy && <div className="mt-3 p-2.5 rounded bg-error text-on-error text-[14px] flex gap-2"><Icono n="emergency" className="text-[20px]" /><span>
           <b>Derivar hoy a urgencia.</b> {p.razones.find((r) => r.factor === "urgencia")?.valor}. No corresponde esperar una cita electiva.</span></div>}
         {p.urgencia_cerrada && <div className="mt-3 p-2.5 rounded bg-hlf-claro text-hlf text-[14px] flex gap-2"><Icono n="task_alt" className="text-[20px]" /><span>
@@ -80,15 +81,12 @@ export function Ficha({ p, total, detalle, fecha, demo, esp, onCambio, onAviso, 
         {p.estado_revision === "requiere_revision" && <div className="mt-2 p-2.5 rounded bg-ambar-container text-ambar text-[14px] flex gap-2"><Icono n="rate_review" className="text-[20px]" /><span><b>Hay información nueva desde la última revisión:</b> {p.revision_vencida_por}. El especialista ve si mantiene su decisión.</span></div>}
         {p.estado_revision === "pendiente" && avisos.length > 0 && <div className="mt-2 p-2.5 rounded bg-ambar-container/60 text-ambar text-[14px] flex gap-2"><Icono n="rate_review" className="text-[20px]" /><span><b>Aviso para el especialista:</b> {avisos.join(" · ")}</span></div>}
         <dl className="mt-3 grid grid-cols-[130px_1fr] gap-y-1 text-[14px]">
-          <dt className="text-on-surface-variant">Especialidad</dt><dd>{p.especialidad}</dd>
-          <dt className="text-on-surface-variant">Diagnóstico</dt><dd>{p.diagnostico_cie10} · {p.diagnostico_texto}</dd>
+          <dt className="text-on-surface-variant">Diagnóstico</dt><dd>{p.diagnostico_cie10.startsWith("HLF-") ? p.diagnostico_texto : `${p.diagnostico_cie10} · ${p.diagnostico_texto}`}</dd>
           <dt className="text-on-surface-variant">Ingreso a lista</dt><dd>{fmt(p.fecha_ingreso_lista)} ({p.dias_espera} días)</dd>
-          <dt className="text-on-surface-variant">Prioridad inicial</dt><dd className="capitalize">{p.prioridad_inicial}</dd>
-          <dt className="text-on-surface-variant">N° en la lista</dt><dd>{p.posicion} de {total} {esp && esp !== "Todas" ? `en ${esp}` : "(todas las especialidades)"}</dd>
-          <dt className="text-on-surface-variant">Prioridad</dt><dd><EstadoRevision p={p} /></dd>
+          <dt className="text-on-surface-variant">Revisión</dt><dd><EstadoRevision p={p} /></dd>
           {p.gestion && <><dt className="text-on-surface-variant">Gestión</dt><dd><b className={ESTILO_GESTION[p.gestion.estado]}>{p.gestion.texto}</b>{p.gestion.motivo_texto && ` · ${p.gestion.motivo_texto}`}</dd>
             <dt className="text-on-surface-variant">Próxima acción</dt><dd>{p.gestion.proxima_accion}{p.gestion.seguimiento && <span className={p.gestion.seguimiento_vencido ? "text-error font-semibold" : ""}> · seguimiento {fmt(p.gestion.seguimiento)}{p.gestion.seguimiento_vencido && " (vencido)"}</span>}</dd>
-            <dt className="text-on-surface-variant">Responsable</dt><dd className={p.gestion.responsable ? "" : "text-ambar"}>{p.gestion.responsable || "Sin responsable asignado"}</dd></>}
+            {p.gestion.responsable && <><dt className="text-on-surface-variant">Responsable</dt><dd>{p.gestion.responsable}</dd></>}</>}
           {(p.grupo_proteccion || p.acg) && <><dt className="text-on-surface-variant">Riesgo social</dt><dd>{[p.grupo_proteccion && `Grupo ${p.grupo_proteccion}`, p.acg && `ACG ${p.acg}`].filter(Boolean).join(" · ")}</dd></>}
           {p.comorbilidades?.length > 0 && <><dt className="text-on-surface-variant">Comorbilidades</dt><dd>{p.comorbilidades.map((c) => c.nombre).join(", ")}</dd></>}
         </dl>
@@ -109,8 +107,7 @@ export function Ficha({ p, total, detalle, fecha, demo, esp, onCambio, onAviso, 
       {p.comparacion && (p.comparacion.arriba || p.comparacion.abajo) && <Caja titulo="Comparado con sus vecinos en la lista">
         <Vecino v={p.comparacion.arriba} arriba onVer={onVer} />
         <Vecino v={p.comparacion.abajo} onVer={onVer} />
-        <p className="text-[12px] text-on-surface-variant mt-2">Se comparan con los criterios del orden de la lista, en este orden: prioridad, urgencia «derivar hoy»,
-          descompensación grave, mortalidad, gravedad del evento, descompensado o estable; recién después grupo de protección y tiempo de espera (Ord. MINSAL 536/2025).</p>
+        <p className="text-[12px] text-on-surface-variant mt-2">{ordenLista(p.algoritmo === "rubrica")}</p>
       </Caja>}
       </>}
 
@@ -130,8 +127,10 @@ export function Ficha({ p, total, detalle, fecha, demo, esp, onCambio, onAviso, 
         {p.algoritmo === "rubrica" && p.rubrica ? <div className="text-[14px] space-y-1.5">
           <p><b>Algoritmo con rúbrica:</b> un modelo de IA (Amazon Bedrock) leyó el historial {p.rubrica.categorias_corridas?.length || 3} veces y
             respondió preguntas cerradas con citas; una fórmula fija con la tabla del HLF calculó la prioridad. La IA no decide.</p>
-          <p className="text-[13px] text-on-surface-variant">Reglas: {p.rubrica.categoria_reglas} · rúbrica: {p.rubrica.categoria_rubrica ?? "—"} ·
-            lecturas: {(p.rubrica.categorias_corridas || []).map((c) => c || "falló").join(" / ")} · {p.rubrica.modelo} · {p.rubrica.version_kb}</p>
+          <details className="text-[13px] text-on-surface-variant"><summary className="cursor-pointer">Detalle técnico de la evaluación</summary>
+            <p className="mt-1">Prioridad según las reglas: {p.rubrica.categoria_reglas} · según la fórmula con las respuestas de la IA: {p.rubrica.categoria_rubrica ?? "—"}.
+              La fórmula se aplicó a cada una de las 3 lecturas: {(p.rubrica.categorias_corridas || []).map((c) => c || "falló").join(" / ")} (la IA no elige la prioridad; responde preguntas y la fórmula calcula).
+              Modelo {p.rubrica.modelo} · base de conocimiento {p.rubrica.version_kb}.</p></details>
           {p.rubrica.requiere_revision
             ? <div className="rounded bg-ambar-container/60 text-ambar p-2 text-[13px]"><b>Podría bajar de prioridad:</b> {p.controles.filter((m) => m.motivo === "bajaria").map((m) => m.detalle).join(" · ")}. El sistema nunca baja solo: mantiene la prioridad hasta que el especialista decida.</div>
             : p.controles?.length > 0
@@ -218,6 +217,39 @@ export function Ficha({ p, total, detalle, fecha, demo, esp, onCambio, onAviso, 
         </ol>
       </Caja>}
     </>
+  );
+}
+
+// Lo primero que se ve al abrir un paciente: dónde está, cómo cambió su prioridad y por qué.
+const MOTIVOS = ["urgencia", "combinacion", "criterio_registro", "criterio_clinico", "oncologico", "tabla_oficial", "piso"];
+function Resultado({ p, total, esp, fecha, onFundamento }) {
+  const rz = p.razones || [];
+  const m = MOTIVOS.map((f) => rz.find((r) => r.factor === f && !r.sin_regla)).find(Boolean);
+  const cambio = p.categoria !== p.prioridad_inicial;
+  const motivo = p.categoria !== p.categoria_sistema ? `cambiada por el especialista${p.revision?.motivo ? `: ${p.revision.motivo}` : ""}`
+    : m ? m.valor.split(" · ")[0].replace(" (no supera la actual)", "").replace(/^"([^"]+)"/, "$1")
+      : cambio ? "subió por un evento clínico posterior a la interconsulta" : "es la prioridad que asignó el especialista al recibir la interconsulta";
+  const ev = rz.find((r) => r.factor === "evento");
+  const fechaEv = p.evaluacion?.fecha_evento || ev?.valor.match(/\d{4}-\d{2}-\d{2}/)?.[0];
+  const claveEv = ev ? ev.valor.split(":")[0].trim() : null;
+  const tipoEv = claveEv ? (TIPO_EVENTO[claveEv.replaceAll(" ", "_")] || claveEv.replaceAll("_", " ")).replace(/^evento grave$/, "Evento grave") : null;
+  const hace14 = (() => { const d = new Date(fecha + "T12:00:00"); d.setDate(d.getDate() - 14); return d.toISOString().slice(0, 10); })();
+  const delta = p.posicion_anterior ? p.posicion_anterior - p.posicion : 0;
+  return (
+    <div className="mt-3 rounded border border-primary/30 bg-primary/5 p-3 text-[14px]">
+      <div className="text-[20px] font-bold leading-tight">Puesto {p.posicion} <span className="text-[14px] font-normal text-on-surface-variant">de {total} {esp && esp !== "Todas" ? `en ${esp}` : "en todo el hospital"}</span></div>
+      <div className="mt-1 flex flex-wrap items-center gap-1.5">Prioridad
+        {cambio ? <><Prioridad cat={p.prioridad_inicial} /><span>→</span><Prioridad cat={p.categoria} /></> : <><Prioridad cat={p.categoria} /><span className="text-on-surface-variant">(se mantiene desde el ingreso)</span></>}
+      </div>
+      <div className="mt-1"><b>Motivo:</b> {motivo}.</div>
+      {tipoEv && fechaEv && <div><b>Evento:</b> {tipoEv} del {fmtHace(fechaEv, fecha)}.</div>}
+      <div className="text-on-surface-variant text-[13px] mt-1">
+        {delta > 0 ? `Subió ${delta} puesto${delta !== 1 ? "s" : ""} desde el ${fmt(hace14)} (estaba en el N° ${p.posicion_anterior}).`
+          : delta < 0 ? `Bajó ${-delta} puesto${-delta !== 1 ? "s" : ""} desde el ${fmt(hace14)} porque entraron pacientes más graves (estaba en el N° ${p.posicion_anterior}).`
+            : p.posicion_anterior ? `Sin cambio de puesto desde el ${fmt(hace14)}.` : ""}
+        {" "}<button onClick={onFundamento} className="text-primary font-semibold hover:underline">Ver criterio y evidencia</button>
+      </div>
+    </div>
   );
 }
 

@@ -17,7 +17,7 @@ function validarRut(valor) {
 
 export function NuevoPaciente({ fecha, esp, onCerrar, onListo }) {
   const [cat, setCat] = useState(null);
-  const [f, setF] = useState({ nombre: "", rut: "", edad: "", sexo: "F", comuna: "La Florida", prevision: "FONASA B", especialidad: esp && esp !== "Todas" ? esp : "", diagnostico_cie10: "", prioridad_inicial: "media", origen_derivacion: "CESFAM/APS", grupo_proteccion: "", acg: "", motivo_interconsulta: "" });
+  const [f, setF] = useState({ nombre: "", rut: "", edad: "", sexo: "", comuna: "", prevision: "", fecha_ingreso_lista: fecha, especialidad: esp && esp !== "Todas" ? esp : "", diagnostico_cie10: "", prioridad_inicial: "", origen_derivacion: "CESFAM/APS", grupo_proteccion: "", acg: "", motivo_interconsulta: "" });
   const [error, setError] = useState(null);
   const [enviando, setEnviando] = useState(false);
   useEffect(() => { api.getCatalogo().then(setCat).catch((e) => setError(e.message)); }, []);
@@ -32,7 +32,7 @@ export function NuevoPaciente({ fecha, esp, onCerrar, onListo }) {
     ...["alta", "media", "baja"].map((c) => [`Tabla oficial HLF · prioridad ${ETIQUETA[c].toLowerCase()}`, dxs.filter((d) => d.prioridad_tabla === c)])].filter(([, l]) => l.length);
   const rutOk = validarRut(f.rut);
   const rutMal = f.rut.trim() !== "" && !rutOk;
-  const valido = f.nombre.trim() && f.edad !== "" && f.diagnostico_cie10 && !rutMal;
+  const valido = f.nombre.trim() && f.edad !== "" && f.sexo && f.diagnostico_cie10 && f.prioridad_inicial && f.fecha_ingreso_lista && !rutMal;
   const guardar = async () => {
     setEnviando(true); setError(null);
     try { onListo(await api.postPaciente({ ...f, rut: rutOk || undefined, edad: Number(f.edad), fecha_corte: fecha })); }
@@ -56,10 +56,10 @@ export function NuevoPaciente({ fecha, esp, onCerrar, onListo }) {
           </Filtro>
           <div className="grid grid-cols-2 gap-2">
             <Filtro label="Edad"><input type="number" min={0} max={120} value={f.edad} onChange={set("edad")} className={campo} /></Filtro>
-            <Filtro label="Sexo"><select value={f.sexo} onChange={set("sexo")} className={campo}><option value="F">Femenino</option><option value="M">Masculino</option></select></Filtro>
+            <Filtro label="Sexo"><select value={f.sexo} onChange={set("sexo")} className={campo}><option value="">Seleccione…</option><option value="F">Femenino</option><option value="M">Masculino</option></select></Filtro>
           </div>
-          <Filtro label="Comuna"><select value={f.comuna} onChange={set("comuna")} className={campo}>{cat?.comunas.map((c) => <option key={c}>{c}</option>)}</select></Filtro>
-          <Filtro label="Previsión"><select value={f.prevision} onChange={set("prevision")} className={campo}>{cat?.previsiones.map((c) => <option key={c}>{c}</option>)}</select></Filtro>
+          <Filtro label="Comuna"><select value={f.comuna} onChange={set("comuna")} className={campo}><option value="">Sin dato</option>{cat?.comunas.map((c) => <option key={c}>{c}</option>)}</select></Filtro>
+          <Filtro label="Previsión"><select value={f.prevision} onChange={set("prevision")} className={campo}><option value="">Sin dato</option>{cat?.previsiones.map((c) => <option key={c}>{c}</option>)}</select></Filtro>
           <Filtro label="Especialidad"><select value={f.especialidad} onChange={set("especialidad")} className={campo}><option value="">Seleccione…</option>{especialidades.map((e) => <option key={e}>{e}</option>)}</select></Filtro>
           <Filtro label="Diagnóstico o síntoma"><select value={f.diagnostico_cie10} onChange={set("diagnostico_cie10")} disabled={!f.especialidad} className={campo}><option value="">Seleccione…</option>
             {grupos.map(([t, l]) => <optgroup key={t} label={t}>{l.map((d) => <option key={d.diagnostico_cie10} value={d.diagnostico_cie10}>{d.prioridad_tabla ? d.diagnostico_texto : `${d.diagnostico_cie10} · ${d.diagnostico_texto}`}</option>)}</optgroup>)}
@@ -71,6 +71,7 @@ export function NuevoPaciente({ fecha, esp, onCerrar, onListo }) {
               <button key={c} type="button" onClick={() => setF({ ...f, prioridad_inicial: c })} className={`flex-1 h-9 rounded border font-semibold ${f.prioridad_inicial === c ? COLOR_CAT[c] : "border-outline-variant text-on-surface-variant"}`}>{ETIQUETA[c]}</button>
             ))}</div>
           </Filtro>
+          <Filtro label="Fecha de la interconsulta"><input type="date" value={f.fecha_ingreso_lista} max={fecha} onChange={set("fecha_ingreso_lista")} className={campo} /></Filtro>
           <Filtro label="Origen de la derivación"><select value={f.origen_derivacion} onChange={set("origen_derivacion")} className={campo}>{cat?.origenes.map((c) => <option key={c}>{c}</option>)}</select></Filtro>
           <Filtro label="Grupo de especial protección"><select value={f.grupo_proteccion} onChange={set("grupo_proteccion")} className={campo}><option value="">Ninguno</option>{cat?.grupos_proteccion.map((g) => <option key={g}>{g}</option>)}</select></Filtro>
           <div className="col-span-2"><Filtro label="Motivo de la interconsulta (lo que escribió quien deriva)">
