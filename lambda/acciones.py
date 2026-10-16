@@ -61,7 +61,8 @@ def post_evento(body):
     if err:
         return 400, {"error": err}
     especialidad = perfs[pid]["lista_espera"]["especialidad"]
-    antes = lista(corte)
+    vista = especialidad if body.get("especialidad") else None  # el front ve la lista de una especialidad: los puestos son de esa lista
+    antes = lista(corte, vista)
     pos_antes = next((p["posicion"] for p in antes["pacientes"] if p["id_paciente"] == pid), None)
     ev = {
         "id_evento": "EV-DEMO-" + uuid.uuid4().hex[:6].upper(),
@@ -71,7 +72,7 @@ def post_evento(body):
         "severidad": subtipos[body["subtipo"]],
         "detalle": body.get("detalle") or f'{body.get("subtipo", body["tipo_evento"])} ({especialidad})',
         **({"motivo": str(body["motivo"])[:300]} if body.get("motivo") else {}),
-        **({"relacionado": bool(body["relacionado"])} if body.get("relacionado") is not None else {}),
+        **({"relacionado": str(body["relacionado"]).strip().lower() not in ("false", "0", "no", "")} if body.get("relacionado") is not None else {}),
         "registrado": ahora(),
         "usuario": body.get("usuario", "equipo clínico"),
     }
@@ -79,11 +80,11 @@ def post_evento(body):
     evaluacion = None
     if algoritmo_activo() == "rubrica":  # el disparador: solo este paciente se reevalúa, en el momento
         evaluacion = evaluar_y_guardar(pid, corte)
-    despues = lista(corte)
+    despues = lista(corte, vista)
     fila = next((p for p in despues["pacientes"] if p["id_paciente"] == pid), None)
     ms = round((time.perf_counter() - t0) * 1000)
-    out = {"evento": ev, "paciente": fila, "posicion_antes": pos_antes,
-           "posicion_despues": fila and fila["posicion"], "reevaluado_en_ms": ms, "lista": despues}
+    out = {"evento": ev, "paciente": fila, "posicion_antes": pos_antes, "posicion_despues": fila and fila["posicion"],
+           "total": despues["total"], "reevaluado_en_ms": ms}
     if evaluacion:
         out["evaluacion"] = evaluacion
     return 200, out
@@ -149,8 +150,10 @@ def post_revision(pid, body):
     accion = body.get("accion")
     if accion not in ("confirmar", "ajustar"):
         return 400, {"error": "accion debe ser 'confirmar' o 'ajustar'"}
-    if accion == "ajustar" and (body.get("categoria_ajustada") not in puntaje.ORDEN_CAT or not body.get("motivo")):
-        return 400, {"error": "ajustar requiere categoria_ajustada (alta|media|baja) y motivo"}
+    if not (body.get("usuario") or "").strip():
+        return 400, {"error": "escriba su nombre y cargo arriba a la derecha: la revisión queda a su nombre"}
+    if accion == "ajustar" and (body.get("categoria_ajustada") not in puntaje.ORDEN_CAT or len((body.get("motivo") or "").strip()) < MIN_EXPLICACION):
+        return 400, {"error": f"cambiar la prioridad requiere categoria_ajustada (alta|media|baja) y un motivo clínico de al menos {MIN_EXPLICACION} caracteres"}
     corte = fecha_de(body)
     previa = fila_de(pid, corte)
     rev = {"accion": accion, "categoria_ajustada": body.get("categoria_ajustada") if accion == "ajustar" else None,

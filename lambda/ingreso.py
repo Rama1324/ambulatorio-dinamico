@@ -6,7 +6,7 @@ import uuid
 import importar
 import puntaje
 from catalogo import catalogo
-from datos import ahora, fecha_de, guardar, guardar_evento, perfiles_combinados
+from datos import ahora, fecha_de, fecha_valida, guardar, guardar_evento, perfiles_combinados
 from evaluacion_ia import algoritmo_activo, cliente_llm
 from lista import lista
 
@@ -49,7 +49,9 @@ def post_paciente(body):
         if existente:
             return 409, {"error": f"El RUT {rut} ya tiene una interconsulta por ese diagnóstico en la lista ({existente})"}
     corte = fecha_de(body)
-    ingreso = body.get("fecha_ingreso_lista") or corte.isoformat()
+    ingreso, err = fecha_valida(body.get("fecha_ingreso_lista") or corte.isoformat(), corte, "fecha de ingreso a la lista")
+    if err:
+        return 400, {"error": err}
     pid = "PAC-NUEVO-" + uuid.uuid4().hex[:5].upper()
     perfil = {
         "id_paciente": pid,

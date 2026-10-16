@@ -28,10 +28,11 @@ export function Ficha({ p, total, detalle, fecha, demo, esp, onCambio, onAviso, 
 
   const correr = async (nombre, fn) => {
     setCargando(nombre);
-    try { await fn(); } catch (e) { onAviso({ titulo: "No se pudo completar: " + e.message }); } finally { setCargando(null); }
+    try { await fn(); return true; } catch (e) { onAviso({ titulo: "No se pudo completar: " + e.message }); return false; } finally { setCargando(null); }
   };
   const registrarEvento = (ev, origen) => correr("evento", async () => {
     const r = await api.postEvento({ id_paciente: p.id_paciente, fecha_corte: fecha, fecha_evento: ev.fecha_evento || fecha,
+      ...(esp && esp !== "Todas" ? { especialidad: esp } : {}),
       tipo_evento: ev.tipo_evento, subtipo: ev.subtipo, severidad: ev.severidad, detalle: ev.detalle,
       ...(ev.motivo_clinico ? { motivo: ev.motivo_clinico } : {}), ...(ev.relacionado != null ? { relacionado: ev.relacionado } : {}) });
     await onCambio(); onDestacar(p.id_paciente);
@@ -40,8 +41,9 @@ export function Ficha({ p, total, detalle, fecha, demo, esp, onCambio, onAviso, 
     onAviso({ titulo: `${origen}. Lista actualizada`, antes: r.posicion_antes, despues: r.posicion_despues, cat: r.paciente?.categoria });
   });
   const [tab, setTab] = useState("resumen");
-  const confirmar = () => correr("rev", async () => { await api.postRevision(p.id_paciente, { accion: "confirmar", fecha_corte: fecha }); await onCambio(); onAviso({ titulo: "Prioridad confirmada" }); });
-  const guardarAjuste = () => correr("rev", async () => {
+  const sinNombre = () => !api.getUsuario() && (onAviso({ titulo: "Escriba su nombre y cargo arriba a la derecha: la revisión queda a su nombre" }), true);
+  const confirmar = () => !sinNombre() && correr("rev", async () => { await api.postRevision(p.id_paciente, { accion: "confirmar", fecha_corte: fecha }); await onCambio(); onAviso({ titulo: "Prioridad confirmada" }); });
+  const guardarAjuste = () => !sinNombre() && correr("rev", async () => {
     await api.postRevision(p.id_paciente, { accion: "ajustar", categoria_ajustada: ajuste.categoria, motivo: ajuste.motivo, fecha_corte: fecha });
     setAjuste(null); await onCambio(); onAviso({ titulo: "Cambio de prioridad registrado" });
   });
@@ -166,8 +168,8 @@ export function Ficha({ p, total, detalle, fecha, demo, esp, onCambio, onAviso, 
                 <select value={ajuste.categoria} onChange={(e) => setAjuste({ ...ajuste, categoria: e.target.value })} className="h-9 px-2 border border-outline-variant rounded bg-surface-container-lowest">
                   {Object.entries(ETIQUETA).map(([k, v]) => <option key={k} value={k}>Prioridad {v.toLowerCase()}</option>)}
                 </select>
-                <input placeholder="Motivo clínico (obligatorio)" value={ajuste.motivo} onChange={(e) => setAjuste({ ...ajuste, motivo: e.target.value })} className="h-9 px-2 border border-outline-variant rounded" />
-                <button disabled={!ajuste.motivo} onClick={guardarAjuste} className="py-2 rounded bg-primary text-on-primary font-semibold disabled:opacity-40">Guardar cambio</button>
+                <input placeholder="Motivo clínico (obligatorio, mínimo 20 caracteres)" value={ajuste.motivo} onChange={(e) => setAjuste({ ...ajuste, motivo: e.target.value })} className="h-9 px-2 border border-outline-variant rounded" />
+                <button disabled={ajuste.motivo.trim().length < 20 || !ajuste.motivo} onClick={guardarAjuste} className="py-2 rounded bg-primary text-on-primary font-semibold disabled:opacity-40">Guardar cambio</button>
               </div>
             )}
           </Caja>
@@ -247,7 +249,8 @@ function ResultadoEvento({ r, onVer, onCerrar }) {
               {x.riesgo && <div className="text-on-surface-variant">Riesgo: {x.riesgo}</div>}
               <div className="text-[12px] text-on-surface-variant">Fuente: {x.fuente}</div></li>
           ))}
-          {reglas.length === 0 && <li className="text-[13px]">Ninguna regla oficial cambia su prioridad con este evento{ev?.valor?.includes("sin relación") ? " (no tiene relación con su diagnóstico)" : ""}: se mantiene donde estaba.</li>}
+          {reglas.length === 0 && <li className="text-[13px]">Ninguna regla oficial cambia su prioridad con este evento{ev?.valor?.includes("sin relación") ? " (no tiene relación con su diagnóstico)" : ""}
+            {subio ? ". Dentro de la misma prioridad avanza porque ahora está descompensado y se ordena por la gravedad del evento (ver vecinos)." : ": se mantiene donde estaba."}</li>}
         </ul>
       </div>
       {p.comparacion && <div className="mt-2"><Vecino v={p.comparacion.arriba} arriba onVer={onVer} /><Vecino v={p.comparacion.abajo} onVer={onVer} /></div>}

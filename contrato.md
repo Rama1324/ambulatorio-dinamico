@@ -78,7 +78,7 @@ Sin `fecha_corte`, la API usa `FECHA_REFERENCIA` (variable de entorno): `hoy` = 
 | GET | `/catalogo` | Diagnósticos, comunas, previsiones, orígenes y condiciones de Charlson con su peso |
 | POST | `/importar` | `{archivos:[{nombre, contenido_base64}], confirmar}`: lee Excel/CSV, detecta la tabla, normaliza y valida. Sin `confirmar` solo revisa |
 | GET | `/plantillas/{tabla}` | CSV de ejemplo: pacientes, lista_espera, eventos_clinicos, mediciones, citaciones |
-| POST | `/pacientes/{id}/revision` | `{"accion":"confirmar"}` o `{"accion":"ajustar","categoria_ajustada":"alta|media|baja","motivo":"..."}` |
+| POST | `/pacientes/{id}/revision` | `{"accion":"confirmar","usuario":"..."}` o `{"accion":"ajustar","categoria_ajustada":"alta|media|baja","motivo":"(20+ caracteres)","usuario":"..."}`. Sin `usuario` → 400 |
 | POST | `/pacientes/{id}/explicar` | Bedrock redacta `explicacion_ia` desde `razones` |
 | GET | `/health` | `{ok, pacientes, fecha_hoy, modo, datos: "sinteticos", datos_hasta, registro_al}` para verificar el deploy |
 
@@ -96,9 +96,10 @@ Para confirmar, el front envía ese `evento` a `POST /eventos`.
 ## Respuesta POST /eventos
 ```json
 { "evento": {...}, "paciente": { ...objeto Paciente... }, "posicion_antes": 231, "posicion_despues": 49,
-  "reevaluado_en_ms": 11, "lista": { ...misma forma que GET /pacientes, sin filtro de especialidad... } }
+  "total": 84, "reevaluado_en_ms": 11 }
 ```
-Body: `id_paciente`, `tipo_evento`, `subtipo`, `severidad`, `detalle` y opcionales `fecha_corte` (default 2026-10-13), `fecha_evento` (default = fecha_corte).
+Body: `id_paciente`, `tipo_evento`, `subtipo`, `severidad`, `detalle` y opcionales `fecha_corte` (default 2026-10-13), `fecha_evento` (default = fecha_corte)
+y `especialidad` (si viene, los puestos y el total son los de la lista de esa especialidad). Ya no devuelve la lista entera: el front la vuelve a pedir.
 `tipo_evento`: cambio_farmaco · control_aps · examen_alterado · hospitalizacion · visita_urgencia
 
 ## Pacientes de demo (del dataset)

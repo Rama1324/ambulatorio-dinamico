@@ -63,7 +63,8 @@ def explicar(paciente):
     try:
         import boto3
         kw = {"region_name": os.environ["BEDROCK_REGION"]} if os.environ.get("BEDROCK_REGION") else {}
-        client = boto3.client("bedrock-runtime", **kw)
+        from aws_config import CORTA
+        client = boto3.client("bedrock-runtime", config=CORTA, **kw)
         r = client.converse(
             modelId=model_id,
             system=[{"text": PROMPT_SISTEMA}],

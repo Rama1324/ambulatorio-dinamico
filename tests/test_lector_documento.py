@@ -172,3 +172,26 @@ def test_ia_descompensacion_relacionada_si_sube():
     s, r = informe(pid, texto, cli)
     assert r["registrados"] and r["registrados"][0].get("relacionado") is not False
     assert r["posicion_despues"] < r["posicion_antes"]
+
+
+def test_negacion_dentro_de_la_cita_no_se_registra_sola():
+    pid = paciente()
+    texto = "Control broncopulmonar. Resultado: se descarta neoplasia maligna."
+    s, r = informe(pid, texto, cliente(("sospecha_cancer", "se descarta neoplasia maligna")))
+    assert s == 200 and not r["registrados"] and r["eventos"] and "negación" in r["eventos"][0]["motivo"]
+
+
+def test_fecha_de_nacimiento_no_es_la_fecha_del_evento():
+    pid = paciente("Cardiología")
+    texto = ("Epicrisis. Paciente: Juan Pérez. Fecha de nacimiento: 12/03/1950.\n"
+             "Ingreso hospitalario el 10/10/2026 por angina inestable en servicio de cardiología.")
+    s, r = informe(pid, texto, cliente(("hospitalizacion", "Ingreso hospitalario el 10/10/2026 por angina inestable")))
+    fechas = [e["fecha_evento"] for e in r["registrados"]] + [e["fecha_evento"] for e in r["eventos"]]
+    assert s == 200 and fechas and "1950-03-12" not in fechas and fechas[0] == "2026-10-10"
+
+
+def test_fecha_anterior_al_ingreso_queda_como_propuesta():
+    pid = paciente("Cardiología")
+    texto = "Epicrisis del 05/01/2020.\nHospitalización por angina inestable el 05/01/2020."
+    s, r = informe(pid, texto, cliente(("hospitalizacion", "Hospitalización por angina inestable el 05/01/2020")))
+    assert s == 200 and not r["registrados"] and r["eventos"] and "anterior al ingreso" in r["eventos"][0]["motivo"]

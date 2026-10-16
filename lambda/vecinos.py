@@ -20,6 +20,8 @@ def _prioridad(p):
     """La prioridad y de dónde sale: la regla que la subió o, si no, la que asignó el especialista en la SIC."""
     r = next((x for x in p.get("razones") or [] if x.get("factor") in ("urgencia", "combinacion", "criterio_registro", "oncologico", "tabla_oficial")
               and "→" in str(x.get("valor"))), None)
+    if p.get("categoria_sistema") and p["categoria"] != p["categoria_sistema"]:
+        return f'prioridad {p["categoria"]} (cambiada por el especialista)'
     origen = str(r["valor"]).split(" · ")[0].replace(" (no supera la actual)", "")[:140] if r else "asignada por el especialista en la interconsulta"
     return f'prioridad {p["categoria"]} ({origen})'
 
@@ -59,7 +61,7 @@ def por_que_antes(a, b, con_lace=False):
                 break
             return {"criterio": nombre, "este": describe(a), "otro": describe(b), "clinico": nombre in CLINICOS}
     else:
-        return {"criterio": "empate", "texto": "coinciden en todos los criterios clínicos y en el tiempo de espera: desempata el orden de llegada"}
+        return {"criterio": "empate", "texto": "coinciden en todos los criterios clínicos y en los días de espera: desempata el número de solicitud"}
     return {"criterio": "orden del equipo", "texto": "el orden lo fijó una decisión del equipo clínico"}
 
 

@@ -171,7 +171,7 @@ export function Indicadores({ fecha, data, esp, setEsp, onVer }) {
       <div className="flex items-start justify-between gap-2">
         <h3 className="font-semibold text-[15px]">{titulo}</h3>
         <span className={`text-[12px] font-semibold rounded px-2 py-0.5 whitespace-nowrap ${estado === "ok" ? "bg-hlf-claro text-hlf" : estado === "mal" ? "bg-ambar-container text-ambar" : "bg-surface-container text-on-surface-variant"}`}>
-          {estado === "ok" ? "✓ En meta" : estado === "mal" ? "Bajo la meta" : "Aún sin datos"}</span>
+          {estado === "ok" ? "✓ En meta" : estado === "mal" ? "Bajo la meta" : estado === "diseño" ? "Por diseño" : "Aún sin datos"}</span>
       </div>
       <div className="text-[34px] font-bold text-primary-container mt-1 leading-tight">{valor}</div>
       <div className="text-[13px] text-on-surface-variant">Meta del hospital: <b>{meta}</b></div>
@@ -228,7 +228,7 @@ export function Indicadores({ fecha, data, esp, setEsp, onVer }) {
 
       <Seccion titulo="Metas del hospital" sub="Los tres indicadores que fijó el HLF para el desafío. Se miden con lo registrado en la herramienta.">
         <div className="grid gap-4 lg:grid-cols-3">
-          <Meta titulo="Actualización tras un evento" valor="al instante" meta="inmediata" estado="ok"
+          <Meta titulo="Actualización tras un evento" valor="al instante" meta="inmediata" estado="diseño"
             detalle={<>Cada evento, informe o paciente nuevo recalcula la lista en milisegundos.{re.evaluados
               ? <> El especialista revisó la prioridad en una mediana de {num(re.mediana_horas)} h ({re.evaluados} revisadas; {re.sin_evaluar} sin revisar).</> : null}
               {" "}Hoy hay <b>{re.descompensados_en_lista}</b> descompensaciones graves: {re.evaluacion_hecha} revisadas y <b className={re.evaluacion_pendiente ? "text-error" : ""}>{re.evaluacion_pendiente} por revisar</b>.</>} />
@@ -380,7 +380,7 @@ export function Indicadores({ fecha, data, esp, setEsp, onVer }) {
           </Caja>
           <Caja titulo="Revisión del especialista">
             <div className="text-[14px] space-y-1">
-              <Fila t="Requieren revisión" v={k.alertas.revision_sugerida} c="text-ambar" />
+              <Fila t="Con aviso para el especialista" v={k.alertas.revision_sugerida} c="text-ambar" />
               <Fila t="Revisiones registradas" v={cc.revisiones} />
               <Fila t="Ajustes manuales vigentes" v={k.ajustes_manuales.vigentes} />
               <Fila t="Ajustes sin efecto por evento nuevo" v={k.ajustes_manuales.sin_efecto_por_evento} c={k.ajustes_manuales.sin_efecto_por_evento ? "text-ambar" : ""} />

@@ -97,7 +97,7 @@ export function Informe({ p, fecha, cargando, onConfirmar, onAviso, onRegistrado
   const foto = (b64) => { setCamara(false); analizar({ imagen_base64: b64, media_type: "image/jpeg" }); };
   const eventos = res?.eventos || [];
   const ev = eventos[elegido];
-  useEffect(() => setFechaEv(ev?.fecha_evento || ""), [ev]);
+  useEffect(() => setFechaEv(ev?.fecha_en_documento ? ev.fecha_evento : ""), [ev]);  // sin fecha en el documento: la indica una persona
   const dudosas = new Set((res?.lectura?.lineas_dudosas || []).map((l) => l.texto));
   const bloqueado = res?.otro_paciente || (res?.lectura && !res.lectura.legible);
   return (
@@ -201,7 +201,7 @@ export function Informe({ p, fecha, cargando, onConfirmar, onAviso, onRegistrado
             <span>Confirmo que el documento corresponde a <b>{p.nombre_fantasia}</b> ({p.id_paciente}) y que el evento está bien leído.</span>
           </label>
           <div className="flex gap-2 pt-1">
-            <button disabled={cargando || !esDelPaciente || bloqueado || !fechaEv} onClick={async () => { await onConfirmar({ ...ev, fecha_evento: fechaEv || ev.fecha_evento, detalle: `Informe: ${ev.evidencia}` }); setRes(null); setTexto(""); }}
+            <button disabled={cargando || !esDelPaciente || bloqueado || !fechaEv} onClick={async () => { if (await onConfirmar({ ...ev, fecha_evento: fechaEv, detalle: `Informe: ${ev.evidencia}` })) { setRes(null); setTexto(""); } }}
               className="flex-1 py-2 rounded bg-primary text-on-primary font-semibold disabled:opacity-40">Confirmar y actualizar lista</button>
             <button onClick={() => setRes(null)} className="flex-1 py-2 rounded border border-outline-variant font-semibold">Descartar</button>
           </div>

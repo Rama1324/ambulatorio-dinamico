@@ -187,7 +187,7 @@ def regla_criterio(eventos):
     crit = [e for e in eventos if e.get("tipo_evento") == "criterio_clinico"]
     if not crit:
         return None
-    u = crit[-1]
+    u = max(crit, key=lambda e: (ORDEN_CAT.get(e.get("nivel_criterio"), 0), e["fecha_evento"]))  # el más alto: nunca baja
     return {"evento": u, "nivel": u.get("nivel_criterio"), "urgencia": any(e.get("urgencia") for e in crit)}
 
 
@@ -306,8 +306,9 @@ def aplicar_registro(perfil, corte, categoria, razones):
     if not enf:
         return categoria
     cie = le["diagnostico_cie10"]
-    evs = [e for e in perfil.get("eventos_clinicos", []) if d(e["fecha_evento"]) <= corte and not no_relacionado(e)
-           and e.get("tipo_evento") in ("visita_urgencia", "hospitalizacion")]
+    ingreso = d(le["fecha_ingreso_lista"])  # lo anterior a la SIC ya lo vio el especialista al priorizar
+    evs = [e for e in perfil.get("eventos_clinicos", []) if ingreso <= d(e["fecha_evento"]) <= corte and not no_relacionado(e)
+           and e.get("tipo_evento") in ("visita_urgencia", "hospitalizacion") and e.get("severidad") != "leve"]
     def en(dias):
         return [e for e in evs if (corte - d(e["fecha_evento"])).days <= dias]
 
@@ -554,9 +555,18 @@ def puntuar(perfil, corte):
     # dolor) cambian en minutos y no describen el riesgo de las semanas de espera (observación del HLF). HbA1c refleja ~3
     # meses y el PHQ-9 las últimas 2 semanas: cuentan si las DOS últimas están fuera de rango.
     plazo = PLAZO_CATEGORIA[categoria]
-    plazo_vencido = dias_espera > plazo
+    # El plazo corre desde que llegó a su prioridad actual: el ingreso o, si subió, el evento que lo subió
+    # (no se le cobra a la prioridad nueva el tiempo que esperó en la anterior).
+    desde = ingreso
+    if categoria != inicial:
+        cand = ([ult_desc["fecha_evento"]] if estado == "descompensado" and ult_desc else []) +                [x["evento"]["fecha_evento"] for x in (onco, crit) if x] + [e["fecha_evento"] for e in (comb or {}).get("eventos", [])]
+        if cand:
+            desde = max(ingreso, d(max(cand)))
+    dias_en_prioridad = (corte - desde).days
+    plazo_vencido = dias_en_prioridad > plazo
     if plazo_vencido:
-        razones.append({"factor": "plazo", "valor": f"{dias_espera} días esperando: supera el plazo de referencia de su prioridad ({plazo} días)",
+        razones.append({"factor": "plazo", "valor": f"{dias_en_prioridad} días en prioridad {categoria}" +
+                        ("" if desde == ingreso else f" (desde el {desde.isoformat()})") + f": supera el plazo de referencia ({plazo} días)",
                         "fuente": "Queensland CPC: Cat 1 ≤ 30, Cat 2 ≤ 90, Cat 3 ≤ 365 días (referencia; la norma chilena No GES no fija plazos)",
                         "riesgo": RIESGO_ESPERA + "."})
     medicion_alerta = False
@@ -586,7 +596,7 @@ def puntuar(perfil, corte):
             "estado_clinico": estado, "riesgo_vital": riesgo_vital, "urgencia_hoy": urgencia_hoy, "lace": lace,
             "urgencia_desde": urg_ev and {"fecha": urg_ev["fecha_evento"], "registrado": urg_ev.get("registrado")},
             "agudeza": agudeza(ult_desc) if estado == "descompensado" else 0, "letalidad": letalidad,
-            "plazo_dias": plazo, "plazo_vencido": plazo_vencido, "antiguedad_mayor_1_anio": antiguo, "dias_espera": dias_espera,
+            "plazo_dias": plazo, "plazo_vencido": plazo_vencido, "dias_en_prioridad": dias_en_prioridad, "antiguedad_mayor_1_anio": antiguo, "dias_espera": dias_espera,
             "ges": ges_info, "medicion_alerta": medicion_alerta, "senales": senales, "grupo_proteccion": grupo, "acg": acg,
             "fecha_descompensacion": ult_desc["fecha_evento"] if estado == "descompensado" else None,
             "dias_desde_descompensacion": (corte - d(ult_desc["fecha_evento"])).days if estado == "descompensado" else None,
@@ -607,7 +617,12 @@ def priorizar(perfiles, corte, especialidad=None):
     out = []
     for p in perfiles:
         if especialidad and p["lista_espera"]["especialidad"] != especialidad: continue
-        r = puntuar(p, corte)
+        try:
+            r = puntuar(p, corte)
+        except Exception as e:  # un registro con datos malos no puede botar la lista de todos: queda fuera y visible
+            print(f"puntuar {p.get('id_paciente')}: {type(e).__name__}: {e}")
+            r = {"id_paciente": p.get("id_paciente"), "excluido": True, "motivo": "datos_invalidos", "fecha": None, "razones": [],
+                 "error": f"{type(e).__name__}: {e}"[:200]}
         if r: out.append(r)
     activos = sorted([r for r in out if not r["excluido"]], key=clave_orden)
     for i, r in enumerate(activos, 1): r["posicion"] = i

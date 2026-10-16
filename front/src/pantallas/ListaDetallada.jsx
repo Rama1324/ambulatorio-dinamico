@@ -44,10 +44,10 @@ export function ListaDetallada({ data, fecha, esp, setEsp, filtros, setFiltros, 
     const q = busca.trim().toLowerCase();
     const g = (p) => p.gestion || {};
     return data.pacientes.filter((p) =>
-      (filtroCat === "todas" || (filtroCat === "vital" ? p.contactar_hoy : filtroCat === "ges" ? p.ges?.vencida : p.categoria === filtroCat)) &&
+      (filtroCat === "todas" || (filtroCat === "vital" ? p.riesgo_vital : filtroCat === "ges" ? p.ges?.vencida : p.categoria === filtroCat)) &&
       (filtroGestion === "todos" || (filtroGestion === "sin_responsable" ? !g(p).responsable
         : filtroGestion === "seguimiento_vencido" ? g(p).seguimiento_vencido : g(p).estado === filtroGestion)) &&
-      (!esperaLarga || p.dias_espera >= (Number(diasEspera) || 0)) &&
+      (!esperaLarga || p.dias_espera > (Number(diasEspera) || 0)) &&
       (!q || p.nombre_fantasia.toLowerCase().includes(q) || p.id_paciente.toLowerCase().includes(q) || p.diagnostico_texto.toLowerCase().includes(q)));
   }, [data, busca, filtroCat, filtroGestion, esperaLarga, diasEspera]);
   useEffect(() => setPagina(0), [filtros, esp]);
@@ -81,10 +81,10 @@ export function ListaDetallada({ data, fecha, esp, setEsp, filtros, setFiltros, 
           {Object.entries(FILTRO_GESTION).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
       </Filtro>
-      <label className="flex items-center gap-2 h-9 cursor-pointer select-none" title="Pacientes que llevan al menos esa cantidad de días en lista">
-        <input type="checkbox" checked={esperaLarga} onChange={(e) => setEsperaLarga(e.target.checked)} className="w-4 h-4 accent-primary" />Espera de
+      <label className="flex items-center gap-2 h-9 cursor-pointer select-none" title="Pacientes que llevan más de esa cantidad de días en lista">
+        <input type="checkbox" checked={esperaLarga} onChange={(e) => setEsperaLarga(e.target.checked)} className="w-4 h-4 accent-primary" />Espera de más de
         <input type="number" min={0} step={30} value={diasEspera} onChange={(e) => { setDiasEspera(e.target.value); setEsperaLarga(true); }} aria-label="Días mínimos de espera"
-          className="h-8 w-20 px-2 border border-outline-variant rounded" />días o más</label>
+          className="h-8 w-20 px-2 border border-outline-variant rounded" />días</label>
       {hayFiltros && <button onClick={limpiarFiltros} className="h-9 px-2 text-primary font-semibold flex items-center gap-1"><Icono n="filter_alt_off" className="text-[18px]" />Limpiar filtros</button>}
       <button onClick={() => exportarExcel(filtrados, fecha, { excluidos: data.excluidos, filtros: [["Especialidad", esp], ["Búsqueda", busca || "(ninguna)"],
         ["Prioridad", FILTRO_CAT[filtroCat]], ["Estado de gestión", FILTRO_GESTION[filtroGestion]],
@@ -131,7 +131,8 @@ export function ListaDetallada({ data, fecha, esp, setEsp, filtros, setFiltros, 
                       {p.contactar_hoy && p.riesgo_vital && <Marca tono="rojo" title={`Descompensación grave del ${fmtHace(p.evaluacion?.fecha_evento, fecha)}: la prioridad ya se actualizó; contactar al paciente`}>
                         Descompensación grave</Marca>}
                       {p.riesgo_vital && p.evaluacion?.fecha_evento && <span className="text-[12px] text-error font-semibold self-center">evento grave {hace(p.evaluacion.fecha_evento, fecha)}</span>}
-                      {p.riesgo_vital && !p.contactar_hoy && <Marca tono="azul" title={p.evaluacion?.cierre?.texto}>Prioridad revisada</Marca>}
+                      {p.riesgo_vital && !p.contactar_hoy && p.evaluacion?.cierre && <Marca tono="azul" title={p.evaluacion.cierre.texto}>Prioridad revisada</Marca>}
+                      {p.riesgo_vital && !p.contactar_hoy && !p.evaluacion?.cierre && p.contactado && <Marca tono="azul" title={`${p.contactado.texto} · ${p.contactado.usuario || ""}`}>Contactado</Marca>}
                       {!p.riesgo_vital && p.estado_clinico === "descompensado" && <Marca tono="rojo">Descompensado</Marca>}
                       {p.ajuste_manual && <Marca tono="azul" title={`${p.ajuste_manual.motivo_texto}: ${p.ajuste_manual.explicacion} (${p.ajuste_manual.usuario})`}>Ajuste manual</Marca>}
                       {p.ajuste_manual_vencido && <Marca tono="ambar" title={`Evento nuevo: ${p.ajuste_manual_vencido.vencido_por}`}>Ajuste sin efecto: revisar</Marca>}

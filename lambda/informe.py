@@ -105,7 +105,8 @@ def _region():
 def leer_foto(imagen_b64):
     """Foto → Lectura con el texto y la confianza de cada línea (Amazon Textract DetectDocumentText)."""
     import boto3
-    r = boto3.client("textract", region_name=_region()).detect_document_text(Document={"Bytes": base64.b64decode(imagen_b64)})
+    from aws_config import CORTA
+    r = boto3.client("textract", region_name=_region(), config=CORTA).detect_document_text(Document={"Bytes": base64.b64decode(imagen_b64)})
     lineas = [LineaLeida(texto=b["Text"], confianza=round(b["Confidence"], 1)) for b in r["Blocks"] if b["BlockType"] == "LINE"]
     if not lineas:
         raise ValueError("no se encontró texto en la imagen")
@@ -125,7 +126,8 @@ def sugerencia_bedrock(texto):
         return None
     try:
         import boto3
-        r = boto3.client("bedrock-runtime", region_name=_region()).converse(
+        from aws_config import CORTA
+        r = boto3.client("bedrock-runtime", region_name=_region(), config=CORTA).converse(
             modelId=model_id, system=[{"text": PROMPT.format(vocab=json.dumps({t: list(s) for t, s in SUBTIPOS.items()}, ensure_ascii=False))}],
             messages=[{"role": "user", "content": [{"text": texto}]}], inferenceConfig={"maxTokens": 1200})
         crudo = "".join(b.get("text", "") for b in r["output"]["message"]["content"])  # puede venir un bloque de razonamiento antes

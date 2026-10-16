@@ -354,9 +354,9 @@ def combinar(datos, existentes, catalogo):
         p = perfil(r["id_paciente"], crear=True)
         le = {k: v for k, v in r.items() if k != "id_paciente" and v is not None}
         dx = catalogo.get(le.get("diagnostico_cie10"))
-        if dx:
+        if dx:  # la especialidad la define el diagnóstico (así "CARDIOLOGIA" o "Cardiologia" del archivo no importan)
             for k in ("especialidad", "sub_especialidad", "diagnostico_texto"):
-                le.setdefault(k, dx[k])
+                le[k] = dx[k]
         p["lista_espera"].update(le)
     for pid, p in list(perfs.items()):  # completar y validar pacientes nuevos
         pa, le = p["paciente"], p["lista_espera"]
@@ -371,7 +371,7 @@ def combinar(datos, existentes, catalogo):
         if falta:
             avisos.append(f"{pid}: no se puede ingresar a la lista, falta {', '.join(falta)} (venga en Pacientes / Lista de espera)")
             del perfs[pid]; res["pacientes_nuevos"] -= 1
-        elif catalogo and (le["diagnostico_cie10"] not in catalogo or le["especialidad"] != catalogo[le["diagnostico_cie10"]]["especialidad"]):
+        elif catalogo and le["diagnostico_cie10"] not in catalogo:
             # solo especialidades y diagnósticos del registro del hospital: para otros no hay pacientes ni criterios validados
             avisos.append(f"{pid}: {le['especialidad']} · {le['diagnostico_cie10']} no es una especialidad o diagnóstico del registro "
                           f"del hospital ({', '.join(sorted({d['especialidad'] for d in catalogo.values()}))}): no se ingresa")

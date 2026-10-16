@@ -121,6 +121,10 @@ def _enriquecer(r, perfil, revision, pos_ant, corte=None, contacto=None, decisio
                              "dias_desde_evento": dias, "fecha_evento": r.get("fecha_descompensacion"), "llego_al_sistema": llegada,
                              "dias_en_revision": en_revision, "cierre": cierre}
         out["contactar_hoy"] = not cierre or out["urgencia_hoy"]
+    # ya se contactó después del evento (citado o derivado a urgencia): no se vuelve a pedir contactar hoy
+    if out["contactar_hoy"] and contacto and contacto.get("resultado") in ("citado", "derivado_urgencia") and             contacto.get("fecha_corte", "0000") <= corte_iso and contacto["fecha_corte"] >= (r.get("fecha_descompensacion") or "") and             contacto["fecha"] >= (r.get("registro_descompensacion") or "") and             (not r.get("urgencia_desde") or contacto["fecha"] >= (r["urgencia_desde"].get("registrado") or "")):
+        out["contactar_hoy"] = False
+        out["contactado"] = {"resultado": contacto["resultado"], "texto": contacto["texto"], "fecha": contacto["fecha"], "usuario": contacto.get("usuario")}
     return out
 
 

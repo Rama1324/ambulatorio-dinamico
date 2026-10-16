@@ -37,4 +37,4 @@ print("API local en http://localhost:3001")
 try:
     DualStack(("::", 3001), H).serve_forever()
 except OSError:
-    ThreadingHTTPServer(("0.0.0.0", 3001), H).serve_forever()
+    ThreadingHTTPServer(("127.0.0.1", 3001), H).serve_forever()  # solo este computador

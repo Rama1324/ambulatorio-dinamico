@@ -100,6 +100,12 @@ def _informe_con_ia(pid, lectura, corte, perfs, avisos, dudoso, menciona, body):
         clasif = _aplicar_criterios(pid, le["diagnostico_cie10"], lectura.texto, corte.isoformat(), body)
         combs = _aplicar_combinaciones(pid, perfs[pid], lectura.texto, corte.isoformat(), body)
     aceptados = r["aceptados"]
+    ing = le["fecha_ingreso_lista"]
+    viejos = [h for h in aceptados if h.get("fecha") and h["fecha"] < ing]
+    if viejos:  # p. ej. una fecha de nacimiento o un evento anterior a la interconsulta: lo confirma una persona
+        r["propuestos"] = [{**h, "motivo": f"la fecha que trae el documento ({h['fecha']}) es anterior al ingreso a la lista ({ing}): confirme la fecha"}
+                           for h in viejos] + r["propuestos"]
+        aceptados = [h for h in aceptados if h not in viejos]
     if dudoso and aceptados:  # identidad o legibilidad en duda: nada se registra solo
         r["propuestos"] = [{**h, "motivo": "no se pudo confirmar que el documento sea de este paciente o es poco legible"} for h in aceptados] + r["propuestos"]
         aceptados = []

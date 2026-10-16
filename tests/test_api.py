@@ -135,19 +135,22 @@ def test_pydantic_rechaza_evento_invalido():
             pass
 
 def test_revision():
-    s, _ = call("POST", "/pacientes/PAC-HLF-00001/revision", body={"accion": "confirmar"})
+    assert call("POST", "/pacientes/PAC-HLF-00001/revision", body={"accion": "confirmar"})[0] == 400   # sin nombre no se cierra nada
+    s, _ = call("POST", "/pacientes/PAC-HLF-00001/revision", body={"accion": "confirmar", "usuario": "Dr. Prueba"})
     assert s == 200
     _, d = call("GET", "/pacientes")
     assert fila(d, "PAC-HLF-00001")["estado_revision"] == "confirmado"
-    s, _ = call("POST", "/pacientes/PAC-HLF-00001/revision", body={"accion": "ajustar"})
+    s, _ = call("POST", "/pacientes/PAC-HLF-00001/revision", body={"accion": "ajustar", "usuario": "Dr. Prueba"})
     assert s == 400
+    s, _ = call("POST", "/pacientes/PAC-HLF-00001/revision", body={"accion": "ajustar", "categoria_ajustada": "baja", "motivo": "x", "usuario": "Dr. Prueba"})
+    assert s == 400   # cambiar exige explicar el motivo
 
 def test_ajuste_clinico_reordena():
     _, d = call("GET", "/pacientes")
     p = next(p for p in reversed(d["pacientes"]) if p["categoria"] == "baja" and p["id_paciente"] not in
              ("PAC-HLF-00028", "PAC-HLF-00002", "PAC-HLF-00020"))
     s, _ = call("POST", f"/pacientes/{p['id_paciente']}/revision",
-                body={"accion": "ajustar", "categoria_ajustada": "alta", "motivo": "criterio clínico"})
+                body={"accion": "ajustar", "categoria_ajustada": "alta", "motivo": "criterio clínico del especialista tratante", "usuario": "Dr. Prueba"})
     assert s == 200
     _, d2 = call("GET", "/pacientes")
     q = fila(d2, p["id_paciente"])
@@ -309,7 +312,7 @@ def test_bug_ajuste_no_tapa_descompensacion_posterior():
     _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
     p = _otro(d, diagnostico_cie10="I50", categoria="media", estado_clinico="sin_cambios")
     pid = p["id_paciente"]
-    call("POST", f"/pacientes/{pid}/revision", body={"accion": "ajustar", "categoria_ajustada": "baja", "motivo": "estable", "fecha_corte": "2026-10-13"})
+    call("POST", f"/pacientes/{pid}/revision", body={"accion": "ajustar", "categoria_ajustada": "baja", "motivo": "estable en controles, sin síntomas", "fecha_corte": "2026-10-13", "usuario": "Dr. Prueba"})
     _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
     assert fila(d, pid)["categoria"] == "baja" and fila(d, pid)["estado_revision"] == "ajustado"
     call("POST", "/eventos", body={"id_paciente": pid, "tipo_evento": "hospitalizacion", "subtipo": "ingreso hospitalario",
@@ -326,10 +329,13 @@ def test_bug_contacto_apaga_alerta():
     s, r = call("POST", f"/pacientes/{p['id_paciente']}/contacto", body={"resultado": "contactado", "fecha_corte": "2026-10-13"})
     assert s == 200 and r["paciente"]["contactar_hoy"]          # llamar no es decidir: sigue pendiente la evaluación médica
     s, r = call("POST", f"/pacientes/{p['id_paciente']}/contacto", body={"resultado": "citado", "fecha_corte": "2026-10-13"})
-    assert r["paciente"]["contactar_hoy"] and r["paciente"]["gestion"]["estado"] == "cita_reservada"   # citar no es revisar la prioridad
-    s, r = call("POST", f"/pacientes/{p['id_paciente']}/revision", body={"accion": "confirmar", "fecha_corte": "2026-10-13"})
+    q = r["paciente"]   # citado: ya no hay que contactarlo, pero el aviso al especialista sigue abierto (citar no es revisar)
+    assert not q["contactar_hoy"] and q["contactado"]["resultado"] == "citado" and q["gestion"]["estado"] == "cita_reservada"
+    assert q["evaluacion"]["estado"] == "pendiente"
+    s, r = call("POST", f"/pacientes/{p['id_paciente']}/revision", body={"accion": "confirmar", "fecha_corte": "2026-10-13", "usuario": "Dr. Prueba"})
     _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
     assert not fila(d, p["id_paciente"])["contactar_hoy"] and fila(d, p["id_paciente"])["riesgo_vital"]   # revisada, sigue priorizada
+    assert fila(d, p["id_paciente"])["evaluacion"]["estado"] == "evaluada"
 
 def test_sin_plazo_fijo_la_alerta_sigue_pendiente_hasta_que_revisa_el_especialista():
     _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-14"})
@@ -338,7 +344,7 @@ def test_sin_plazo_fijo_la_alerta_sigue_pendiente_hasta_que_revisa_el_especialis
     assert v and all(p["evaluacion"]["llego_al_sistema"] == "2026-10-13" and p["evaluacion"]["dias_en_revision"] == 1
                      and p["evaluacion"]["estado"] == "pendiente" for p in v)   # el registro se cargó el 13-10
     _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-20"})
-    assert all(p["evaluacion"]["estado"] == "pendiente" and p["contactar_hoy"] and "plazo_dias" not in p["evaluacion"]
+    assert all(p["evaluacion"]["estado"] == "pendiente" and (p["contactar_hoy"] or p.get("contactado")) and "plazo_dias" not in p["evaluacion"]
                for p in d["pacientes"] if p["id_paciente"] in {x["id_paciente"] for x in v} and p["evaluacion"]["estado"] != "evaluada")
 
 def test_gestion_responsable_y_seguimiento():
@@ -539,3 +545,41 @@ def test_indicadores_por_especialidad_y_tramos():
 def test_health_informa_fecha_y_modo():
     s, h = call("GET", "/health")
     assert s == 200 and h["datos"] == "sinteticos" and h["modo"] in ("simulacion", "tiempo_real") and h["fecha_hoy"]
+
+def test_fecha_de_ingreso_mal_escrita_no_bota_la_lista():
+    base = {"nombre": "Fecha mala", "edad": 50, "sexo": "F", "diagnostico_cie10": "I50", "prioridad_inicial": "media"}
+    assert call("POST", "/pacientes", body={**base, "fecha_ingreso_lista": "13-10-2026"})[0] == 400
+    assert call("POST", "/pacientes", body={**base, "fecha_ingreso_lista": "2030-01-01"})[0] == 400
+    for ruta in ("/pacientes", "/kpis", "/estadisticas"):
+        assert call("GET", ruta)[0] == 200
+
+def test_un_registro_con_datos_malos_no_bota_la_lista():
+    import copy, puntaje
+    perfs = copy.deepcopy(list(app.perfiles_combinados()[0].values()))
+    malo = next(p for p in perfs if p.get("mediciones"))
+    malo["mediciones"][-1]["valor"] = "siete coma dos"
+    malo["mediciones"][-1]["fecha_medicion"] = "no es fecha"
+    activos, excluidos = puntaje.priorizar(perfs, date(2026, 10, 13))
+    assert len(activos) >= 400 and any(e["id_paciente"] == malo["id_paciente"] and e["motivo"] == "datos_invalidos" for e in excluidos)
+
+def test_criterio_posterior_mas_bajo_no_baja():
+    import puntaje
+    evs = [{"tipo_evento": "criterio_clinico", "nivel_criterio": n, "fecha_evento": f} for n, f in
+           (("media", "2026-08-01"), ("alta", "2026-09-01"), ("media", "2026-10-01"))]
+    assert puntaje.regla_criterio(evs)["nivel"] == "alta"
+
+def test_importar_acepta_la_especialidad_sin_tilde():
+    excel = _xlsx({
+        "Pacientes": [["RUT", "Nombre", "Edad", "Género"], ["7.654.321-6", "Rosa Díaz", 66, "Femenino"]],
+        "Lista espera": [["RUT", "CIE10", "Especialidad", "Prioridad", "Fecha ingreso"], ["7.654.321-6", "I50", "CARDIOLOGIA", "MEDIA", 46000]],
+    })
+    s, rev = call("POST", "/importar", body={"archivos": [{"nombre": "sin_tilde.xlsx", "contenido_base64": excel}]})
+    assert s == 200 and rev["resumen"]["pacientes_nuevos"] == 1, rev["avisos"]
+
+def test_evento_con_especialidad_da_puestos_de_esa_lista():
+    d = call("GET", "/pacientes", {"especialidad": "Cardiología"})[1]
+    p = next(x for x in d["pacientes"] if x["categoria"] == "baja" and x["diagnostico_cie10"] == "I20")
+    s, r = call("POST", "/eventos", body={"id_paciente": p["id_paciente"], "tipo_evento": "visita_urgencia", "subtipo": "triage ESI 2",
+                                          "severidad": "grave", "especialidad": "Cardiología", "usuario": "Dr. Prueba"})
+    assert s == 200 and "lista" not in r and r["posicion_antes"] == p["posicion"] and r["total"] == d["total"]
+    assert r["paciente"]["comparacion"]["arriba"]["especialidad"] == "Cardiología"

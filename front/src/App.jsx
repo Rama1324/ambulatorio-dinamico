@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import * as api from "./api";
 import { Icono, Indicador } from "./componentes/comunes";
@@ -46,16 +46,20 @@ export default function App() {
   const [usuario, setUsuarioLocal] = useState(api.getUsuario());
   const fecha = demo ? fechas[iFecha] : fechas[fechas.length - 1];
 
+  const pedido = useRef(0);  // si llegan respuestas en desorden (cambio rápido de especialidad o fecha), vale solo la última
   const cargar = useCallback(async () => {
     if (!info) return;
+    const n = ++pedido.current;
     setActualizando(true);
-    try { setError(null); setData(await api.getPacientes(fecha, esp === "Todas" ? null : esp)); }
-    catch (e) { setError(e.message); } finally { setActualizando(false); }
+    try { setError(null); const d = await api.getPacientes(fecha, esp === "Todas" ? null : esp); if (n === pedido.current) setData(d); }
+    catch (e) { if (n === pedido.current) setError(e.message); } finally { if (n === pedido.current) setActualizando(false); }
   }, [fecha, esp, info]);
   useEffect(() => { cargar(); }, [cargar]);
   useEffect(() => {
     if (!sel) return setDetalle(null);
-    api.getPaciente(sel, fecha).then(setDetalle).catch(() => setDetalle(null));
+    let vigente = true;  // no mostrar la historia de otro paciente si la respuesta llega tarde
+    api.getPaciente(sel, fecha).then((d) => vigente && setDetalle(d)).catch(() => vigente && setDetalle(null));
+    return () => { vigente = false; };
   }, [sel, fecha, data]);
   // los indicadores de arriba abren la lista detallada con un filtro puesto
   const verLista = (filtro = {}) => { setFiltros({ ...FILTROS_VACIOS, ...filtro }); setVista("lista"); };
@@ -163,7 +167,7 @@ export default function App() {
         {vista === "simple" && <ListaSimple data={data} fecha={fecha} esp={esp} setEsp={setEsp} actualizando={actualizando} onVer={abrir} />}
 
         {vista === "hoy" && <Alertas vitales={vitales} todosPacientes={data.pacientes} fecha={fecha} esp={esp} setEsp={setEsp} onVer={abrir} onCambio={cargar} onAviso={mostrarAviso} />}
-        {vista === "criterios" && <Criterios ia={data.pacientes.some((p) => p.algoritmo)} />}
+        {vista === "criterios" && <Criterios ia={data.pacientes.some((p) => p.algoritmo === "rubrica")} />}
         {vista === "indicadores" && <Indicadores fecha={fecha} data={data} esp={esp} setEsp={setEsp} onVer={abrir} />}
         {vista === "cargar" && <CargarDatos onListo={async (r) => {
           await cargar();

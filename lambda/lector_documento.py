@@ -126,10 +126,13 @@ def leer_documento(texto, cliente, lecturas=LECTURAS, diagnostico=None):
             x["lecturas"].add(k)
             x["relaciones"].append(h.relacionado)
     doc = normalizar(texto)
+    # mismo texto normalizado pero con sus saltos de línea (mismas posiciones): la fecha se busca en la línea de la cita
+    doc_lineas = chr(10).join(x for x in (normalizar(l) for l in texto.splitlines()) if x)
+    doc_lineas = doc_lineas if len(doc_lineas) == len(doc) else doc
     aceptados, propuestos, informativos = [], [], []
     for tipo, x in por_tipo.items():
         estable = len(x["lecturas"]) == lecturas and not errores
-        fecha = informe._fecha_del_evento(doc, x["pos"])
+        fecha = informe._fecha_del_evento(doc_lineas, x["pos"])
         h = {"tipo": tipo, "cita": x["cita"], "fecha": fecha and fecha.isoformat(), "fecha_en_documento": fecha is not None,
              "lecturas": f"{len(x['lecturas'])}/{lecturas}"}
         if EVENTO_DE[tipo] is None:
@@ -140,7 +143,9 @@ def leer_documento(texto, cliente, lecturas=LECTURAS, diagnostico=None):
         if tipo in CON_RELACION:
             # "no relacionado" solo si TODAS las lecturas lo dicen; ante la duda se asume relacionado (no baja a nadie)
             h["relacionado"] = False if x["relaciones"] and all(r == "no" for r in x["relaciones"]) else None
-        negado = informe._negado(doc, x["pos"])  # NegEx puede equivocarse: si hay duda, decide una persona
+        # NegEx puede equivocarse: si hay duda, decide una persona. La negación puede venir antes o DENTRO de la cita
+        # ("se descarta neoplasia maligna"), también en cualquiera de sus trozos unidos con "…".
+        negado = informe._negado(doc, x["pos"]) or bool(informe.NEGACION.search(normalizar(x["cita"])))
         if tipo in NO_AUTOMATICO:
             propuestos.append({**h, "motivo": "podría bajar la prioridad: lo confirma el equipo clínico"})
         elif negado:

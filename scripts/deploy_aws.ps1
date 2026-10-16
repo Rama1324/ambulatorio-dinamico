@@ -45,7 +45,9 @@ if (-not $SoloFront) {
 # 3) Página: build apuntando a la API de AWS y publicación en Amplify (sin Git)
 $env:VITE_API_URL = $api
 $dist = Join-Path $env:TEMP "hlf_dist"; if (Test-Path $dist) { Remove-Item $dist -Recurse -Force }
-Push-Location "$raiz\front"; npx vite build --outDir $dist | Out-Null; Pop-Location
+Push-Location "$raiz\front"; npx vite build --outDir $dist | Out-Null; $okBuild = $LASTEXITCODE -eq 0; Pop-Location
+# nunca publicar un sitio vacío: si el build falla o no deja index.html, se corta aquí
+if (-not $okBuild -or -not (Test-Path (Join-Path $dist "index.html"))) { throw "El build del front falló: no se publica la página" }
 $zip = Join-Path $env:TEMP "hlf_dist.zip"
 python -X utf8 -c "import zipfile,os,sys; s,z=sys.argv[1],zipfile.ZipFile(sys.argv[2],'w',zipfile.ZIP_DEFLATED); [z.write(os.path.join(r,f),os.path.relpath(os.path.join(r,f),s).replace(os.sep,'/')) for r,_,fs in os.walk(s) for f in fs]; z.close()" $dist $zip
 if (-not $AppAmplify) {

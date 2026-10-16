@@ -67,7 +67,7 @@ export function Criterios({ ia }) {
           <li>Si el texto no alcanza para decidir, <b>no se asigna baja</b>: queda la prioridad asignada.</li>
           <li>Las <b>excepciones de urgencia</b> ("derivar hoy": sospecha de síndrome coronario agudo, síndrome de cauda equina, riesgo suicida con plan…) ponen al paciente primero, en alta y con "contactar hoy".</li>
         </ul>
-        <p className="text-[13px] text-on-surface-variant mt-2">El clasificador se probó con Claude en 154 notas clínicas (una por nivel y una por urgencia, en 46 enfermedades): 97,8 % del nivel correcto, 0 casos clasificados más bajo de lo que corresponde, 16 de 16 urgencias detectadas y ninguna urgencia falsa.</p>
+        <p className="text-[13px] text-on-surface-variant mt-2">La IA solo elige entre los criterios de la lista y copia la frase; el código verifica la cita y nunca baja la prioridad. Falta medir la concordancia con especialistas del HLF.</p>
       </Caja>
       {ia && <Caja titulo="Algoritmo con IA: la IA lee, el código decide">
         <ol className="list-decimal pl-5 space-y-2">

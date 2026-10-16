@@ -48,6 +48,8 @@ class Cache:
 def casos():
     for i, e in criterios.cargar()["por_id"].items():
         for n in ("alta", "media", "baja"):
+            if not e["niveles"][n]["criterios_detallados"]:  # algunas enfermedades no tienen criterios para todos los niveles
+                continue
             yield {"id": f"{i}.{n}", "enf": e, "esperado": n, "situacion": e["niveles"][n]["criterios_detallados"][0], "urgencia": False}
         for k, u in enumerate(e.get("excepciones_de_urgencia", [])):
             yield {"id": f"{i}.urg{k}", "enf": e, "esperado": "alta", "situacion": u["condicion"], "urgencia": True}
