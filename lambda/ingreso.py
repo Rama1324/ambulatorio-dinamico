@@ -8,7 +8,7 @@ import privacidad
 import puntaje
 from catalogo import catalogo
 from datos import ahora, fecha_de, fecha_valida, guardar, guardar_evento, perfiles_combinados
-from evaluacion_ia import algoritmo_activo, cliente_llm
+from evaluacion_ia import algoritmo_activo, cliente_llm, evaluar_y_guardar
 from lista import lista
 
 
@@ -72,6 +72,11 @@ def post_paciente(body):
     motivo = privacidad.ocultar(motivo, [nombre], [rut])  # a la IA no va el nombre ni el RUT
     clasif = _aplicar_criterios(pid, dx["diagnostico_cie10"], motivo, ingreso, body)
     combs = _aplicar_combinaciones(pid, perfil, motivo, ingreso, body)
+    if algoritmo_activo() == "rubrica":  # el modelo evalúa al paciente al ingresar, cruzando lo registrado (no solo la SIC)
+        try:
+            evaluar_y_guardar(pid, corte)
+        except Exception as e:  # si la IA falla, quedan las reglas: el ingreso no se pierde
+            print(f"evaluación al ingresar {pid}: {type(e).__name__}: {e}")
     data = lista(corte)
     fila = next((p for p in data["pacientes"] if p["id_paciente"] == pid), None)
     return 200, {"id_paciente": pid, "paciente": fila, "criterio": clasif, "combinaciones": combs}

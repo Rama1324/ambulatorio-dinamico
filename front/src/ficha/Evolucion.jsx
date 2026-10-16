@@ -14,7 +14,7 @@ export function EvolucionPaciente({ p, fecha, esp }) {
     setH(null); setErr(null);
     api.getHistoria(p.id_paciente, fecha, esp).then((r) => { if (vivo) setH(r); }).catch((e) => { if (vivo) setErr(e.message); });
     return () => { vivo = false; };
-  }, [p.id_paciente, fecha, esp]);
+  }, [p.id_paciente, fecha, esp, p.posicion, p.categoria]);  // un evento nuevo cambia el puesto: se vuelve a pedir la historia
 
   // Razones indexadas por factor: traen el texto y la fuente oficial que ya calculó el motor de reglas.
   const rz = Object.fromEntries((p.razones || []).map((r) => [r.factor, r]));
