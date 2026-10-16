@@ -34,7 +34,18 @@ def cargar_kb(ruta=None):
 
 
 def kb_diagnostico(kb, cie):
-    return kb["diagnosticos"].get(cie) or {"texto": cie, "fila_descompensado": None, "estado": "sin_fila"}
+    """Diagnóstico del registro, o fila de la tabla del HLF: hereda lo del diagnóstico del registro si es la misma enfermedad
+    (puntaje.cie_base) y usa la fila de descompensación de mayor prioridad (puntaje.fila_descompensado)."""
+    t = puntaje.tabla_hlf().get(cie)
+    dx = kb["diagnosticos"].get(puntaje.cie_base(cie))
+    if not t:
+        return dx or {"texto": cie, "fila_descompensado": None, "estado": "sin_fila"}
+    dx = {"ventanas": {}, "medicion": None, "estado": "sin_fila", **(dx or {}), "texto": t["texto"]}
+    fila, eq = puntaje.fila_descompensado(cie)
+    if fila:
+        dx.update(fila_descompensado={"texto_pdf": fila[0].upper(), "prioridad": fila[1], "pagina": fila[2], "especialidad_pdf": t["seccion_pdf"]},
+                  estado="con_fuente", equivalencia={"detalle": eq} if eq else None)
+    return dx
 
 
 def _fecha(s):

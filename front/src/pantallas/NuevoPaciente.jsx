@@ -67,6 +67,10 @@ export function NuevoPaciente({ fecha, esp, onCerrar, onListo }) {
             {grupos.map(([t, l]) => <optgroup key={t} label={t}>{l.map((d) => <option key={d.diagnostico_cie10} value={d.diagnostico_cie10}>{d.prioridad_tabla ? d.diagnostico_texto : `${d.diagnostico_cie10} · ${d.diagnostico_texto}`}</option>)}</optgroup>)}
           </select>
             {elegido?.prioridad_tabla && <span className="text-[12px] text-on-surface-variant">Tabla SSMSO 2025, HLF, pág. {elegido.pagina}: prioridad {ETIQUETA[elegido.prioridad_tabla].toLowerCase()}. Puede subirla; el sistema no la deja más abajo.</span>}
+            {elegido && <span className="text-[12px] text-on-surface-variant">
+              {elegido.equivalente && <>Usa los criterios de <b>{elegido.equivalente}</b>. </>}
+              {elegido.si_empeora ? <>Si empeora: {elegido.si_empeora}.</> : <>Si empeora: la tabla no tiene fila más grave; sube al primer lugar de su prioridad y queda para revisión del especialista.</>}
+            </span>}
           </Filtro>
           <Filtro label="Prioridad asignada al revisar la SIC">
             <div className="flex gap-1">{["alta", "media", "baja"].map((c) => (

@@ -3,7 +3,8 @@
  "fuente": {
   "documento": "SSMSO (2025). Priorización diagnósticos especialidades médicas y odontológicas No GES, §11.1 Hospital Dra. Eloísa Díaz Inzunza",
   "url": "https://redsalud.ssmso.cl/wp-content/uploads/2025/07/PRIORIZACION-SSMSO-02.07.2025-I-ETAPA.pdf",
-  "metodo": "Filas de las secciones de adulto de las 7 especialidades del registro (Diabetología se suma a Endocrinología). La prioridad se leyó con dos métodos independientes: el orden del texto del PDF y el color de la celda (verde alta, azul mediana, amarilla baja). Coincidieron en 162 de 176 filas; las 14 diferencias (etiqueta en una celda compartida con otra especialidad) se revisaron en la imagen de la página. 'ALTA- URGENCIA' (DM2 con cetoacidosis) se marca urgencia."
+  "metodo": "Filas de las secciones de adulto de las 7 especialidades del registro (Diabetología se suma a Endocrinología). La prioridad se leyó con dos métodos independientes: el orden del texto del PDF y el color de la celda (verde alta, azul mediana, amarilla baja). Coincidieron en 162 de 176 filas; las 14 diferencias (etiqueta en una celda compartida con otra especialidad) se revisaron en la imagen de la página. 'ALTA- URGENCIA' (DM2 con cetoacidosis) se marca urgencia.",
+  "equivalencias": "cie10_base: la fila es la misma enfermedad que un diagnóstico del registro (hereda sus criterios clínicos, fila de descompensación, letalidad y combinaciones). fila_si_empeora: fila de esta misma tabla que describe la misma enfermedad en su forma más grave; se usa si el paciente se descompensa. Equivalencias definidas por el equipo, a validar por el especialista."
  },
  "diagnosticos": [
   {
@@ -15,7 +16,8 @@
    "prioridad": "alta",
    "urgencia": false,
    "pagina": 85,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "cie10_base": "I20"
   },
   {
    "codigo": "HLF-CAR-02",
@@ -26,7 +28,8 @@
    "prioridad": "alta",
    "urgencia": false,
    "pagina": 85,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "cie10_base": "I20"
   },
   {
    "codigo": "HLF-CAR-03",
@@ -37,7 +40,8 @@
    "prioridad": "alta",
    "urgencia": false,
    "pagina": 85,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "cie10_base": "I50"
   },
   {
    "codigo": "HLF-CAR-04",
@@ -125,7 +129,8 @@
    "prioridad": "media",
    "urgencia": false,
    "pagina": 85,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "cie10_base": "I10"
   },
   {
    "codigo": "HLF-CAR-12",
@@ -136,7 +141,8 @@
    "prioridad": "media",
    "urgencia": false,
    "pagina": 85,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "cie10_base": "I20"
   },
   {
    "codigo": "HLF-CAR-13",
@@ -147,7 +153,9 @@
    "prioridad": "media",
    "urgencia": false,
    "pagina": 85,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "fila_si_empeora": "HLF-CAR-04",
+   "equivalencia_a_validar": "la fibrilación auricular es una arritmia supraventricular"
   },
   {
    "codigo": "HLF-CAR-14",
@@ -158,7 +166,9 @@
    "prioridad": "media",
    "urgencia": false,
    "pagina": 85,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "fila_si_empeora": "HLF-CAR-03",
+   "equivalencia_a_validar": "la miocardiopatía dilatada se descompensa como insuficiencia cardíaca"
   },
   {
    "codigo": "HLF-CAR-15",
@@ -334,7 +344,8 @@
    "prioridad": "baja",
    "urgencia": false,
    "pagina": 85,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "cie10_base": "I20"
   },
   {
    "codigo": "HLF-END-01",
@@ -345,7 +356,8 @@
    "prioridad": "alta",
    "urgencia": true,
    "pagina": 94,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "cie10_base": "E11"
   },
   {
    "codigo": "HLF-END-02",
@@ -356,7 +368,8 @@
    "prioridad": "alta",
    "urgencia": false,
    "pagina": 94,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "cie10_base": "E11"
   },
   {
    "codigo": "HLF-END-03",
@@ -389,7 +402,8 @@
    "prioridad": "alta",
    "urgencia": false,
    "pagina": 94,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "cie10_base": "E11"
   },
   {
    "codigo": "HLF-END-07",
@@ -411,7 +425,8 @@
    "prioridad": "alta",
    "urgencia": false,
    "pagina": 94,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "cie10_base": "E11"
   },
   {
    "codigo": "HLF-END-09",
@@ -422,7 +437,8 @@
    "prioridad": "media",
    "urgencia": false,
    "pagina": 94,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "cie10_base": "E11"
   },
   {
    "codigo": "HLF-END-10",
@@ -433,7 +449,8 @@
    "prioridad": "media",
    "urgencia": false,
    "pagina": 94,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "cie10_base": "E11"
   },
   {
    "codigo": "HLF-END-11",
@@ -444,7 +461,8 @@
    "prioridad": "media",
    "urgencia": false,
    "pagina": 94,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "fila_si_empeora": "HLF-END-18"
   },
   {
    "codigo": "HLF-END-12",
@@ -455,7 +473,8 @@
    "prioridad": "media",
    "urgencia": false,
    "pagina": 94,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "cie10_base": "E11"
   },
   {
    "codigo": "HLF-END-13",
@@ -466,7 +485,8 @@
    "prioridad": "media",
    "urgencia": false,
    "pagina": 94,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "cie10_base": "E11"
   },
   {
    "codigo": "HLF-END-14",
@@ -488,7 +508,8 @@
    "prioridad": "baja",
    "urgencia": false,
    "pagina": 94,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "cie10_base": "E11"
   },
   {
    "codigo": "HLF-END-16",
@@ -543,7 +564,8 @@
    "prioridad": "alta",
    "urgencia": false,
    "pagina": 94,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "cie10_base": "E03"
   },
   {
    "codigo": "HLF-END-21",
@@ -609,7 +631,9 @@
    "prioridad": "media",
    "urgencia": false,
    "pagina": 94,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "fila_si_empeora": "HLF-END-19",
+   "equivalencia_a_validar": "la tormenta tiroidea es la descompensación grave del hipertiroidismo de Graves"
   },
   {
    "codigo": "HLF-END-27",
@@ -620,7 +644,8 @@
    "prioridad": "media",
    "urgencia": false,
    "pagina": 94,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "cie10_base": "E03"
   },
   {
    "codigo": "HLF-END-28",
@@ -653,7 +678,8 @@
    "prioridad": "media",
    "urgencia": false,
    "pagina": 94,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "fila_si_empeora": "HLF-END-22"
   },
   {
    "codigo": "HLF-END-31",
@@ -686,7 +712,8 @@
    "prioridad": "media",
    "urgencia": false,
    "pagina": 94,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "fila_si_empeora": "HLF-END-24"
   },
   {
    "codigo": "HLF-END-34",
@@ -774,7 +801,8 @@
    "prioridad": "baja",
    "urgencia": false,
    "pagina": 94,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "cie10_base": "E03"
   },
   {
    "codigo": "HLF-END-42",
@@ -851,7 +879,8 @@
    "prioridad": "alta",
    "urgencia": false,
    "pagina": 95,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "cie10_base": "J44"
   },
   {
    "codigo": "HLF-BRP-04",
@@ -862,7 +891,8 @@
    "prioridad": "alta",
    "urgencia": false,
    "pagina": 95,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "cie10_base": "J45"
   },
   {
    "codigo": "HLF-BRP-05",
@@ -994,7 +1024,8 @@
    "prioridad": "media",
    "urgencia": false,
    "pagina": 95,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "cie10_base": "J44"
   },
   {
    "codigo": "HLF-BRP-17",
@@ -1093,7 +1124,8 @@
    "prioridad": "alta",
    "urgencia": false,
    "pagina": 95,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "cie10_base": "K70"
   },
   {
    "codigo": "HLF-GAS-08",
@@ -1137,7 +1169,8 @@
    "prioridad": "media",
    "urgencia": false,
    "pagina": 95,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "cie10_base": "K21"
   },
   {
    "codigo": "HLF-GAS-12",
@@ -1159,7 +1192,8 @@
    "prioridad": "media",
    "urgencia": false,
    "pagina": 95,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "fila_si_empeora": "HLF-GAS-03"
   },
   {
    "codigo": "HLF-GAS-14",
@@ -1181,7 +1215,9 @@
    "prioridad": "media",
    "urgencia": false,
    "pagina": 95,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "fila_si_empeora": "HLF-GAS-04",
+   "equivalencia_a_validar": "la colangitis aguda es la complicación de la coledocolitiasis"
   },
   {
    "codigo": "HLF-GAS-16",
@@ -1192,7 +1228,8 @@
    "prioridad": "media",
    "urgencia": false,
    "pagina": 95,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "fila_si_empeora": "HLF-GAS-05"
   },
   {
    "codigo": "HLF-GAS-17",
@@ -1203,7 +1240,8 @@
    "prioridad": "media",
    "urgencia": false,
    "pagina": 95,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "fila_si_empeora": "HLF-GAS-06"
   },
   {
    "codigo": "HLF-GAS-18",
@@ -1247,7 +1285,9 @@
    "prioridad": "baja",
    "urgencia": false,
    "pagina": 96,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "cie10_base": "K21",
+   "fila_si_empeora": "HLF-GAS-11"
   },
   {
    "codigo": "HLF-GAS-22",
@@ -1258,7 +1298,8 @@
    "prioridad": "baja",
    "urgencia": false,
    "pagina": 96,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "fila_si_empeora": "HLF-GAS-20"
   },
   {
    "codigo": "HLF-GAS-23",
@@ -1280,7 +1321,8 @@
    "prioridad": "baja",
    "urgencia": false,
    "pagina": 96,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "fila_si_empeora": "HLF-GAS-13"
   },
   {
    "codigo": "HLF-GAS-25",
@@ -1313,7 +1355,8 @@
    "prioridad": "baja",
    "urgencia": false,
    "pagina": 96,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "fila_si_empeora": "HLF-GAS-12"
   },
   {
    "codigo": "HLF-GAS-28",
@@ -1324,7 +1367,8 @@
    "prioridad": "baja",
    "urgencia": false,
    "pagina": 96,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "fila_si_empeora": "HLF-GAS-14"
   },
   {
    "codigo": "HLF-GAS-29",
@@ -1390,7 +1434,8 @@
    "prioridad": "alta",
    "urgencia": false,
    "pagina": 103,
-   "verificacion": "verificado en la imagen de la página"
+   "verificacion": "verificado en la imagen de la página",
+   "cie10_base": "G40"
   },
   {
    "codigo": "HLF-NEU-05",
@@ -1445,7 +1490,8 @@
    "prioridad": "alta",
    "urgencia": false,
    "pagina": 103,
-   "verificacion": "verificado en la imagen de la página"
+   "verificacion": "verificado en la imagen de la página",
+   "cie10_base": "G43"
   },
   {
    "codigo": "HLF-NEU-10",
@@ -1467,7 +1513,8 @@
    "prioridad": "media",
    "urgencia": false,
    "pagina": 103,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "cie10_base": "G40"
   },
   {
    "codigo": "HLF-NEU-12",
@@ -1489,7 +1536,8 @@
    "prioridad": "media",
    "urgencia": false,
    "pagina": 103,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "fila_si_empeora": "HLF-NEU-01"
   },
   {
    "codigo": "HLF-NEU-14",
@@ -1511,7 +1559,8 @@
    "prioridad": "media",
    "urgencia": false,
    "pagina": 103,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "cie10_base": "G43"
   },
   {
    "codigo": "HLF-NEU-16",
@@ -1599,7 +1648,8 @@
    "prioridad": "baja",
    "urgencia": false,
    "pagina": 103,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "cie10_base": "G40"
   },
   {
    "codigo": "HLF-NEU-24",
@@ -1610,7 +1660,8 @@
    "prioridad": "baja",
    "urgencia": false,
    "pagina": 103,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "fila_si_empeora": "HLF-NEU-13"
   },
   {
    "codigo": "HLF-NEU-25",
@@ -1621,7 +1672,8 @@
    "prioridad": "baja",
    "urgencia": false,
    "pagina": 103,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "fila_si_empeora": "HLF-NEU-17"
   },
   {
    "codigo": "HLF-NEU-26",
@@ -1632,7 +1684,8 @@
    "prioridad": "baja",
    "urgencia": false,
    "pagina": 103,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "fila_si_empeora": "HLF-NEU-16"
   },
   {
    "codigo": "HLF-NEU-27",
@@ -1698,7 +1751,8 @@
    "prioridad": "alta",
    "urgencia": false,
    "pagina": 110,
-   "verificacion": "verificado en la imagen de la página"
+   "verificacion": "verificado en la imagen de la página",
+   "cie10_base": "F32"
   },
   {
    "codigo": "HLF-SME-03",
@@ -1786,7 +1840,8 @@
    "prioridad": "media",
    "urgencia": false,
    "pagina": 111,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "cie10_base": "M17"
   },
   {
    "codigo": "HLF-TRA-06",
@@ -1841,7 +1896,8 @@
    "prioridad": "media",
    "urgencia": false,
    "pagina": 111,
-   "verificacion": "texto y color de la celda coinciden"
+   "verificacion": "texto y color de la celda coinciden",
+   "cie10_base": "M54"
   },
   {
    "codigo": "HLF-TRA-11",

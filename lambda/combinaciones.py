@@ -36,7 +36,8 @@ def cargar():
 def condiciones(perfil):
     """Lo que el registro sabe del paciente: códigos CIE-10 (diagnóstico de la SIC y comorbilidades), nombres y edad."""
     pac, le = perfil["paciente"], perfil["lista_espera"]
-    cies = [le.get("diagnostico_cie10") or ""] + [c.get("cie10") or "" for c in pac.get("comorbilidades", [])]
+    import puntaje  # fila de la tabla del HLF → CIE-10 del registro equivalente (si es la misma enfermedad)
+    cies = [puntaje.cie_base(le.get("diagnostico_cie10") or "")] + [c.get("cie10") or "" for c in pac.get("comorbilidades", [])]
     nombres = [le.get("diagnostico_texto") or ""] + [c.get("nombre") or c.get("condicion") or "" for c in pac.get("comorbilidades", [])]
     return {"cie10": [c.upper() for c in cies if c], "nombres": [normalizar(n) for n in nombres if n], "edad": pac.get("edad")}
 

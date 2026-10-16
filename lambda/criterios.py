@@ -68,7 +68,8 @@ def cargar():
 
 
 def enfermedad_de(cie):
-    return cargar()["por_cie"].get((cie or "").upper()[:3])
+    import puntaje  # una fila de la tabla del HLF que es la misma enfermedad usa los criterios de ese diagnóstico
+    return cargar()["por_cie"].get(puntaje.cie_base(cie or "").upper()[:3])
 
 
 def catalogo():

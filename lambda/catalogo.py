@@ -41,6 +41,15 @@ MOTIVOS_PENDIENTE = {"falta_cupo": "Falta de cupo", "contacto": "No se ha podido
                      "revision_humana": "El paciente pidió que una persona revise su prioridad (Ley 21.719, art. 8 bis)", "otro": "Otro (documentado)"}
 
 
+def _cobertura(cie, textos_registro):
+    """Qué criterios aplican a este diagnóstico, para mostrarlo al ingresar: equivalente del registro y qué pasa si empeora."""
+    base = puntaje.cie_base(cie)
+    fila, eq = puntaje.fila_descompensado(cie)
+    return {"equivalente": f"{base} {textos_registro.get(base, '')}".strip() if base != cie else None,
+            "criterios_clinicos": base in puntaje.criterios_registro(),
+            "si_empeora": f'"{fila[0]}" → prioridad {fila[1]} (pág. {fila[2]})' + (" · equivalencia a validar" if eq else "") if fila else None}
+
+
 def catalogo():
     """Diagnósticos de la lista (especialidad, sub-especialidad, CIE-10, texto), tal como vienen en el registro. Solo se
     ingresan pacientes de las especialidades y diagnósticos que tiene el registro del hospital."""
@@ -54,6 +63,8 @@ def catalogo():
     tabla = [{"especialidad": x["especialidad"], "sub_especialidad": x["especialidad"], "diagnostico_cie10": x["codigo"],
               "diagnostico_texto": x["texto"], "prioridad_tabla": x["prioridad"], "pagina": x["pagina"], "origen": "tabla_hlf"}
              for x in puntaje.tabla_hlf().values() if x["especialidad"] in {d["especialidad"] for d in registro}]
+    for d in registro + tabla:
+        d.update(_cobertura(d["diagnostico_cie10"], {x["diagnostico_cie10"]: x["diagnostico_texto"] for x in registro}))
     return {"diagnosticos": registro + tabla,
             "comunas": sorted({p["paciente"]["comuna"] for p in perfiles().values()}),
             "previsiones": sorted({p["paciente"]["prevision"] for p in perfiles().values()}),

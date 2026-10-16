@@ -68,6 +68,13 @@ Salud Mental y Traumatología). Por especialidad se puede elegir:
   162 de 176 y las 14 diferencias se revisaron en la imagen de la página.
   Al ingresar un paciente con una de esas filas, **la prioridad de la tabla es el piso**: si quien prioriza puso una
   menor, el sistema la sube y lo explica con la página; si puso una mayor, se respeta.
+  **Si el paciente empeora**, cada fila usa (equivalencias del equipo, a validar por el especialista):
+  - 32 filas que son la misma enfermedad de un diagnóstico del registro (`cie10_base`, ej. "Epilepsia controlada" → G40,
+    "Enfisema" → J44) heredan sus criterios clínicos, fila de descompensación, letalidad y combinaciones;
+  - 19 filas usan la fila más grave de la misma enfermedad en la misma tabla (`fila_si_empeora`, ej. "Crohn no complicada"
+    → "Crohn complicada", alta); las filas que ya son alta se usan a sí mismas (descompensación grave = riesgo vital);
+  - las demás (ej. quiste de Baker, hallazgo ECG incidental) no tienen fila más grave en la tabla: el evento las pone
+    primero dentro de su prioridad y quedan para revisión del especialista. El formulario de ingreso lo muestra al elegir.
 La lista se ve **por especialidad** (al entrar, Cardiología): el N° es el puesto dentro de esa especialidad y la
 comparación con los vecinos también. "Todas" queda como vista de coordinación.
 

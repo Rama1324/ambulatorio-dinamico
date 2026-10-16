@@ -115,7 +115,7 @@ PESO_CHARLSON = dict(CONDICIONES_CHARLSON)
 def charlson(perfil):
     """Suma de pesos Charlson (LACE) del diagnóstico de la SIC + comorbilidades registradas, cada condición una vez."""
     conds = {}
-    peso, nombre = CHARLSON_LACE.get(perfil["lista_espera"]["diagnostico_cie10"], (0, None))
+    peso, nombre = CHARLSON_LACE.get(cie_base(perfil["lista_espera"]["diagnostico_cie10"]), (0, None))
     if nombre:
         conds[nombre] = peso
     for c in perfil["paciente"].get("comorbilidades", []):
@@ -283,6 +283,28 @@ def tabla_hlf():
     return _TABLA["por_codigo"]
 
 
+def cie_base(cie):
+    """Fila de la tabla del HLF que es la misma enfermedad que un diagnóstico del registro → ese CIE-10 (hereda sus criterios
+    clínicos, fila de descompensación, letalidad y combinaciones). Cualquier otro código se devuelve igual."""
+    return (tabla_hlf().get(cie) or {}).get("cie10_base") or cie
+
+
+def fila_descompensado(cie):
+    """((fila, prioridad, página), equivalencia a validar) que se usa si el paciente se descompensa. Candidatas: la fila del
+    registro (por su CIE-10 base), la fila 'si empeora' de la misma tabla (misma enfermedad, forma más grave) y la propia fila
+    si ya es alta. Se usa la de mayor prioridad; sin ninguna → (None, None)."""
+    cands = []
+    base, t = cie_base(cie), tabla_hlf().get(cie)
+    if base in FILA_DESCOMPENSADO:
+        cands.append((FILA_DESCOMPENSADO[base], EQUIVALENCIA_A_VALIDAR.get(base)))
+    if t and t.get("fila_si_empeora"):
+        s = tabla_hlf()[t["fila_si_empeora"]]
+        cands.append(((s["texto"], s["prioridad"], s["pagina"]), t.get("equivalencia_a_validar")))
+    if t and t["prioridad"] == "alta":
+        cands.append(((t["texto"], "alta", t["pagina"]), None))
+    return max(cands, key=lambda c: ORDEN_CAT[c[0][1]]) if cands else (None, None)
+
+
 def criterios_registro():
     """Criterios oficiales (Queensland CPC / NICE) de los diagnósticos del registro, por CIE-10."""
     if "por_cie" not in _REG:
@@ -302,10 +324,10 @@ def _razon_registro(enf, nivel, criterio, detalle):
 def aplicar_registro(perfil, corte, categoria, razones):
     """Reglas oficiales que se calculan con el registro (sin IA), por diagnóstico. Solo suben. Devuelve la categoría."""
     le = perfil["lista_espera"]
-    enf = criterios_registro().get(le["diagnostico_cie10"])
+    cie = cie_base(le["diagnostico_cie10"])
+    enf = criterios_registro().get(cie)
     if not enf:
         return categoria
-    cie = le["diagnostico_cie10"]
     ingreso = d(le["fecha_ingreso_lista"])  # lo anterior a la SIC ya lo vio el especialista al priorizar
     evs = [e for e in perfil.get("eventos_clinicos", []) if ingreso <= d(e["fecha_evento"]) <= corte and not no_relacionado(e)
            and e.get("tipo_evento") in ("visita_urgencia", "hospitalizacion") and e.get("severidad") != "leve"]
@@ -438,7 +460,8 @@ def puntuar(perfil, corte):
         razones.append({"factor": "tabla_oficial", "valor": f'"{oficial["texto"]}" → prioridad {oficial["prioridad"]}'
                         f'{" (ALTA-URGENCIA en la tabla)" if oficial["urgencia"] else ""}{nota}',
                         "fuente": f"{FUENTE_TABLA}, pág. {oficial['pagina']}"})
-    fila = FILA_DESCOMPENSADO.get(cie)
+    fila, equivalencia = fila_descompensado(cie)
+    base = cie_base(cie)
     # Riesgo vital: descompensación grave sin estabilización posterior, en un diagnóstico cuya fila oficial es Alta.
     # MINSAL prioriza primero la "criticidad / riesgo vital" (Ord. C27 N°373/2021, citado en SSMSO 2025 pág. 4)
     # y el "impacto en la progresión de la enfermedad y complicaciones" (Ord. 536/2025, criterio 1).
@@ -447,7 +470,7 @@ def puntuar(perfil, corte):
         razones.append({"factor": "evento", "valor": f'{ult_desc["tipo_evento"].replace("_", " ")}: {ult_desc["subtipo"]} '
                                                     f'({ult_desc["severidad"]}, {ult_desc["fecha_evento"]})',
                         "fuente": "Registro clínico posterior a la SIC"})
-    validar = f' · equivalencia usada: {EQUIVALENCIA_A_VALIDAR[cie]}' if cie in EQUIVALENCIA_A_VALIDAR else ""
+    validar = f' · equivalencia usada: {equivalencia}' if equivalencia else ""
     if estado == "descompensado":
         if fila and ORDEN_CAT[fila[1]] > ORDEN_CAT[inicial]:
             categoria = fila[1]
@@ -475,11 +498,11 @@ def puntuar(perfil, corte):
     urgencia_hoy = bool((crit and crit["urgencia"]) or (comb and comb["urgencia"]))
     # Letalidad (1 = más letal): de la descompensación de su diagnóstico y de las urgencias/combinaciones verificadas
     tiers = [e["letalidad"] for e in eventos if e.get("letalidad") and e.get("tipo_evento") in ("criterio_clinico", "combinacion_riesgo")]
-    if estado == "descompensado" and cie in LETALIDAD_DX:
-        tiers.append(LETALIDAD_DX[cie][0])
+    if estado == "descompensado" and base in LETALIDAD_DX:
+        tiers.append(LETALIDAD_DX[base][0])
         for x in razones:
             if x["factor"] in ("tabla_oficial", "riesgo_vital") and "riesgo" not in x:
-                x["riesgo"] = LETALIDAD_DX[cie][1][0].upper() + LETALIDAD_DX[cie][1][1:] + "."
+                x["riesgo"] = LETALIDAD_DX[base][1][0].upper() + LETALIDAD_DX[base][1][1:] + "."
     letalidad = min(tiers) if tiers else 9
     # la última urgencia (para saber si el especialista ya la revisó después: así sale del carril de urgencia)
     urg_ev = max((e for e in eventos if e.get("urgencia") and e.get("tipo_evento") in ("criterio_clinico", "combinacion_riesgo")),
@@ -590,7 +613,7 @@ def puntuar(perfil, corte):
     con_regla = any(x["factor"] in FACTORES_REGLA and not x.get("sin_regla") for x in razones)
     if con_regla:
         estado_eval = "determinada"
-    elif eventos and (cie in FILA_DESCOMPENSADO or cie in criterios_registro()):
+    elif eventos and (fila or base in criterios_registro()):
         estado_eval = "evaluada_sin_cambio"   # hubo eventos, se evaluaron las reglas de su diagnóstico y no corresponde cambiar
     elif eventos:
         estado_eval = "sin_regla_aplicable"   # hubo eventos, pero su diagnóstico no tiene reglas

@@ -12,7 +12,7 @@ def _letalidad(p):
     n = p.get("letalidad", 9)
     if n == 9:
         return "sin descompensación con mortalidad conocida"
-    cifra = puntaje.LETALIDAD_DX.get(p.get("diagnostico_cie10"), (None, ""))[1].split(" (")[0]
+    cifra = puntaje.LETALIDAD_DX.get(puntaje.cie_base(p.get("diagnostico_cie10")), (None, ""))[1].split(" (")[0]
     return f"letalidad {NIVEL_LETALIDAD.get(n, n)}" + (f" ({cifra})" if cifra else "")
 
 

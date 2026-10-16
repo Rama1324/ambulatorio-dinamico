@@ -675,3 +675,22 @@ def test_evento_sin_relacion_no_adelanta_ni_por_desempate():
         s, r = call("POST", "/eventos", body={"id_paciente": p["id_paciente"], "tipo_evento": tipo, "subtipo": sub, "especialidad": "Cardiología",
                                               "usuario": "Dr. Prueba", **extra})
         assert s == 200 and r["paciente"]["categoria"] == "baja" and r["posicion_despues"] == r["posicion_antes"], (sub, r["posicion_antes"], r["posicion_despues"])
+
+def test_diagnosticos_de_la_tabla_usan_los_criterios_de_su_enfermedad():
+    """Una fila de la tabla del HLF que es la misma enfermedad del registro hereda sus criterios; si no, usa la fila más grave
+    de la misma tabla; si no hay ninguna, sube dentro de su prioridad y queda para revisión."""
+    import criterios, decisor
+    cat = {d["diagnostico_cie10"]: d for d in call("GET", "/catalogo")[1]["diagnosticos"]}
+    assert cat["HLF-NEU-23"]["equivalente"] == "G40 Epilepsia" and criterios.enfermedad_de("HLF-NEU-23")["id"] == criterios.enfermedad_de("G40")["id"]
+    assert decisor.kb_diagnostico(decisor.cargar_kb(), "HLF-GAS-16")["fila_descompensado"]["prioridad"] == "alta"
+    def hospitalizar(cod):
+        _, r = call("POST", "/pacientes", body={"nombre": "Tabla", "edad": 60, "sexo": "F", "diagnostico_cie10": cod, "prioridad_inicial": "baja", "usuario": "t"})
+        _, e = call("POST", "/eventos", body={"id_paciente": r["id_paciente"], "tipo_evento": "hospitalizacion", "subtipo": "ingreso hospitalario",
+                                             "severidad": "grave", "usuario": "t"})
+        return e
+    e = hospitalizar("HLF-BRP-16")                          # enfisema (media) → fila de EPOC grave no controlado (alta)
+    assert e["paciente"]["categoria"] == "alta" and e["paciente"]["riesgo_vital"] and e["paciente"]["letalidad"] == 2
+    e = hospitalizar("HLF-GAS-16")                          # Crohn no complicada → Crohn complicada (alta, misma tabla)
+    assert e["paciente"]["categoria"] == "alta"
+    e = hospitalizar("HLF-TRA-12")                          # quiste de Baker: sin fila más grave → misma prioridad, sube y se revisa
+    assert e["paciente"]["categoria"] == "baja" and e["posicion_despues"] < e["posicion_antes"] and cat["HLF-TRA-12"]["si_empeora"] is None
