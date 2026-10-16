@@ -39,7 +39,9 @@ def en_carril_de_urgencia(p):
 
 def test_json_completo_y_mapeado():
     kb = criterios.cargar()
-    assert len(kb["por_id"]) == 46 and set(criterios.CIE10) == set(kb["por_id"])
+    assert len(kb["kb"]["especialidades"]) == 5 and set(criterios.CIE10) <= set(kb["por_id"]) and len(criterios.CIE10) == 46
+    registro = {"I50", "I20", "I10", "J44", "J45", "K70", "K21", "E11", "E03", "E66", "G40", "G43", "F32", "F41", "M17", "M54", "M75"}
+    assert registro <= set(kb["por_cie"])                                 # los 17 diagnósticos del registro tienen criterios
     cat = {d["diagnostico_cie10"] for d in app.catalogo()["diagnosticos"]}
     assert {"N40", "H33", "H91", "F31", "M32"} <= cat                      # se pueden ingresar pacientes de esas especialidades
     assert criterios.enfermedad_de("F32")["id"] == "psiquiatria_07"        # la depresión del registro usa sus criterios

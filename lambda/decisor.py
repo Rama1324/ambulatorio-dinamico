@@ -181,6 +181,7 @@ def decidir(perfil, resp, corte, kb):
     comb = puntaje.regla_combinacion(eventos)
     if comb:
         categoria = puntaje.aplicar_combinacion(categoria, comb, razones, [])
+    categoria = puntaje.aplicar_registro(perfil, corte, categoria, razones)   # reglas oficiales con datos del registro (sin IA)
 
     # Medición clave: el LLM dice si empeora; el código lo confirma con los valores registrados y compara el último
     # con el umbral con fuente (nunca usa el número que escribió el LLM)
@@ -226,6 +227,6 @@ def clave_orden_536(r):
     """Ord. MINSAL 536/2025: criterio médico (categoría, descompensación grave y cualquier descompensación vigente) →
     grupo de especial protección → antigüedad > 1 año → orden de llegada. Sin LACE. El criterio médico va antes que el
     grupo de protección: un paciente descompensado no puede quedar bajo uno estable de la misma prioridad."""
-    return (-ORDEN_CAT[r["categoria"]], not r.get("urgencia_hoy"), not r.get("riesgo_vital"), -r.get("agudeza", 0),
+    return (-ORDEN_CAT[r["categoria"]], not r.get("urgencia_hoy"), not r.get("riesgo_vital"), r.get("letalidad", 9), -r.get("agudeza", 0),
             r.get("estado_clinico") != "descompensado", not r.get("grupo_proteccion"),
             not (r["dias_espera"] > DIAS_ANTIGUEDAD), -r["dias_espera"], r["id_paciente"])

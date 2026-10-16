@@ -185,9 +185,9 @@ def aplicar_criterio(categoria, c, razones):
             texto = f'{crit} → sería {c["nivel"]}; se mantiene {categoria} (bajar lo decide el especialista)'
         else:
             texto = f'{crit} → prioridad {c["nivel"]} (coincide)'
-        razones.append({"factor": "criterio_clinico", "valor": texto, "fuente": fuente})
+        razones.append({"factor": "criterio_clinico", "valor": texto, "fuente": fuente, "riesgo": e.get("riesgo")})
     if c["urgencia"]:  # la urgencia prevalece sobre la clasificación electiva: alta y primera razón
-        razones.insert(0, {"factor": "urgencia", "valor": e.get("texto_urgencia") or e["detalle"], "fuente": fuente})
+        razones.insert(0, {"factor": "urgencia", "valor": e.get("texto_urgencia") or e["detalle"], "fuente": fuente, "riesgo": e.get("riesgo")})
         nueva = "alta"
     return nueva
 
@@ -201,17 +201,22 @@ def regla_combinacion(eventos):
 def aplicar_combinacion(categoria, c, razones, senales):
     """Solo sube. Urgencia: alta y primera razón. Alerta no listada: razón visible + señal para el equipo (no cambia)."""
     for e in c["eventos"]:
-        fuente = e.get("fuente") or "Combinaciones de riesgo"
-        if e.get("texto_urgencia"):
-            razones.insert(0, {"factor": "urgencia", "valor": f'combinación de riesgo · {e["texto_urgencia"]}', "fuente": fuente})
-        if e.get("texto_criterio"):
-            sube = ORDEN_CAT["alta"] > ORDEN_CAT[categoria]
-            razones.append({"factor": "combinacion", "valor": e["texto_criterio"] + (" → prioridad alta" if sube else " (ya es alta)"), "fuente": fuente})
+        for a in e.get("combinaciones", []):
+            f = a.get("fuente") or {}
+            fuente = f'{f.get("documento", "Combinaciones de riesgo")}' + (f': "{f["cita"]}"' if f.get("cita") else "") + (f' · {f["url"]}' if f.get("url") else "")
+            valor = f'{a["nombre"]}: "{a["cita_gatillo"]}" → riesgo de {a["desenlace"]} (letalidad nivel {a.get("letalidad", "?")})'
+            if a["efecto"] == "urgencia":
+                razones.insert(0, {"factor": "urgencia", "valor": "combinación de riesgo · " + valor, "fuente": fuente, "riesgo": a.get("riesgo")})
+            elif a["efecto"] == "alta":
+                sube = ORDEN_CAT["alta"] > ORDEN_CAT[categoria]
+                razones.append({"factor": "combinacion", "valor": valor + (" → prioridad alta" if sube else " (ya es alta)"), "fuente": fuente,
+                                "riesgo": a.get("riesgo")})
         if e.get("nivel_criterio") == "alta":
             categoria = "alta"
         for a in e.get("alertas", []):
-            razones.append({"factor": "alerta_combinacion", "valor": f'{a["descripcion"]}: "{a["cita"]}" · no está en la lista de combinaciones con fuente',
-                            "fuente": "Detectado por la IA en el texto (red de seguridad, sin regla con fuente)"})
+            razones.append({"factor": "alerta_combinacion", "valor": f'{a["descripcion"]}: "{a["cita"]}"' + ("" if a.get("riesgo") else " · no está en la lista de combinaciones con fuente"),
+                            "fuente": a.get("fuente") or "Detectado por la IA en el texto (red de seguridad, sin regla con fuente)",
+                            "riesgo": a.get("riesgo")})
             senales.append({"motivo": f'posible combinación de riesgo no listada: {a["descripcion"]}', "fecha": e["fecha_evento"],
                             "registrado": e.get("registrado")})
     return categoria
@@ -225,6 +230,99 @@ def agudeza(ev):
     if ev.get("subtipo") in ("ingreso UCI", "triage ESI 1"):
         return 3
     return 2 if ev.get("severidad") == "grave" else 1
+
+
+# ---------- Evidencia del informe de investigación (15-10-2026): reglas oficiales del registro, piso, letalidad, plazo ----------
+# Letalidad de una descompensación por diagnóstico (1 = más letal). Ordinal y aproximado; cifras verificadas en PubMed.
+LETALIDAD_DX = {
+    "K70": (1, "cirrosis descompensada: hemorragia variceal 16% de mortalidad a 6 semanas (Reverter 2014, PMID 24148622); peritonitis bacteriana espontánea 31,5% a 1 mes y 66% a 1 año (Arvaniti 2010, PMID 20558165)"),
+    "I50": (2, "tras hospitalizarse por insuficiencia cardíaca, 24,5–29,6% de mortalidad a 1 año (ICARO Chile, PMID 15332366; Ciapponi 2016, PMID 27553287)"),
+    "J44": (2, "tras una exacerbación hospitalizada de EPOC, 23% de mortalidad a 1 año, 35% si estuvo en UCI (Groenewegen 2003, PMID 12907529)"),
+    "I20": (2, "infarto: 14,2% de mortalidad hospitalaria en Chile (Nazzal 2011); síndrome coronario agudo ≈7,9% a 6 meses (GRACE, PMID 17032691)"),
+    "I10": (2, "emergencia hipertensiva: 12,5% de mortalidad hospitalaria y 38,9% a 12 meses (Guiga 2017, PMID 28866866)"),
+    "F32": (3, "tras un intento de suicidio, 1,6% de suicidio a 12 meses (Carroll 2014, PMID 24587141); tras un alta psiquiátrica el riesgo se concentra en los primeros 3 meses (Chung 2017, PMID 28564699)"),
+    "E11": (3, "hipoglicemia grave: 28,3% de mortalidad a 3 años (Lee 2018, PMID 29127240); estado hiperosmolar 10–20% (Pasquel 2014, PMID 25342831)"),
+    "G40": (3, "estado epiléptico convulsivo: 15,9% de mortalidad en adultos (Neligan 2019, PMID 31135807)"),
+    "J45": (3, "asma hospitalizada sin ventilación ~0,4–1%; con ventilación mecánica 16,5% (Marquette 1992, PMID 1626819)"),
+    "E03": (3, "el coma mixedematoso tiene 29,5% de mortalidad (Ono 2017, PMID 28142035), aunque es raro"),
+}
+# Plazo de referencia por prioridad (Queensland CPC: Cat 1 ≤30, Cat 2 ≤90, Cat 3 ≤365 días). La norma chilena no fija plazos
+# No GES: es una referencia, no una regla que mueva a nadie.
+PLAZO_CATEGORIA = {"alta": 30, "media": 90, "baja": 365}
+RIESGO_ESPERA = ("Esperar más del plazo aumenta el riesgo: en lista de espera cardiológica, los pacientes 'no urgentes' acumularon más "
+                 "muertes porque esperaron más (OR 1,66; Sobolev 2006, PMID 16799363); en cáncer, cada 4 semanas de retraso eleva la "
+                 "mortalidad 6–8% (Hanna 2020, PMID 33148535)")
+_REG = {}
+
+
+def criterios_registro():
+    """Criterios oficiales (Queensland CPC / NICE) de los diagnósticos del registro, por CIE-10."""
+    if "por_cie" not in _REG:
+        import json
+        import os
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "conocimiento", "criterios_registro.json"), encoding="utf-8") as f:
+            kb = json.load(f)
+        _REG["por_cie"] = {c: e for s in kb["especialidades"] for e in s["enfermedades"] for c in e["cie10"]}
+    return _REG["por_cie"]
+
+
+def _razon_registro(enf, nivel, criterio, detalle):
+    return {"factor": "criterio_registro", "valor": f"{criterio} ({detalle}) → prioridad {nivel}",
+            "fuente": f'{enf["niveles"][nivel]["justificacion"]} · {enf["fuente_url"]}', "riesgo": enf.get("riesgo")}
+
+
+def aplicar_registro(perfil, corte, categoria, razones):
+    """Reglas oficiales que se calculan con el registro (sin IA), por diagnóstico. Solo suben. Devuelve la categoría."""
+    le = perfil["lista_espera"]
+    enf = criterios_registro().get(le["diagnostico_cie10"])
+    if not enf:
+        return categoria
+    cie = le["diagnostico_cie10"]
+    evs = [e for e in perfil.get("eventos_clinicos", []) if d(e["fecha_evento"]) <= corte and not no_relacionado(e)
+           and e.get("tipo_evento") in ("visita_urgencia", "hospitalizacion")]
+    def en(dias):
+        return [e for e in evs if (corte - d(e["fecha_evento"])).days <= dias]
+
+    def sube(nivel, criterio, detalle):
+        nonlocal categoria
+        if ORDEN_CAT[nivel] > ORDEN_CAT[categoria]:
+            razones.append(_razon_registro(enf, nivel, criterio, detalle))
+            categoria = nivel
+    if cie in ("J45", "J46"):
+        uci = [e for e in en(365) if e.get("subtipo") == "ingreso UCI"]
+        if uci:
+            sube("alta", "crisis de asma con UCI en los últimos 12 meses", f'UCI el {uci[-1]["fecha_evento"]}')
+        hosp = [e for e in en(183) if e["tipo_evento"] == "hospitalizacion"]
+        if hosp:
+            sube("media", "hospitalización por asma en los últimos 6 meses", f'el {hosp[-1]["fecha_evento"]}')
+    if cie in ("J44", "J43"):
+        n = len(en(365))
+        if n > 3:
+            sube("media", "más de 3 exacerbaciones o consultas en urgencia en 12 meses", f"{n} en 12 meses")
+    if cie in ("E11", "E10", "E13", "E14"):
+        serie = sorted([m for m in perfil.get("mediciones", []) if m["tipo_medicion"] == "HbA1c" and d(m["fecha_medicion"]) <= corte],
+                       key=lambda m: m["fecha_medicion"])[-2:]
+        if len(serie) == 2 and serie[1]["valor"] > serie[0]["valor"]:
+            v = serie[1]["valor"]
+            det = f'HbA1c {serie[0]["valor"]:g} → {v:g}% ({serie[1]["fecha_medicion"]})'
+            if v > 10:
+                sube("alta", "HbA1c > 10% con deterioro reciente", det)
+            elif v >= 8:
+                sube("media", "HbA1c 8–10% con deterioro reciente", det)
+    piso = enf.get("piso")
+    if piso and ORDEN_CAT[piso] > ORDEN_CAT[categoria]:
+        razones.append({"factor": "piso", "valor": f'{enf["enfermedad"]}: no tiene prioridad baja → prioridad {piso}',
+                        "fuente": f'{enf["niveles"]["baja"]["justificacion"]} · {enf["fuente_url"]}', "riesgo": enf.get("riesgo")})
+        categoria = piso
+    if cie in ("F32", "F33"):
+        phq = sorted([m for m in perfil.get("mediciones", []) if m["tipo_medicion"] == "PHQ9" and d(m["fecha_medicion"]) <= corte],
+                     key=lambda m: m["fecha_medicion"])
+        if phq and phq[-1]["valor"] >= 16:
+            razones.append({"factor": "alerta_clinica", "valor": f'PHQ-9 = {phq[-1]["valor"]:g} ({phq[-1]["fecha_medicion"]}): depresión más grave',
+                            "fuente": "NICE NG222: PHQ-9 ≥ 16 = \"more severe depression\" (no cambia la prioridad por sí solo)",
+                            "riesgo": "Preguntar directamente por ideación suicida (NICE NG222); con plan o intención, derivar de inmediato."})
+    return categoria
+
 
 
 def razon_oncologica(o):
@@ -336,7 +434,16 @@ def puntuar(perfil, corte):
     alertas_comb = []
     if comb:
         categoria = aplicar_combinacion(categoria, comb, razones, alertas_comb)
+    categoria = aplicar_registro(perfil, corte, categoria, razones)
     urgencia_hoy = bool((crit and crit["urgencia"]) or (comb and comb["urgencia"]))
+    # Letalidad (1 = más letal): de la descompensación de su diagnóstico y de las urgencias/combinaciones verificadas
+    tiers = [e["letalidad"] for e in eventos if e.get("letalidad") and e.get("tipo_evento") in ("criterio_clinico", "combinacion_riesgo")]
+    if estado == "descompensado" and cie in LETALIDAD_DX:
+        tiers.append(LETALIDAD_DX[cie][0])
+        for x in razones:
+            if x["factor"] in ("tabla_oficial", "riesgo_vital") and "riesgo" not in x:
+                x["riesgo"] = LETALIDAD_DX[cie][1][0].upper() + LETALIDAD_DX[cie][1][1:] + "."
+    letalidad = min(tiers) if tiers else 9
     # la última urgencia (para saber si el especialista ya la revisó después: así sale del carril de urgencia)
     urg_ev = max((e for e in eventos if e.get("urgencia") and e.get("tipo_evento") in ("criterio_clinico", "combinacion_riesgo")),
                  key=lambda e: (e["fecha_evento"], e.get("registrado") or ""), default=None)
@@ -410,6 +517,12 @@ def puntuar(perfil, corte):
     # Solo mediciones ESTABLES y SOSTENIDAS justifican: los signos vitales (presión, saturación, glicemia capilar, peak flow,
     # dolor) cambian en minutos y no describen el riesgo de las semanas de espera (observación del HLF). HbA1c refleja ~3
     # meses y el PHQ-9 las últimas 2 semanas: cuentan si las DOS últimas están fuera de rango.
+    plazo = PLAZO_CATEGORIA[categoria]
+    plazo_vencido = dias_espera > plazo
+    if plazo_vencido:
+        razones.append({"factor": "plazo", "valor": f"{dias_espera} días esperando: supera el plazo de referencia de su prioridad ({plazo} días)",
+                        "fuente": "Queensland CPC: Cat 1 ≤ 30, Cat 2 ≤ 90, Cat 3 ≤ 365 días (referencia; la norma chilena No GES no fija plazos)",
+                        "riesgo": RIESGO_ESPERA + "."})
     medicion_alerta = False
     for tipo in MEDICIONES_ESTABLES:
         serie = sorted([m for m in perfil.get("mediciones", []) if m["tipo_medicion"] == tipo and d(m["fecha_medicion"]) <= corte],
@@ -423,7 +536,8 @@ def puntuar(perfil, corte):
     return {"id_paciente": perfil["id_paciente"], "excluido": False, "categoria": categoria,
             "estado_clinico": estado, "riesgo_vital": riesgo_vital, "urgencia_hoy": urgencia_hoy, "lace": lace,
             "urgencia_desde": urg_ev and {"fecha": urg_ev["fecha_evento"], "registrado": urg_ev.get("registrado")},
-            "agudeza": agudeza(ult_desc) if estado == "descompensado" else 0, "antiguedad_mayor_1_anio": antiguo, "dias_espera": dias_espera,
+            "agudeza": agudeza(ult_desc) if estado == "descompensado" else 0, "letalidad": letalidad,
+            "plazo_dias": plazo, "plazo_vencido": plazo_vencido, "antiguedad_mayor_1_anio": antiguo, "dias_espera": dias_espera,
             "ges": ges_info, "medicion_alerta": medicion_alerta, "senales": senales, "grupo_proteccion": grupo, "acg": acg,
             "fecha_descompensacion": ult_desc["fecha_evento"] if estado == "descompensado" else None,
             "dias_desde_descompensacion": (corte - d(ult_desc["fecha_evento"])).days if estado == "descompensado" else None,
@@ -435,7 +549,7 @@ def clave_orden(r, categoria=None):
     """MINSAL Ord. 536/2025: criterio médico (categoría, descompensación grave y cualquier descompensación vigente)
     → grupos de especial protección → antigüedad > 1 año → LACE (componente experimental, solo desempata) → orden de llegada.
     El criterio médico va antes que el grupo de protección: un descompensado no queda bajo uno estable de la misma prioridad."""
-    return (-ORDEN_CAT[categoria or r["categoria"]], not r.get("urgencia_hoy"), not r["riesgo_vital"], -r.get("agudeza", 0),
+    return (-ORDEN_CAT[categoria or r["categoria"]], not r.get("urgencia_hoy"), not r["riesgo_vital"], r.get("letalidad", 9), -r.get("agudeza", 0),
             r.get("estado_clinico") != "descompensado", not r.get("grupo_proteccion"),
             not r["antiguedad_mayor_1_anio"], -r["lace"]["total"], -r["dias_espera"], r["id_paciente"])
 

@@ -1,5 +1,5 @@
 {
- "version": "combinaciones_v1.1",
+ "version": "combinaciones_v2",
  "fecha": "2026-10-15",
  "objeto": "Combinaciones de una condición de base del paciente (diagnóstico, comorbilidad, edad, embarazo, fármaco) con un evento o hallazgo, que juntas aumentan el riesgo de muerte o daño irreversible. La IA solo detecta en el texto que se cumplen la base y el gatillo, citando la frase; el código verifica y aplica el efecto.",
  "efectos": {
@@ -9,7 +9,8 @@
  },
  "estados": {
   "verificado": "Texto leído en el documento oficial (cita textual).",
-  "guia_citada": "Recomendación de la guía indicada; el texto oficial no se pudo abrir: verificar."
+  "guia_citada": "Guía identificada pero texto oficial no leído: solo alerta visible.",
+  "sin_verificar": "Sin fuente oficial verificada: solo alerta visible, no cambia la prioridad."
  },
  "combinaciones": [
   {
@@ -35,11 +36,11 @@
    "efecto": "alta",
    "desenlace": "infección profunda, osteomielitis y amputación",
    "fuente": {
-    "documento": "IWGDF 2023, Guías de prevención y manejo de la enfermedad del pie relacionada con la diabetes",
-    "url": "https://iwgdfguidelines.org/guidelines-2023/",
-    "cita": "Una úlcera en el pie de una persona con diabetes requiere evaluación y manejo por un equipo especializado."
+    "documento": "Queensland CPC, diabetes mellitus y pie de alto riesgo (úlcera del pie = categoría 1; sin categoría 3) · NICE NG19 (problema activo del pie)",
+    "cita": "Foot ulcer → Category 1 (ideally reviewed within 48 hours)",
+    "url": "https://www.health.qld.gov.au/cpc/diabetes-and-endocrinology/high-risk-foot2"
    },
-   "estado": "guia_citada",
+   "estado": "verificado",
    "gatillo_terminos": [
     "pie",
     "ortejo",
@@ -49,7 +50,9 @@
     "dedo del pie",
     "ampolla",
     "callo"
-   ]
+   ],
+   "letalidad": 3,
+   "riesgo": "Una úlcera del pie en diabetes puede progresar a infección y amputación; tras una amputación mayor, la mortalidad a 5 años es 56,6% (Armstrong 2020, PMID 32209136)."
   },
   {
    "id": "pie_diabetico_infeccion",
@@ -74,11 +77,11 @@
    "efecto": "urgencia",
    "desenlace": "sepsis y amputación mayor",
    "fuente": {
-    "documento": "IWGDF/IDSA 2023, Guía de infección del pie diabético, recomendación 20",
-    "url": "https://iwgdfguidelines.org/wp-content/uploads/2023/07/IWGDF-2023-04-Infection-Guideline.pdf",
-    "cita": "Persona con diabetes, enfermedad arterial periférica y úlcera infectada o gangrena: evaluación urgente por cirugía y cirugía vascular."
+    "documento": "NICE NG19 Diabetic foot problems, recomendación 1.4.1",
+    "cita": "If a person has a limb-threatening or life-threatening diabetic foot problem, refer them immediately to acute services",
+    "url": "https://www.nice.org.uk/guidance/ng19/chapter/Recommendations"
    },
-   "estado": "guia_citada",
+   "estado": "verificado",
    "gatillo_terminos": [
     "pus",
     "purulent",
@@ -90,7 +93,9 @@
     "fiebre",
     "infecc",
     "secrecion"
-   ]
+   ],
+   "letalidad": 2,
+   "riesgo": "La infección del pie diabético tiene ~19% de mortalidad a 1 año (Vuorlaakso 2021, PMID 33996886) y 56,6% a 5 años tras amputación mayor (Armstrong 2020, PMID 32209136)."
   },
   {
    "id": "dm_cetoacidosis",
@@ -132,7 +137,9 @@
     "deshidrat",
     "conciencia",
     "hiperosmolar"
-   ]
+   ],
+   "letalidad": 1,
+   "riesgo": "El estado hiperosmolar tiene 10–20% de mortalidad (Pasquel 2014, PMID 25342831); la cetoacidosis, 0,4% (Benoit 2018, PMID 29596400)."
   },
   {
    "id": "dm_hipoglucemia_grave",
@@ -165,7 +172,9 @@
    "gatillo_terminos": [
     "hipogluc",
     "hipoglic"
-   ]
+   ],
+   "letalidad": 3,
+   "riesgo": "Una hipoglicemia grave se asocia a 28,3% de mortalidad a 3 años (HR 1,73; Lee 2018, PMID 29127240)."
   },
   {
    "id": "anticoagulado_tec",
@@ -207,7 +216,9 @@
     "parietal",
     "temporal",
     "encefalocraneano"
-   ]
+   ],
+   "letalidad": 2,
+   "riesgo": "En anticoagulados, un golpe en la cabeza sin síntomas puede ocultar una hemorragia intracraneal que solo se ve en un TAC (NICE NG232)."
   },
   {
    "id": "anticoagulado_sangrado",
@@ -229,14 +240,14 @@
     ]
    },
    "gatillo": "sangrado digestivo (vómito con sangre, deposiciones negras), hematuria franca, sangrado que no se detiene",
-   "efecto": "urgencia",
+   "efecto": "alerta",
    "desenlace": "hemorragia grave",
    "fuente": {
     "documento": "Tabla de priorización SSMSO 2025, HLF, Gastroenterología adulto (úlcera gástrica complicada ALTA) y NICE CG124 1.2.2 (la anticoagulación es una condición a corregir de inmediato)",
     "ubicacion": "pág. 95",
     "cita": "ÚLCERA GÁSTRICA COMPLICADA → ALTA"
    },
-   "estado": "guia_citada",
+   "estado": "sin_verificar",
    "gatillo_terminos": [
     "sangr",
     "hematemesis",
@@ -245,7 +256,9 @@
     "hematuria",
     "rectorragia",
     "hemorrag"
-   ]
+   ],
+   "letalidad": 2,
+   "riesgo": "Un sangrado digestivo con anticoagulación puede ser masivo; la anticoagulación es una condición a corregir de inmediato (NICE CG124 1.2.2)."
   },
   {
    "id": "inmunosuprimido_fiebre",
@@ -280,7 +293,9 @@
     "temperatura",
     "38",
     "39"
-   ]
+   ],
+   "letalidad": 2,
+   "riesgo": "La neutropenia febril tiene 9,5% de mortalidad, y 21,4% o más con más de una comorbilidad mayor (Kuderer 2006, PMID 16575919)."
   },
   {
    "id": "cancer_compresion_medular",
@@ -322,7 +337,9 @@
     "paraplej",
     "incontin",
     "camina"
-   ]
+   ],
+   "letalidad": 4,
+   "riesgo": "El retraso deja paraplejia irreversible; es una emergencia oncológica (NICE NG234 1.3.2)."
   },
   {
    "id": "cancer_dolor_espalda",
@@ -359,7 +376,9 @@
     "lumbar",
     "columna",
     "vertebr"
-   ]
+   ],
+   "letalidad": 4,
+   "riesgo": "Puede progresar a compresión medular y paraplejia (NICE NG234 1.3.3)."
   },
   {
    "id": "lumbago_cauda_equina",
@@ -385,11 +404,11 @@
    "efecto": "urgencia",
    "desenlace": "parálisis e incontinencia permanentes",
    "fuente": {
-    "documento": "NICE CKS Back pain – low (without radiculopathy), signos de alarma de síndrome de cauda equina",
-    "url": "https://cks.nice.org.uk/topics/back-pain-low-without-radiculopathy/diagnosis/red-flag-symptoms-signs/",
-    "cita": "Síndrome de cauda equina: emergencia; derivación inmediata ante alteración vesical, intestinal o anestesia en silla de montar."
+    "documento": "Queensland CPC, spine, neck and back pain (emergencia)",
+    "cita": "Cauda equina syndrome",
+    "url": "https://www.health.qld.gov.au/cpc/orthopaedics/spine-neck-back-pain"
    },
-   "estado": "guia_citada",
+   "estado": "verificado",
    "gatillo_terminos": [
     "orin",
     "vejiga",
@@ -401,7 +420,9 @@
     "ambas piernas",
     "incontin",
     "deposicion"
-   ]
+   ],
+   "letalidad": 4,
+   "riesgo": "Operar antes de 48 horas mejora el resultado sensitivo, motor y de esfínteres (Ahn 2000, PMID 10851100); el retraso deja incontinencia y parálisis."
   },
   {
    "id": "adulto_mayor_caida_cadera",
@@ -434,7 +455,9 @@
     "no camina",
     "no logra caminar",
     "no logra apoyar"
-   ]
+   ],
+   "letalidad": 1,
+   "riesgo": "La fractura de cadera tiene 23–30% de mortalidad a 1 año en Chile (sector público 23% vs privado 16%; Barahona, PMID 33274170) y no operarla multiplica la mortalidad hospitalaria por 8 (OR 8,32; PMID 32603321)."
   },
   {
    "id": "adulto_mayor_confusion",
@@ -464,7 +487,9 @@
     "delirium",
     "no reconoce",
     "conducta"
-   ]
+   ],
+   "letalidad": 2,
+   "riesgo": "El delirium duplica el riesgo de muerte (HR 1,95) y multiplica por 12,5 el de demencia (Witlox 2010, PMID 20664045)."
   },
   {
    "id": "embarazo_hipertension",
@@ -489,11 +514,11 @@
    "efecto": "urgencia",
    "desenlace": "eclampsia, hemorragia cerebral, muerte materna y fetal",
    "fuente": {
-    "documento": "MINSAL, Guía Perinatal 2015, Síndrome hipertensivo del embarazo",
-    "url": "https://www.minsal.cl/sites/default/files/files/GUIA%20PERINATAL_2015_%20PARA%20PUBLICAR.pdf",
-    "cita": "Hipertensión en el embarazo: PA ≥ 140/90; la preeclampsia severa requiere hospitalización."
+    "documento": "NICE NG133 Hypertension in pregnancy, recomendación 1.1.1",
+    "cita": "see a healthcare professional immediately if they experience symptoms of pre-eclampsia",
+    "url": "https://www.nice.org.uk/guidance/ng133/chapter/Recommendations"
    },
-   "estado": "guia_citada",
+   "estado": "verificado",
    "gatillo_terminos": [
     "presion",
     "140",
@@ -506,7 +531,9 @@
     "edema",
     "hinchaz",
     "proteinuria"
-   ]
+   ],
+   "letalidad": 2,
+   "riesgo": "La preeclampsia puede progresar a eclampsia, ACV y muerte materna (NICE NG133: consultar de inmediato)."
   },
   {
    "id": "embarazo_teratogeno",
@@ -530,11 +557,11 @@
    "efecto": "alta",
    "desenlace": "malformaciones fetales",
    "fuente": {
-    "documento": "EMA / MINSAL, alertas de seguridad de valproato e isotretinoína en el embarazo",
-    "url": "https://www.ema.europa.eu/en/medicines/human/referrals/valproate-related-substances-0",
-    "cita": "El valproato no debe usarse en el embarazo salvo que no haya alternativa."
+    "documento": "MHRA, Valproate use by women and girls",
+    "cita": "around 1 in 9 babies (11%) will have a birth defect",
+    "url": "https://www.gov.uk/guidance/valproate-use-by-women-and-girls"
    },
-   "estado": "guia_citada",
+   "estado": "verificado",
    "gatillo_terminos": [
     "valpro",
     "isotretinoin",
@@ -546,7 +573,9 @@
     "ara ii",
     "teratog",
     "acenocumarol"
-   ]
+   ],
+   "letalidad": 4,
+   "riesgo": "El valproato en el embarazo causa malformaciones en ~11% de los bebés (MHRA)."
   },
   {
    "id": "erc_hiperkalemia",
@@ -584,7 +613,9 @@
     "oliguria",
     "orina",
     "debilidad muscular"
-   ]
+   ],
+   "letalidad": 1,
+   "riesgo": "Con potasio ≥ 6,0 el riesgo de muerte en el primer día se multiplica: OR 19,5 en ERC etapa 3, 11,6 en etapa 4 y 8,0 en etapa 5 (Einhorn 2009, PMID 19546417)."
   },
   {
    "id": "cirrosis_hemorragia",
@@ -611,18 +642,20 @@
    "efecto": "urgencia",
    "desenlace": "hemorragia por várices (alta mortalidad a 6 semanas)",
    "fuente": {
-    "documento": "Baveno VII (2022): endoscopia dentro de 12 h en hemorragia variceal aguda; tabla SSMSO HLF pág. 95: cirrosis hepática descompensada ALTA",
-    "url": "https://doi.org/10.1016/j.jhep.2021.12.022",
-    "cita": "Endoscopia dentro de las 12 horas de la presentación, tras reanimación."
+    "documento": "Queensland CPC, liver cirrhosis (emergencia) · tabla SSMSO HLF pág. 95 (cirrosis descompensada ALTA)",
+    "cita": "Acute severe GI bleeding",
+    "url": "https://www.health.qld.gov.au/cpc/hepatology/liver-cirrhosis"
    },
-   "estado": "guia_citada",
+   "estado": "verificado",
    "gatillo_terminos": [
     "sangr",
     "hematemesis",
     "melena",
     "negra",
     "hemorrag"
-   ]
+   ],
+   "letalidad": 1,
+   "riesgo": "La hemorragia variceal tiene 16% de mortalidad a 6 semanas, 20% o más con MELD ≥ 19 (Reverter 2014, PMID 24148622)."
   },
   {
    "id": "cirrosis_infeccion_encefalopatia",
@@ -646,11 +679,11 @@
    "efecto": "urgencia",
    "desenlace": "peritonitis bacteriana espontánea o encefalopatía hepática",
    "fuente": {
-    "documento": "EASL Clinical Practice Guidelines 2018, manejo de la cirrosis descompensada; tabla SSMSO HLF pág. 95: cirrosis hepática descompensada ALTA",
-    "url": "https://doi.org/10.1016/j.jhep.2018.03.024",
-    "cita": "Paracentesis diagnóstica ante signos de infección o deterioro en pacientes con cirrosis y ascitis."
+    "documento": "Queensland CPC, liver cirrhosis (emergencia)",
+    "cita": "Sepsis in a patient with cirrhosis; Severe encephalopathy; New significant renal dysfunction in a patient with cirrhosis",
+    "url": "https://www.health.qld.gov.au/cpc/hepatology/liver-cirrhosis"
    },
-   "estado": "guia_citada",
+   "estado": "verificado",
    "gatillo_terminos": [
     "fiebre",
     "dolor abdominal",
@@ -659,7 +692,9 @@
     "somnol",
     "conducta",
     "encefalopat"
-   ]
+   ],
+   "letalidad": 1,
+   "riesgo": "La peritonitis bacteriana espontánea tiene 31,5% de mortalidad a 1 mes y 66% a 1 año (Arvaniti 2010, PMID 20558165); la primera encefalopatía, ~58% a 1 año (Bustamante 1999, PMID 10365817)."
   },
   {
    "id": "ic_infeccion",
@@ -678,11 +713,11 @@
    "efecto": "alta",
    "desenlace": "descompensación cardíaca",
    "fuente": {
-    "documento": "ESC 2021 Heart Failure Guidelines, factores precipitantes de la insuficiencia cardíaca aguda (infección)",
-    "url": "https://doi.org/10.1093/eurheartj/ehab368",
-    "cita": "Las infecciones son un precipitante frecuente de la insuficiencia cardíaca aguda."
+    "documento": "ICARO, registro chileno de insuficiencia cardíaca (PMID 15332366)",
+    "cita": "La infección es la causa del 22% de las descompensaciones de insuficiencia cardíaca en Chile.",
+    "url": "https://pubmed.ncbi.nlm.nih.gov/15332366/"
    },
-   "estado": "guia_citada",
+   "estado": "verificado",
    "gatillo_terminos": [
     "neumon",
     "bronquit",
@@ -690,7 +725,9 @@
     "infeccion respiratoria",
     "disnea",
     "edema"
-   ]
+   ],
+   "letalidad": 2,
+   "riesgo": "La infección causa el 22% de las descompensaciones de insuficiencia cardíaca en Chile (ICARO, PMID 15332366); tras hospitalizarse, la mortalidad a 1 año es 24,5–29,6%."
   },
   {
    "id": "coronario_dolor_reposo",
@@ -727,7 +764,9 @@
     "opresi",
     "pecho",
     "torac"
-   ]
+   ],
+   "letalidad": 2,
+   "riesgo": "El infarto tiene 14,2% de mortalidad hospitalaria en Chile (Nazzal 2011); el síndrome coronario agudo, ≈7,9% a 6 meses (GRACE, PMID 17032691)."
   },
   {
    "id": "neuro_deficit_subito",
@@ -757,7 +796,9 @@
     "hemipar",
     "paralisis",
     "fuerza"
-   ]
+   ],
+   "letalidad": 1,
+   "riesgo": "El ACV tiene 23,3% de mortalidad a 30 días en Chile (Lavados 2005, PMID 15978929); el tratamiento depende del tiempo."
   },
   {
    "id": "cefalea_alarma",
@@ -780,7 +821,9 @@
    "gatillo_terminos": [
     "cefalea",
     "dolor de cabeza"
-   ]
+   ],
+   "letalidad": 1,
+   "riesgo": "La hemorragia subaracnoidea tiene 8,3–66,7% de letalidad (Nieuwkamp 2009, PMID 19501022); ante una cefalea en trueno, 10,9% tiene una patología grave (Roberts 2022, PMID 35144978)."
   },
   {
    "id": "epilepsia_crisis_prolongada",
@@ -801,15 +844,17 @@
    "efecto": "urgencia",
    "desenlace": "estado epiléptico (daño neurológico y muerte)",
    "fuente": {
-    "documento": "ILAE 2015, definición operacional de estado epiléptico (t1 = 5 minutos)",
-    "url": "https://doi.org/10.1111/epi.13121",
-    "cita": "Para crisis tónico-clónicas, el tratamiento debe iniciarse a los 5 minutos."
+    "documento": "Queensland CPC, seizures/epilepsy (emergencia)",
+    "cita": "Status epilepticus/epilepsy with concerning features",
+    "url": "https://www.health.qld.gov.au/cpc/neurology/seizuresepilepsy"
    },
-   "estado": "guia_citada",
+   "estado": "verificado",
    "gatillo_terminos": [
     "crisis",
     "convuls"
-   ]
+   ],
+   "letalidad": 1,
+   "riesgo": "El estado epiléptico convulsivo en adultos tiene 15,9% de mortalidad (Neligan 2019, PMID 31135807)."
   },
   {
    "id": "glaucoma_agudo",
@@ -834,7 +879,9 @@
     "ocular",
     "halos",
     "vision"
-   ]
+   ],
+   "letalidad": 4,
+   "riesgo": "El glaucoma agudo de ángulo cerrado puede dejar ceguera en horas."
   },
   {
    "id": "tiroides_crisis",
@@ -874,7 +921,9 @@
     "vomit",
     "hipotens",
     "debilidad"
-   ]
+   ],
+   "letalidad": 1,
+   "riesgo": "El coma mixedematoso tiene 29,5% de mortalidad (Ono 2017, PMID 28142035); la tormenta tiroidea, 1,2–11% (Akamizu 2012, PMID 22690898); la crisis suprarrenal, ~6% por crisis (Hahner 2015, PMID 25419882)."
   },
   {
    "id": "cancer_hipercalcemia",
@@ -910,7 +959,9 @@
     "sed",
     "vomit",
     "constip"
-   ]
+   ],
+   "letalidad": 2,
+   "riesgo": "La hipercalcemia maligna puede causar arritmias, falla renal y coma."
   },
   {
    "id": "articulacion_septica",
@@ -940,7 +991,9 @@
     "caliente",
     "roja",
     "hinchad"
-   ]
+   ],
+   "letalidad": 3,
+   "riesgo": "La artritis séptica destruye la articulación y puede causar sepsis; requiere punción y antibiótico urgentes."
   },
   {
    "id": "depresion_alcohol_perdida",
@@ -961,14 +1014,14 @@
     ]
    },
    "gatillo": "consumo problemático de alcohol o drogas, pérdida reciente (duelo, separación, trabajo), aislamiento o intento previo",
-   "efecto": "alta",
+   "efecto": "alerta",
    "desenlace": "suicidio",
    "fuente": {
     "documento": "NICE NG225 Self-harm (2022): evaluación de riesgo y necesidades psicosociales; OMS, factores de riesgo de suicidio",
     "url": "https://www.nice.org.uk/guidance/ng225/chapter/Recommendations",
     "cita": "Factores asociados a mayor riesgo: consumo de sustancias, pérdidas recientes, intentos previos."
    },
-   "estado": "guia_citada",
+   "estado": "sin_verificar",
    "gatillo_terminos": [
     "alcohol",
     "droga",
@@ -979,7 +1032,9 @@
     "perdida",
     "aislad",
     "intento"
-   ]
+   ],
+   "letalidad": 3,
+   "riesgo": "Tras un intento de suicidio, el riesgo de suicidio a 12 meses es 1,6% (Carroll 2014, PMID 24587141)."
   },
   {
    "id": "riesgo_suicida",
@@ -1005,7 +1060,9 @@
     "autolesi",
     "intento",
     "pastillas"
-   ]
+   ],
+   "letalidad": 2,
+   "riesgo": "Tras un alta psiquiátrica, la tasa de suicidio es 1.132 por 100.000 pacientes-año en los primeros 3 meses y 2.078 si el ingreso fue por conducta suicida (Chung 2017, PMID 28564699); el riesgo se concentra al inicio."
   },
   {
    "id": "asma_epoc_grave",
@@ -1027,9 +1084,9 @@
    "efecto": "alta",
    "desenlace": "crisis respiratoria fatal",
    "fuente": {
-    "documento": "GINA 2024, Summary Guide, Box 4-3 (pág. 38) · Tabla SSMSO HLF pág. 95: EPOC grave no controlado y asma grave no controlada ALTA",
-    "ubicacion": "GINA pág. 37–38",
-    "cita": "Consider early referral for specialist advice after hospitalization, or for patients with repeated emergency visits for asthma."
+    "documento": "Queensland CPC, asthma (categoría 1) y COPD (categoría 2) · GINA 2024 Box 4-3",
+    "cita": "History of life-threatening asthma in the past 12 months requiring ventilation or ICU admission / Recurrent (>3 in 12 months) acute exacerbations or acute presentations to emergency",
+    "url": "https://www.health.qld.gov.au/cpc/respiratory-and-sleep-medicine/asthma"
    },
    "estado": "verificado",
    "gatillo_terminos": [
@@ -1041,7 +1098,9 @@
     "morad",
     "somnol",
     "entrecortad"
-   ]
+   ],
+   "letalidad": 2,
+   "riesgo": "El asma casi fatal con ventilación tiene 16,5% de mortalidad hospitalaria (Marquette 1992, PMID 1626819); la EPOC hospitalizada, 23% a 1 año (35% si estuvo en UCI; Groenewegen 2003, PMID 12907529)."
   },
   {
    "id": "perdida_peso_inexplicada",
@@ -1064,7 +1123,9 @@
    "gatillo_terminos": [
     "peso",
     "adelgaz"
-   ]
+   ],
+   "letalidad": 3,
+   "riesgo": "Puede ser un cáncer digestivo; cada 4 semanas de retraso en el tratamiento del cáncer eleva la mortalidad 6–8% (Hanna 2020, PMID 33148535)."
   },
   {
    "id": "erge_alarma",
@@ -1087,11 +1148,11 @@
    "efecto": "alta",
    "desenlace": "cáncer de esófago o estómago, o sangrado digestivo",
    "fuente": {
-    "documento": "NICE NG12 Suspected cancer, recomendación 1.2.1 (disfagia → derivación por sospecha de cáncer de esófago o estómago) · Tabla SSMSO HLF pág. 95: esófago de Barrett con displasia ALTA, úlcera gástrica complicada ALTA",
-    "url": "https://www.nice.org.uk/guidance/ng12/chapter/Recommendations-organised-by-site-of-cancer",
-    "cita": "Offer urgent direct access upper gastrointestinal endoscopy ... to assess for oesophageal cancer in people with dysphagia"
+    "documento": "Queensland CPC, dyspepsia/heartburn/reflux (categoría 1)",
+    "cita": "≥5% unintentional weight loss (6 months); Gastrointestinal bleeding; Iron deficiency …; Dysphagia/odynophagia",
+    "url": "https://www.health.qld.gov.au/cpc/gastroenterology/dyspepsiaheartburnreflux"
    },
-   "estado": "guia_citada",
+   "estado": "verificado",
    "gatillo_terminos": [
     "tragar",
     "disfagia",
@@ -1101,8 +1162,433 @@
     "melena",
     "negra",
     "anemia"
-   ]
+   ],
+   "letalidad": 3,
+   "riesgo": "Puede ser un cáncer de esófago o estómago, o un sangrado; cada 4 semanas de retraso en cáncer eleva la mortalidad 6–8% (Hanna 2020, PMID 33148535)."
+  },
+  {
+   "id": "suprarrenal_crisis",
+   "nombre": "Insuficiencia suprarrenal o corticoides crónicos + vómitos, hipotensión o letargia",
+   "base": {
+    "descripcion": "insuficiencia suprarrenal o uso crónico de corticoides",
+    "cie10": [
+     "E27"
+    ],
+    "terminos": [
+     "suprarrenal",
+     "addison",
+     "corticoides cronicos",
+     "prednisona",
+     "hidrocortisona"
+    ]
+   },
+   "gatillo": "vómitos, diarrea, hipotensión, mareo, letargia, confusión, hiponatremia o hipoglicemia",
+   "gatillo_terminos": [
+    "vomit",
+    "diarrea",
+    "hipotens",
+    "mareo",
+    "letarg",
+    "confus",
+    "hiponatr",
+    "hipogluc",
+    "debilidad"
+   ],
+   "efecto": "urgencia",
+   "desenlace": "crisis suprarrenal y muerte",
+   "fuente": {
+    "documento": "NICE NG243 Adrenal insufficiency, recomendación 1.7.1",
+    "cita": "Give intravenous or intramuscular hydrocortisone for suspected adrenal crisis immediately",
+    "url": "https://www.nice.org.uk/guidance/ng243/chapter/Recommendations"
+   },
+   "estado": "verificado",
+   "letalidad": 2,
+   "riesgo": "La crisis suprarrenal tiene ~6% de mortalidad por crisis (Hahner 2015, PMID 25419882); los síntomas leves (letargia, confusión) también cuentan (NICE NG243)."
+  },
+  {
+   "id": "vulnerable_sepsis_sin_fiebre",
+   "nombre": "Persona vulnerable + sospecha de infección (aunque no tenga fiebre)",
+   "base": {
+    "descripcion": "inmunosupresión, embarazo o puerperio, 75 años o más, o fragilidad",
+    "cie10": [],
+    "terminos": [
+     "inmunosupres",
+     "quimioterap",
+     "trasplant",
+     "embaraz",
+     "puerper",
+     "fragil"
+    ],
+    "edad_min": 75
+   },
+   "gatillo": "sospecha de infección: escalofríos, decaimiento marcado, confusión, respiración rápida o deterioro general, con o sin fiebre",
+   "gatillo_terminos": [
+    "infecc",
+    "calofr",
+    "escalofr",
+    "decaim",
+    "confus",
+    "respiracion rapida",
+    "deterioro",
+    "fiebre",
+    "sepsis"
+   ],
+   "efecto": "urgencia",
+   "desenlace": "sepsis",
+   "fuente": {
+    "documento": "NICE NG253 Suspected sepsis, recomendación 1.1.2",
+    "cita": "may not have a high temperature",
+    "url": "https://www.nice.org.uk/guidance/ng253/chapter/Could-this-be-sepsis"
+   },
+   "estado": "verificado",
+   "letalidad": 1,
+   "riesgo": "La sepsis severa tiene 26,7% de mortalidad a 28 días en UCI en Chile (Dougnac 2007, PMID 17657331); en personas mayores e inmunosuprimidos suele presentarse sin fiebre (NICE NG253)."
+  },
+  {
+   "id": "puerpera_preeclampsia",
+   "nombre": "Puerperio con preeclampsia + cefalea intensa o dolor epigástrico",
+   "base": {
+    "descripcion": "puerperio con preeclampsia o hipertensión del embarazo",
+    "cie10": [
+     "O14",
+     "O13",
+     "O11"
+    ],
+    "terminos": [
+     "puerper",
+     "postparto",
+     "posparto",
+     "preeclampsia"
+    ]
+   },
+   "gatillo": "cefalea intensa, dolor en la parte alta del abdomen, alteraciones visuales",
+   "gatillo_terminos": [
+    "cefalea",
+    "dolor de cabeza",
+    "epigastr",
+    "vision",
+    "visual"
+   ],
+   "efecto": "urgencia",
+   "desenlace": "eclampsia posparto",
+   "fuente": {
+    "documento": "NICE NG133 Hypertension in pregnancy, recomendación 1.5.15",
+    "cita": "Preeclampsia después del parto con cefalea intensa o dolor epigástrico: evaluación inmediata",
+    "url": "https://www.nice.org.uk/guidance/ng133/chapter/Recommendations"
+   },
+   "estado": "verificado",
+   "letalidad": 2,
+   "riesgo": "La preeclampsia posparto es de las que más se pasan por alto (NICE NG133) y puede terminar en eclampsia o ACV."
+  },
+  {
+   "id": "epilepsia_embarazo",
+   "nombre": "Epilepsia + embarazo",
+   "base": {
+    "descripcion": "epilepsia",
+    "cie10": [
+     "G40",
+     "G41"
+    ],
+    "terminos": [
+     "epilep"
+    ]
+   },
+   "gatillo": "embarazo actual o test de embarazo positivo",
+   "gatillo_terminos": [
+    "embaraz",
+    "gestacion",
+    "test de embarazo positivo",
+    "semanas"
+   ],
+   "efecto": "alta",
+   "desenlace": "crisis durante el embarazo y daño fetal por fármacos",
+   "fuente": {
+    "documento": "Queensland CPC, seizures/epilepsy (categoría 1)",
+    "cita": "Pregnancy in a patient with known epilepsy",
+    "url": "https://www.health.qld.gov.au/cpc/neurology/seizuresepilepsy"
+   },
+   "estado": "verificado",
+   "letalidad": 3,
+   "riesgo": "El embarazo cambia el control de las crisis y algunos anticonvulsivantes dañan al feto (valproato: ~11% de malformaciones, MHRA)."
+  },
+  {
+   "id": "falciforme_crisis",
+   "nombre": "Anemia falciforme + crisis de dolor o síntomas respiratorios",
+   "base": {
+    "descripcion": "anemia falciforme",
+    "cie10": [
+     "D57"
+    ],
+    "terminos": [
+     "falciforme",
+     "drepanocit"
+    ]
+   },
+   "gatillo": "crisis de dolor, dolor torácico, dificultad respiratoria o fiebre",
+   "gatillo_terminos": [
+    "dolor",
+    "respir",
+    "disnea",
+    "fiebre",
+    "torac"
+   ],
+   "efecto": "urgencia",
+   "desenlace": "síndrome torácico agudo",
+   "fuente": {
+    "documento": "NICE CG143 Sickle cell disease, recomendación 1.1.1",
+    "cita": "Treat an acute painful sickle cell episode as an acute medical emergency",
+    "url": "https://www.nice.org.uk/guidance/cg143/chapter/Recommendations"
+   },
+   "estado": "verificado",
+   "letalidad": 2,
+   "riesgo": "La crisis dolorosa puede evolucionar a síndrome torácico agudo (NICE CG143)."
+  },
+  {
+   "id": "riesgo_lesion_renal_aguda",
+   "nombre": "ERC, diabetes, insuficiencia cardíaca, hepatopatía o 65+ + deshidratación, infección grave o contraste",
+   "base": {
+    "descripcion": "enfermedad renal crónica, diabetes, insuficiencia cardíaca, hepatopatía o 65 años o más",
+    "cie10": [
+     "N18",
+     "E11",
+     "E10",
+     "I50",
+     "K70",
+     "K74"
+    ],
+    "terminos": [
+     "renal cronica",
+     "erc",
+     "diabet",
+     "insuficiencia cardiaca",
+     "cirrosis"
+    ],
+    "edad_min": 65
+   },
+   "gatillo": "deshidratación, vómitos o diarrea importantes, infección grave, o contraste/cirugía de urgencia",
+   "gatillo_terminos": [
+    "deshidrat",
+    "vomit",
+    "diarrea",
+    "sepsis",
+    "infeccion grave",
+    "contraste",
+    "cirugia de urgencia"
+   ],
+   "efecto": "alta",
+   "desenlace": "lesión renal aguda",
+   "fuente": {
+    "documento": "NICE NG148 Acute kidney injury, recomendación 1.1.13 (factores de riesgo)",
+    "cita": "Riesgo de lesión renal aguda: ERC, diabetes, insuficiencia cardíaca, 65 años o más, hepatopatía, ante sepsis, hipovolemia o contraste",
+    "url": "https://www.nice.org.uk/guidance/ng148/chapter/Recommendations"
+   },
+   "estado": "verificado",
+   "letalidad": 3,
+   "riesgo": "La lesión renal aguda empeora el pronóstico de la enfermedad de base (NICE NG148)."
+  },
+  {
+   "id": "asplenia_fiebre",
+   "nombre": "Asplenia o esplenectomía + fiebre",
+   "base": {
+    "descripcion": "esplenectomía o asplenia",
+    "cie10": [
+     "D73",
+     "Q89"
+    ],
+    "terminos": [
+     "esplenectom",
+     "asplenia",
+     "sin bazo"
+    ]
+   },
+   "gatillo": "fiebre o calofríos",
+   "gatillo_terminos": [
+    "fiebre",
+    "calofr",
+    "escalofr"
+   ],
+   "efecto": "alerta",
+   "desenlace": "sepsis fulminante",
+   "estado": "sin_verificar",
+   "letalidad": 2,
+   "fuente": {
+    "documento": "Conocimiento clínico general (no verificado en una guía oficial en esta revisión)"
+   },
+   "riesgo": "Riesgo de sepsis fulminante; no se verificó en una guía oficial: solo alerta visible, no cambia la prioridad."
+  },
+  {
+   "id": "vih_cefalea_febril",
+   "nombre": "VIH + cefalea con fiebre",
+   "base": {
+    "descripcion": "infección por VIH",
+    "cie10": [
+     "B20",
+     "B24",
+     "Z21"
+    ],
+    "terminos": [
+     "vih"
+    ]
+   },
+   "gatillo": "cefalea con fiebre o rigidez de nuca",
+   "gatillo_terminos": [
+    "cefalea",
+    "fiebre",
+    "nuca"
+   ],
+   "efecto": "alerta",
+   "desenlace": "meningitis oportunista",
+   "estado": "sin_verificar",
+   "letalidad": 2,
+   "fuente": {
+    "documento": "Conocimiento clínico general (no verificado en una guía oficial en esta revisión)"
+   },
+   "riesgo": "Riesgo de meningitis oportunista; no se verificó en una guía oficial: solo alerta visible, no cambia la prioridad."
+  },
+  {
+   "id": "litio_clozapina_toxicidad",
+   "nombre": "Litio o clozapina + fiebre, confusión o temblor",
+   "base": {
+    "descripcion": "uso de litio o clozapina",
+    "cie10": [],
+    "terminos": [
+     "litio",
+     "clozapina"
+    ]
+   },
+   "gatillo": "fiebre, confusión, temblor marcado, vómitos o diarrea",
+   "gatillo_terminos": [
+    "fiebre",
+    "confus",
+    "temblor",
+    "vomit",
+    "diarrea"
+   ],
+   "efecto": "alerta",
+   "desenlace": "toxicidad o agranulocitosis",
+   "estado": "sin_verificar",
+   "letalidad": 2,
+   "fuente": {
+    "documento": "Conocimiento clínico general (no verificado en una guía oficial en esta revisión)"
+   },
+   "riesgo": "Riesgo de toxicidad o agranulocitosis; no se verificó en una guía oficial: solo alerta visible, no cambia la prioridad."
+  },
+  {
+   "id": "fa_ait",
+   "nombre": "Fibrilación auricular + déficit neurológico transitorio",
+   "base": {
+    "descripcion": "fibrilación auricular",
+    "cie10": [
+     "I48"
+    ],
+    "terminos": [
+     "fibrilacion auricular"
+    ]
+   },
+   "gatillo": "debilidad, adormecimiento o dificultad para hablar que se resolvió",
+   "gatillo_terminos": [
+    "debilidad",
+    "adormec",
+    "habla",
+    "transitori"
+   ],
+   "efecto": "alerta",
+   "desenlace": "ACV",
+   "estado": "sin_verificar",
+   "letalidad": 2,
+   "fuente": {
+    "documento": "Conocimiento clínico general (no verificado en una guía oficial en esta revisión)"
+   },
+   "riesgo": "Riesgo de ACV; no se verificó en una guía oficial: solo alerta visible, no cambia la prioridad."
+  },
+  {
+   "id": "aneurisma_dolor",
+   "nombre": "Aneurisma aórtico + dolor súbito",
+   "base": {
+    "descripcion": "aneurisma aórtico",
+    "cie10": [
+     "I71"
+    ],
+    "terminos": [
+     "aneurisma"
+    ]
+   },
+   "gatillo": "dolor abdominal, lumbar o torácico súbito e intenso",
+   "gatillo_terminos": [
+    "dolor"
+   ],
+   "efecto": "alerta",
+   "desenlace": "rotura del aneurisma",
+   "estado": "sin_verificar",
+   "letalidad": 2,
+   "fuente": {
+    "documento": "Conocimiento clínico general (no verificado en una guía oficial en esta revisión)"
+   },
+   "riesgo": "Riesgo de rotura del aneurisma; no se verificó en una guía oficial: solo alerta visible, no cambia la prioridad."
+  },
+  {
+   "id": "isglt2_vomitos",
+   "nombre": "Uso de iSGLT2 (empagliflozina, dapagliflozina) + vómitos o malestar",
+   "base": {
+    "descripcion": "uso de iSGLT2",
+    "cie10": [],
+    "terminos": [
+     "empagliflozina",
+     "dapagliflozina",
+     "canagliflozina",
+     "isglt2"
+    ]
+   },
+   "gatillo": "vómitos, dolor abdominal o malestar general",
+   "gatillo_terminos": [
+    "vomit",
+    "dolor abdominal",
+    "malestar"
+   ],
+   "efecto": "alerta",
+   "desenlace": "cetoacidosis euglicémica",
+   "estado": "sin_verificar",
+   "letalidad": 2,
+   "fuente": {
+    "documento": "Conocimiento clínico general (no verificado en una guía oficial en esta revisión)"
+   },
+   "riesgo": "Riesgo de cetoacidosis euglicémica; no se verificó en una guía oficial: solo alerta visible, no cambia la prioridad."
+  },
+  {
+   "id": "anticoagulado_embolia",
+   "nombre": "Anticoagulado o con trombosis previa + disnea súbita o pierna hinchada",
+   "base": {
+    "descripcion": "anticoagulación o trombosis venosa previa",
+    "cie10": [
+     "I26",
+     "I80",
+     "Z86"
+    ],
+    "terminos": [
+     "anticoagul",
+     "trombosis",
+     "tep",
+     "tvp"
+    ]
+   },
+   "gatillo": "disnea súbita, dolor pleurítico, síncope o pierna hinchada",
+   "gatillo_terminos": [
+    "disnea",
+    "dolor",
+    "sincope",
+    "hinchad",
+    "edema"
+   ],
+   "efecto": "alerta",
+   "desenlace": "embolia pulmonar",
+   "estado": "sin_verificar",
+   "letalidad": 2,
+   "fuente": {
+    "documento": "Conocimiento clínico general (no verificado en una guía oficial en esta revisión)"
+   },
+   "riesgo": "Riesgo de embolia pulmonar; no se verificó en una guía oficial: solo alerta visible, no cambia la prioridad."
   }
  ],
- "gatillo_terminos": "El código exige que la frase citada como gatillo contenga al menos uno de estos términos (sin tildes, minúsculas): así la IA no puede atribuir un gatillo a una frase que habla de otra cosa."
+ "gatillo_terminos": "El código exige que la frase citada como gatillo contenga al menos uno de estos términos (sin tildes, minúsculas): así la IA no puede atribuir un gatillo a una frase que habla de otra cosa.",
+ "letalidad": "1 = más letal (≥15% a corto plazo o ≥40% a 1 año) · 2 = alta (5–15% agudo o 20–40% a 1 año) · 3 = moderada (1–6%) · 4 = baja mortalidad pero daño irreversible si se retrasa. Ordinal y aproximado: mezcla poblaciones y horizontes (informe de investigación 15-10-2026)."
 }

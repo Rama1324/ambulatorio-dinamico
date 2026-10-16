@@ -202,17 +202,21 @@ def test_medicion_sube_solo_con_umbral_con_fuente_y_si_el_registro_lo_confirma()
     def dec(pid, kb=KB, cita_valor="9.5"):
         return decisor.decidir(perfil(pid), resp(tend="empeora", citas_tend=[{"fecha": "2026-09-01", "tipo": "HbA1c", "valor": cita_valor}]), CORTE, kb)
     con = dec("PAC-HLF-00296")                                     # HbA1c 8,4 → 10,1: empeora y sobre 7
-    assert con["categoria"] == "media" and any("pág. 101" in r["fuente"] and "10.1" in r["valor"] for r in con["razones"] if r["factor"] == "medicion")
+    assert any("pág. 101" in r["fuente"] and "10.1" in r["valor"] for r in con["razones"] if r["factor"] == "medicion")
+    # y además supera 10% con deterioro: Queensland CPC categoría 1 → alta (regla del registro, sin IA)
+    assert con["categoria"] == "alta" and any(r["factor"] == "criterio_registro" and "HbA1c > 10%" in r["valor"] and r["riesgo"] for r in con["razones"])
     assert any(x["motivo"] == "fila_a_validar" for x in con["revision"])     # la equivalencia del equipo queda a validar
     assert KB["diagnosticos"]["E11"]["medicion"]["umbral"]["valor"] == 7      # guía MINSAL DM2: compensado si HbA1c < 7 %
     kb_sin = copy.deepcopy(KB)
     kb_sin["diagnosticos"]["E11"]["medicion"]["umbral"] = {"valor": None, "sentido": "mayor_igual", "estado": "a_validar_por_medico", "fuente": "sin fuente"}
-    assert dec("PAC-HLF-00296", kb_sin)["categoria"] == "baja"              # sin fuente: solo revisión
+    sin = dec("PAC-HLF-00296", kb_sin)                             # sin fuente, el umbral del equipo no actúa (solo revisión)…
+    assert not any(r["factor"] == "medicion" for r in sin["razones"])
+    assert sin["categoria"] == "alta" and any(r["factor"] == "criterio_registro" for r in sin["razones"])   # …pero sí la regla oficial de Queensland
     bajo = dec("PAC-HLF-00298")                                    # empeora pero 6,1 < 7
     assert bajo["categoria"] == "baja" and any(x["motivo"] == "medicion_empeora" for x in bajo["revision"])
     falso = dec("PAC-HLF-00326")                                   # el LLM dice empeora; el registro muestra que mejora
     assert falso["categoria"] == "baja" and any("no lo confirma" in x["detalle"] for x in falso["revision"])
-    assert dec("PAC-HLF-00296", cita_valor="9,5 %")["categoria"] == "media"  # un número mal escrito por el LLM no rompe nada
+    assert dec("PAC-HLF-00296", cita_valor="9,5 %")["categoria"] == "alta"   # un número mal escrito por el LLM no rompe nada (usa el registro)
 
 
 # ---------- R: orden Ord. 536 sin LACE ----------

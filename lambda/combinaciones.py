@@ -169,7 +169,7 @@ def detectar(texto, perfil, cliente, lecturas=LECTURAS):
             c = kb["por_id"][cid]
             aplicadas.append({"id": cid, "nombre": c["nombre"], "efecto": c["efecto"], "desenlace": c["desenlace"],
                               "cita_gatillo": citas[cid][0], "cita_base": citas[cid][1] or None,
-                              "fuente": c["fuente"], "estado": c["estado"]})
+                              "fuente": c["fuente"], "estado": c["estado"], "letalidad": c.get("letalidad"), "riesgo": c.get("riesgo")})
     return {"aplicadas": aplicadas, "alertas": list(otras.values()),
             "lecturas": len([r for r, _, _ in crudas if r]), "errores": [e for _, _, e in crudas if e],
             "tokens_entrada": sum((u.get("tokens_entrada") or 0) for _, u, _ in crudas),
@@ -182,6 +182,10 @@ def evento(d, fecha):
         # la IA no pudo leer: un riesgo no puede pasar en silencio → alerta visible para que una persona lea el texto
         d = {**d, "alertas": [{"descripcion": "la IA no pudo revisar este texto en busca de combinaciones de riesgo; léalo una persona",
                                "cita": d["errores"][0][:120]}]}
+    # combinaciones sin fuente verificada: solo alerta visible (no mueven a nadie)
+    sin_fuente = [{"descripcion": f'{a["nombre"]} (sin fuente verificada)', "cita": a["cita_gatillo"], "riesgo": a.get("riesgo")}
+                  for a in d["aplicadas"] if a["efecto"] == "alerta"]
+    d = {**d, "aplicadas": [a for a in d["aplicadas"] if a["efecto"] != "alerta"], "alertas": d["alertas"] + sin_fuente}
     if not d["aplicadas"] and not d["alertas"]:
         return None
     urg = [a for a in d["aplicadas"] if a["efecto"] == "urgencia"]
@@ -195,4 +199,5 @@ def evento(d, fecha):
             "origen": "combinaciones_ia", "urgencia": bool(urg), "nivel_criterio": "alta" if (urg or alta) else None,
             "texto_urgencia": "; ".join(txt(a) for a in urg) or None, "texto_criterio": "; ".join(txt(a) for a in alta) or None,
             "combinaciones": d["aplicadas"], "alertas": d["alertas"],
+            "letalidad": min((a["letalidad"] for a in d["aplicadas"] if a.get("letalidad")), default=None),
             "fuente": "; ".join(sorted({a["fuente"]["documento"] for a in d["aplicadas"]})) or "Combinaciones de riesgo (sin coincidencia en la lista)"}

@@ -24,7 +24,7 @@ def test_orden_minsal():
     """Categoría → descompensación grave → cualquier descompensación → grupo de protección → > 1 año → LACE → llegada."""
     _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
     orden = {"alta": 3, "media": 2, "baja": 1}
-    claves = [(-orden[p["categoria"]], not p["urgencia_hoy"], not p["riesgo_vital"], -p["agudeza"], p["estado_clinico"] != "descompensado", not p["grupo_proteccion"],
+    claves = [(-orden[p["categoria"]], not p["urgencia_hoy"], not p["riesgo_vital"], p["letalidad"], -p["agudeza"], p["estado_clinico"] != "descompensado", not p["grupo_proteccion"],
                not p["antiguedad_mayor_1_anio"], -p["lace"]["total"], -p["dias_espera"]) for p in d["pacientes"]]
     assert claves == sorted(claves)
     assert all(p["lace"]["experimental"] and p["lace"]["datos_faltantes"] for p in d["pacientes"])

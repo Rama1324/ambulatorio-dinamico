@@ -45,7 +45,8 @@ CIE10 = {
 
 def cargar():
     if "kb" not in _KB:
-        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "conocimiento", "criterios_especialidad.json"), encoding="utf-8") as f:
+        base = os.path.join(os.path.dirname(os.path.abspath(__file__)), "conocimiento")
+        with open(os.path.join(base, "criterios_especialidad.json"), encoding="utf-8") as f:
             kb = json.load(f)
         por_id = {}
         for s in kb["especialidades"]:
@@ -53,6 +54,16 @@ def cargar():
                 por_id[e["id"]] = {**e, "especialidad": s["especialidad"], "transversal": s.get("excepcion_transversal")}
         _KB["kb"], _KB["por_id"] = kb, por_id
         _KB["por_cie"] = {c: por_id[i] for i, cs in CIE10.items() for c in cs}
+        # criterios oficiales de los diagnósticos del registro (Queensland CPC / NICE): cada enfermedad trae sus CIE-10
+        with open(os.path.join(base, "criterios_registro.json"), encoding="utf-8") as f:
+            reg = json.load(f)
+        for s in reg["especialidades"]:
+            for e in s["enfermedades"]:
+                x = {**e, "especialidad": s["especialidad"], "transversal": None}
+                _KB["por_id"][e["id"]] = x
+                for c in e["cie10"]:
+                    _KB["por_cie"].setdefault(c, x)   # si el JSON de especialidades ya lo cubre (F32), se mantiene ese
+        _KB["registro"] = reg
     return _KB
 
 
@@ -63,7 +74,7 @@ def enfermedad_de(cie):
 def catalogo():
     """Diagnósticos del JSON para ingresar interconsultas de esas especialidades (CIE-10 principal de cada enfermedad)."""
     return [{"especialidad": e["especialidad"], "sub_especialidad": e["especialidad"], "diagnostico_cie10": CIE10[i][0],
-             "diagnostico_texto": e["enfermedad"]} for i, e in cargar()["por_id"].items()]
+             "diagnostico_texto": e["enfermedad"]} for i, e in cargar()["por_id"].items() if i in CIE10]  # los del registro ya están en su catálogo
 
 
 def opciones(enf):
@@ -161,7 +172,7 @@ def clasificar(texto, enf, cliente, lecturas=LECTURAS):
             "lecturas": len([r for r, _, _ in crudas if r]), "errores": [e for _, _, e in crudas if e],
             "tokens_entrada": sum((u.get("tokens_entrada") or 0) for _, u, _ in crudas),
             "tokens_salida": sum((u.get("tokens_salida") or 0) for _, u, _ in crudas),
-            "fuente": FUENTE.format(v=cargar()["kb"].get("version", "?"))}
+            "fuente": enf.get("fuente_url") or FUENTE.format(v=cargar()["kb"].get("version", "?")), "riesgo": enf.get("riesgo")}
 
 
 def evento(c, fecha):
@@ -173,7 +184,7 @@ def evento(c, fecha):
             (("; " if c["urgencia"] else "") + f'{c["enfermedad"]}, {c["nivel"]}: {c["criterio"]} ("{c["cita"]}")' if c["nivel"] else "")
     return {"fecha_evento": fecha, "tipo_evento": "criterio_clinico", "subtipo": sub,
             "severidad": "grave" if c["urgencia"] else {"alta": "moderada"}.get(c["nivel"], "leve"),
-            "detalle": texto, "origen": "criterios_ia", "nivel_criterio": c["nivel"], "urgencia": bool(c["urgencia"]),
+            "detalle": texto, "origen": "criterios_ia", "nivel_criterio": c["nivel"], "urgencia": bool(c["urgencia"]), "riesgo": c.get("riesgo"),
             "texto_urgencia": c["urgencia"] and f'{c["urgencia"]} · "{c["cita_urgencia"]}"',
             "texto_criterio": c["nivel"] and f'{c["enfermedad"]}, criterio {c["nivel"]}: {c["criterio"]} · "{c["cita"]}"',
             "fuente": c["fuente"]}

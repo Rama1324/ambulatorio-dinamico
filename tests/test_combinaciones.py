@@ -57,7 +57,9 @@ def test_base_completa_y_con_fuente():
     kb = combinaciones.cargar()["kb"]
     assert len(kb["combinaciones"]) >= 30
     for c in kb["combinaciones"]:
-        assert c["efecto"] in ("urgencia", "alta", "alerta") and c["fuente"]["documento"] and c["estado"] in ("verificado", "guia_citada")
+        assert c["efecto"] in ("urgencia", "alta", "alerta") and c["fuente"]["documento"] and c["estado"] in ("verificado", "sin_verificar")
+        assert c["estado"] == "verificado" or c["efecto"] == "alerta"          # lo no verificado solo alerta
+        assert c.get("riesgo") and c.get("letalidad") in (1, 2, 3, 4)          # cada una dice qué puede pasar
         b = c["base"]
         assert b.get("cualquiera") or b.get("cie10") or b.get("terminos") or b.get("edad_min")
 

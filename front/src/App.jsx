@@ -26,6 +26,8 @@ const FACTOR = {
   lace: "Puntaje LACE (experimental)", oncologico: "Hallazgo oncológico (informe)", ventana: "Vigencia del evento",
   urgencia: "URGENCIA: derivar hoy", criterio_clinico: "Criterio clínico de su enfermedad",
   combinacion: "Combinación de riesgo", alerta_combinacion: "Posible combinación de riesgo (revisar)",
+  criterio_registro: "Criterio oficial de su diagnóstico", piso: "Prioridad mínima de su diagnóstico", plazo: "Plazo de referencia",
+  alerta_clinica: "Alerta clínica",
 };
 const TIPO_EVENTO = { visita_urgencia: "Urgencia", hospitalizacion: "Hospitalización", examen_alterado: "Examen alterado", cambio_farmaco: "Cambio de fármaco", control_aps: "Control APS", hallazgo_oncologico: "Hallazgo oncológico", criterio_clinico: "Criterio clínico", combinacion_riesgo: "Combinación de riesgo" };
 const POR_PAGINA = 25;
@@ -853,9 +855,10 @@ function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso, onDes
       <Caja titulo={`Fundamento de la prioridad ${ETIQUETA[p.categoria].toLowerCase()}`}>
         <ul className="space-y-2.5 text-[14px]">
           {p.razones.map((r, i) => (
-            <li key={i} className={r.factor === "tabla_oficial" || r.factor === "riesgo_vital" ? "pl-2 border-l-4 border-error" : "pl-2 border-l-4 border-outline-variant"}>
+            <li key={i} className={["tabla_oficial", "riesgo_vital", "urgencia", "combinacion", "criterio_registro", "oncologico"].includes(r.factor) ? "pl-2 border-l-4 border-error" : "pl-2 border-l-4 border-outline-variant"}>
               <div className="text-[12px] text-on-surface-variant">{FACTOR[r.factor] || r.factor}</div>
               <div>{r.valor}</div>
+              {r.riesgo && <div className="text-[13px] mt-0.5"><b>Qué puede pasar:</b> {r.riesgo}</div>}
               <div className="text-[12px] text-on-surface-variant italic">Fuente: {r.fuente}</div>
             </li>
           ))}
@@ -2464,11 +2467,21 @@ function Criterios({ ia }) {
         <p className="text-[13px] text-ambar mt-1"><b>Equivalencias a validar con los especialistas:</b> K70 (enfermedad hepática alcohólica) se asimila a la fila de cirrosis; I20 incluye toda angina, la fila es solo angina inestable; G40 usa la fila "crisis mensuales" porque no hay fila de epilepsia descompensada.</p>
         <p className="text-[13px] mt-1">Fuente: <a className="text-primary underline" target="_blank" rel="noreferrer" href="https://redsalud.ssmso.cl/wp-content/uploads/2025/07/PRIORIZACION-SSMSO-02.07.2025-I-ETAPA.pdf">Priorización SSMSO 2025 (PDF)</a></p>
       </Caja>
+      <Caja titulo="Base oficial y evidencia (por qué el sistema decide así)">
+        <ul className="list-disc pl-5 space-y-1.5">
+          <li><b>El problema es real:</b> entre enero y junio de 2025 murieron 19.137 personas mientras esperaban en la lista No GES, 1.426 en la red SSMSO; el 92% esperaba su primera consulta de especialidad (MINSAL, informe Glosa 06, II trimestre 2026). El propio MINSAL dice que no puede saber si eran evitables porque la lista no tiene información clínica: eso es lo que agrega esta herramienta.</li>
+          <li><b>Criterios por diagnóstico:</b> además de la tabla del HLF, se usan los criterios oficiales de Queensland (Australia, Clinical Prioritisation Criteria) para los 17 diagnósticos del registro, con emergencia y categorías 1/2/3 (≤30/90/365 días); salud mental desde NICE. Ejemplos que el sistema aplica solo con el registro: asma con UCI en los últimos 12 meses → alta; EPOC con más de 3 urgencias en 12 meses → media; HbA1c mayor a 10% que empeora → alta; cirrosis y reflujo nunca quedan en baja ("no category 3").</li>
+          <li><b>Letalidad:</b> entre pacientes de la misma prioridad, va primero el evento más mortal (nivel 1: cirrosis descompensada, ACV, sepsis, fractura de cadera… · nivel 2: insuficiencia cardíaca, EPOC hospitalizada, infarto… · nivel 3 · nivel 4: daño irreversible sin alta mortalidad). Cada razón muestra la cifra y su estudio.</li>
+          <li><b>Plazo de referencia:</b> si alguien supera el plazo de su prioridad (30/90/365 días), se muestra con su riesgo: en listas cardiológicas, los "no urgentes" acumularon más muertes porque esperaron más (OR 1,66).</li>
+          <li><b>Cada razón dice qué puede pasar</b> y de dónde sale. Lo que no está verificado en una fuente oficial solo genera una alerta visible; nunca mueve a nadie.</li>
+        </ul>
+        <p className="text-[12px] text-on-surface-variant mt-2">Informe completo con fuentes: "Priorización clínica de listas de espera" (15-10-2026).</p>
+      </Caja>
       <Caja titulo="El motivo del evento importa">
         <p>Una urgencia o una hospitalización solo sube la prioridad si es por <b>la enfermedad por la que el paciente espera</b> (o una complicación de ella). Una amputación por un accidente en un paciente que espera cardiología <b>no</b> cambia su prioridad de cardiología: queda como alerta para revisar si necesita otra derivación. Las urgencias se clasifican por triage: ESI 1-2 grave, ESI 3 moderada, ESI 4-5 leve (un dolor de dedo no sube a nadie). La IA lee el motivo y la relación en el informe; en las planillas se pueden cargar en las columnas <i>motivo</i> y <i>relacionado</i>.</p>
       </Caja>
       <Caja titulo="Combinaciones de riesgo: lo que juntas es más grave">
-        <p className="mb-2">Una condición menor puede ser grave según quién la tenga. El sistema revisa <b>31 combinaciones</b> de una condición de base del paciente con un evento o hallazgo, cada una con su fuente: diabetes + lesión en el pie (pie diabético), anticoagulado + golpe en la cabeza, quimioterapia + fiebre, cáncer + dolor de espalda con debilidad, cirrosis + sangrado, adulto mayor + caída con dolor de cadera, embarazo + presión alta, insuficiencia renal + potasio alto, entre otras.</p>
+        <p className="mb-2">Una condición menor puede ser grave según quién la tenga. El sistema revisa <b>44 combinaciones</b> (35 con fuente oficial verificada; 9 solo como alerta) de una condición de base del paciente con un evento o hallazgo, cada una con su fuente: diabetes + lesión en el pie (pie diabético), anticoagulado + golpe en la cabeza, quimioterapia + fiebre, cáncer + dolor de espalda con debilidad, cirrosis + sangrado, adulto mayor + caída con dolor de cadera, embarazo + presión alta, insuficiencia renal + potasio alto, entre otras.</p>
         <ul className="list-disc pl-5 space-y-1">
           <li>La IA marca la combinación copiando la frase; el código verifica que la base esté en el registro del paciente (o en una frase del texto), que el gatillo esté escrito y no negado, y que hable de lo que dice el gatillo.</li>
           <li>Efecto: <b>urgencia</b> (derivar hoy, primero en la lista) o <b>prioridad alta</b>. Nunca baja a nadie.</li>

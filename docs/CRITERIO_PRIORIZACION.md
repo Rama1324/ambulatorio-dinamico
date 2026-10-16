@@ -167,12 +167,35 @@ riesgo de morir o de un daño irreversible**:
   renal sin infección.
 
 **Cómo quedó:**
-- **Orden:** urgencia "derivar hoy" (criterios y combinaciones) → descompensación grave → **agudeza del evento** (UCI o
+- **Orden:** urgencia "derivar hoy" (criterios y combinaciones) → descompensación grave → **letalidad** (1 a 4) → **agudeza del evento** (UCI o
   ESI/C1 = 3; hospitalización, ESI/C2 o descompensación grave = 2; moderada = 1) → cualquier descompensado → grupos de
   protección → antigüedad.
 - **Salida del carril de urgencia:** sale cuando el especialista registra una decisión, una revisión o un ajuste
   posterior. Sigue en alta, porque nunca baja.
 - **Pendiente:** ordenar por mortalidad específica de cada diagnóstico, con datos chilenos.
+
+## 6b. Evidencia oficial integrada (15-10-2026)
+Informe completo: `docs/investigacion/Priorizacion_clinica_listas_de_espera.md`. Cada dato está marcado como [V]
+verificado en la fuente original o [S] secundario.
+- **Sin plazo de 72 h:** la lista se recalcula al instante cuando entra un paciente, un evento o un informe. La alerta de
+  descompensación grave queda "revisar prioridad" hasta que el especialista revisa.
+- **Criterios oficiales por diagnóstico** (`lambda/conocimiento/criterios_registro.json`): Queensland Clinical
+  Prioritisation Criteria para 16 diagnósticos del registro (emergencia, Cat 1 ≤30 → alta, Cat 2 ≤90 → media, Cat 3
+  ≤365 → baja) y NICE para ansiedad; F32 usa los criterios de psiquiatría del JSON. La IA los aplica sobre textos, y
+  el código aplica sin IA las reglas que se pueden calcular con el registro (`puntaje.aplicar_registro`):
+  - asma con UCI en 12 meses → alta;
+  - asma hospitalizada en 6 meses → media;
+  - EPOC con más de 3 urgencias u hospitalizaciones en 12 meses → media;
+  - HbA1c >10% que empeora → alta, y 8–10% que empeora → media;
+  - piso media para cirrosis y reflujo ("No category 3 criteria");
+  - PHQ-9 ≥16 → alerta (NICE NG222).
+- **Letalidad** (`puntaje.LETALIDAD_DX` y el campo `letalidad` de cada combinación): entre pacientes de la misma
+  prioridad va primero el evento más mortal (1 a 4), con la cifra y su PMID en la razón.
+- **Plazo de referencia** (30/90/365 días según la prioridad, Queensland): si se supera, se muestra con su riesgo (Sobolev
+  2006, OR 1,66; Hanna 2020). No mueve a nadie, porque la norma chilena No GES no fija plazos.
+- **Combinaciones:** 44 en total, 35 verificadas en una fuente oficial (25 de urgencia y 10 de prioridad alta). Las 9 no
+  verificadas (asplenia + fiebre, VIH + cefalea febril, litio o clozapina, entre otras) solo generan una alerta visible.
+- **Cada razón trae `riesgo`** ("qué puede pasar"), con la cifra y la fuente.
 
 ## 7. Cómo debe razonar una IA que ayude a mejorar estos criterios
 1. **Piensa en desenlaces:** ¿qué le puede pasar a esta persona si espera semanas o meses? (muerte, amputación, ceguera,
