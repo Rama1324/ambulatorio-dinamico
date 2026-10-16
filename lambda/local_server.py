@@ -2,7 +2,7 @@
 Uso (desde la raíz del proyecto):  LOCAL=1 DATA_DIR=data python lambda/local_server.py
 En Windows PowerShell:  $env:LOCAL="1"; $env:DATA_DIR="data"; python lambda/local_server.py
 Queda en http://localhost:3001  → en front/.env.local poner VITE_API_URL=http://localhost:3001"""
-import json, os, socket, sys
+import os, socket, sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qsl
 os.environ.setdefault("LOCAL", "1"); os.environ.setdefault("DATA_DIR", "data")

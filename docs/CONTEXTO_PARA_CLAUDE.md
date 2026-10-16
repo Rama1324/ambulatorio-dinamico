@@ -23,8 +23,8 @@ de consultas de especialidad.
 
 ### Lo que pidió el hospital (15-10, conversación con una persona del HLF)
 - **El objetivo principal es la lista de espera y sus prioridades.** Por eso la página principal es la lista.
-- **No quieren gestión de box.** Las pantallas "Gestión de box" y "Tengo horas libres" se sacaron del menú (el código
-  sigue en `App.jsx` y la API, por si se retoman).
+- **No quieren gestión de box.** Se eliminó del front y de la API (pantallas, rutas `/boxes`, `/disponible`, `/cita`,
+  `box.json` y la importación de agenda).
 - **No quieren IA predictiva.** Se evaluó y se descartó. Bedrock solo redacta el "Resumen para el equipo" (eso sí lo aceptan).
 - **La lista se debe poder operar a mano**, siempre con un motivo previo y explicado.
 - **Dos vistas:** una simple, que cualquiera entienda sin capacitación, y otra con toda la información.
@@ -118,7 +118,7 @@ y corre sin servidores propios en AWS (Lambda, API Gateway, DynamoDB, S3, Textra
   6. días de espera;
   7. id del paciente.
 
-  Después se aplican los **ajustes manuales** vigentes (`_aplicar_ajustes` en `app.py`).
+  Después se aplican los **ajustes manuales** vigentes (`_aplicar_ajustes` en `lista.py`).
 - **Descompensación grave (`riesgo_vital`, nombre interno):** un evento grave sin registro posterior de estabilización, en un
   diagnóstico cuya fila de la tabla es alta. Su **prioridad debe revisarse en 72 h** desde que el evento llegó al sistema
   (`evaluacion.llego_al_sistema`: fecha de registro en la app o `REGISTRO_AL` = 2026-10-13 para el registro cargado).
@@ -143,11 +143,10 @@ y corre sin servidores propios en AWS (Lambda, API Gateway, DynamoDB, S3, Textra
 ## 5. Arquitectura (todo en AWS)
 - `front/`: React + Vite + framer-motion + Tailwind (por CDN), con el logo y los colores del HLF, **tema claro/oscuro**
   (botón sol/luna; colores como variables CSS en `front/src/styles/tokens.css`). Se publica en **AWS Amplify** (deploy
-  manual con zip mediante el script). Sin `VITE_API_URL`, funciona en modo mock con `front/src/mock.json` (sin los campos
-  de gestión).
+  manual con zip mediante el script). Necesita la API (`VITE_API_URL`); el modo mock se eliminó.
 - `lambda/`: Python 3.12 (arm64), una sola Lambda detrás de **API Gateway HTTP API**. Se despliega con CloudFormation/SAM
   (`template.yaml`).
-  - Datos: `perfiles.json` y `box.json` en **S3**.
+  - Datos: `perfiles.json` en **S3**.
   - Registros del equipo (eventos, revisiones, contactos, decisiones, citas, gestión, ajustes de orden, novedades e
     importaciones) en **DynamoDB**, con `pk=id_paciente` y `sk=tipo#fecha` (se guarda todo el historial).
   - **Textract** lee fotos; **Bedrock** (`us.anthropic.claude-sonnet-5`) redacta explicaciones. No enviar `temperature`:
@@ -159,21 +158,20 @@ y corre sin servidores propios en AWS (Lambda, API Gateway, DynamoDB, S3, Textra
 
 | Archivo | Qué contiene |
 |---|---|
-| `lambda/app.py` | Todas las rutas y la lógica de negocio: enriquecer pacientes, gestión, ajustes manuales, KPIs, informes, RUT |
+| `lambda/app.py` | Solo el enrutador HTTP. La lógica está en `datos.py`, `catalogo.py`, `lista.py`, `acciones.py`, `ingreso.py`, `lectura_informe.py`, `indicadores.py` y `evaluacion_ia.py` |
 | `lambda/puntaje.py` | Motor de reglas |
 | `lambda/informe.py`, `lambda/modelos.py` | Lectura de informes (Textract + reglas) y modelos Pydantic |
 | `lambda/importar.py` | Importación de Excel/CSV solo con la librería estándar |
 | `lambda/explicar.py` | Explicación con Bedrock, o con plantilla si no hay modelo |
 | `lambda/local_server.py` | Servidor local (puerto 3001) |
-| `front/src/App.jsx` | Toda la interfaz |
+| `front/src/App.jsx` | Encabezado, navegación y estado compartido; cada pantalla está en `pantallas/` y la ficha en `ficha/` |
 | `front/src/excel.js` | Genera .xlsx reales en el navegador, sin librerías |
 | `front/src/api.js` | Llamadas a la API (agrega `usuario` a cada POST) |
 | `contrato.md` | **Contrato de la API y del JSON. No cambiar campos sin avisar al equipo.** |
-| `tests/test_api.py` | 54 tests (estilo pytest) |
+| `tests/` | 131 tests (estilo pytest) |
 | `scripts/deploy_aws.ps1` | Publica backend, datos y página |
 | `scripts/limpiar_demo.py` | Borra lo registrado desde la app (deja la demo en su estado inicial) |
 | `scripts/validar_priorizacion.py` | Validación con fallecidos y eventos graves |
-| `scripts/generar_mock.py` | Regenera `mock.json` |
 
 ## 6. Rutas principales de la API (el detalle está en `contrato.md`)
 
@@ -191,11 +189,10 @@ y corre sin servidores propios en AWS (Lambda, API Gateway, DynamoDB, S3, Textra
 | `POST /pacientes/{id}/contacto` | Llamada: `citado`, `derivado_urgencia`, `contactado` o `no_contesta` |
 | `POST /pacientes/{id}/decision` | Decisión clínica: `citar_prioritario`, `derivar_urgencia`, `adelantar_control` o `mantener`. `responsable` es obligatorio |
 | `POST /pacientes/{id}/novedad` | Comorbilidad, cambio de diagnóstico, datos de riesgo, fallecimiento o atendido |
-| `GET /kpis` | Reevaluación, trabajo pendiente, espera prolongada, citas por estado, contactabilidad, ajustes manuales y kappa con su n |
+| `GET /kpis` | Reevaluación, trabajo pendiente, espera prolongada, contactabilidad, ajustes manuales y kappa con su n |
 | `POST /importar`, `GET /plantillas/{tabla}` | Carga de Excel/CSV |
 | `GET /catalogo` | Diagnósticos, comunas, previsiones, motivos y otros valores para los formularios |
 | `GET /health` | Estado de la API: `fecha_hoy`, `modo`, `datos_hasta`, `registro_al`, `datos: "sinteticos"` |
-| `GET /boxes`, `GET /disponible`, `POST /pacientes/{id}/cita` | Gestión de box (siguen funcionando, pero ya no están en el menú) |
 
 ## 7. Pantallas del front
 - **Lista de espera** (página principal): simple, como una planilla. Columnas: N°, Nombre, RUT/ID, Edad, Sexo, Comuna,
@@ -230,7 +227,7 @@ y corre sin servidores propios en AWS (Lambda, API Gateway, DynamoDB, S3, Textra
 - Dataset **sintético** del hospital: 500 pacientes, 7 especialidades, registro al 2026-10-13 (último dato clínico
   2026-10-10). El archivo principal es `data/perfiles.json`, con un objeto por paciente que incluye `lista_espera`,
   `eventos_clinicos`, `mediciones` y `citaciones`. No trae RUT.
-- **`data/` nunca va al repo** (está en `.gitignore`), igual que los CSV, `box.json` y `.env`. Los dos archivos de datos se
+- **`data/` nunca va al repo** (está en `.gitignore`), igual que los CSV y `.env`. Los dos archivos de datos se
   pasan por fuera de GitHub (Drive).
 - La app publicada **no tiene autenticación**: no se deben subir datos reales de pacientes. Cualquiera con el link puede
   registrar cosas: antes de una demo, correr `python scripts/limpiar_demo.py --borrar`.
@@ -278,10 +275,9 @@ python scripts\limpiar_demo.py --borrar   # borra todo
 - **No agregues librerías nuevas sin preguntar.**
 - Explica brevemente cada cambio: el equipo tiene que poder defender el código en la pre-evaluación técnica.
 - No cambies los campos de `contrato.md` sin avisar.
-- Después de cambiar algo: corre los tests y compila el front (`npx vite build`). Si cambió el motor, regenera el mock
-  (`python scripts/generar_mock.py data`).
+- Después de cambiar algo: corre los tests y compila el front (`npx vite build`).
 - Para PowerShell 5.1: no uses `&&`; escribe el YAML **sin BOM**; arma los zip con `/` y no con `\`.
-- Trabajen en ramas y junten con Pull Request: `App.jsx` es un archivo grande y dos personas editándolo a la vez chocan.
+- Trabajen en ramas y junten con Pull Request: cada pantalla está en su archivo, así que dos personas pueden trabajar en pantallas distintas sin chocar.
 
 ## 11. Historial reciente
 **14-10:** una revisión externa criticó la primera versión y se corrigió (commit `6d07669`): fecha real de Chile y franja

@@ -79,7 +79,6 @@ Resources:
         Variables:
           BUCKET: !Ref DataBucket
           PERFILES_KEY: perfiles.json
-          BOX_KEY: box.json
           TABLE: !Ref RegistrosTable
           MODEL_ID: !Ref ModelId
           FECHA_REFERENCIA: hoy  # fecha real de Chile; AAAA-MM-DD para simular
@@ -116,7 +115,6 @@ Resources:
         Variables:
           BUCKET: !Ref DataBucket
           PERFILES_KEY: perfiles.json
-          BOX_KEY: box.json
           TABLE: !Ref RegistrosTable
           MODEL_ID: !Ref ModelId
           FECHA_REFERENCIA: hoy
@@ -145,7 +143,7 @@ Outputs:
     Description: URL de la API (poner en VITE_API_URL del front)
     Value: !Sub "https://${Api}.execute-api.${AWS::Region}.amazonaws.com"
   BucketName:
-    Description: Bucket donde subir perfiles.json y box.json
+    Description: Bucket donde subir perfiles.json
     Value: !Ref DataBucket
   TableName:
     Value: !Ref RegistrosTable

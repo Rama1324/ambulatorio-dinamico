@@ -9,7 +9,6 @@ RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 os.environ["LOCAL"] = "1"; os.environ.setdefault("DATA_DIR", os.path.join(RAIZ, "data")); os.environ.pop("MODEL_ID", None)
 sys.path.insert(0, os.path.join(RAIZ, "lambda"))
 import app  # noqa: E402
-import lector_documento as ld  # noqa: E402
 import puntaje  # noqa: E402
 import rubrica  # noqa: E402
 

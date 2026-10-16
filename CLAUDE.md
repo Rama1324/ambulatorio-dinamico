@@ -29,7 +29,7 @@ Pacientes de demo: 00002 (salta del puesto 312 al 18 tras urgencia + hospitaliza
 ## Stack
 - `front/`: React + Vite + framer-motion + Tailwind (CDN). Hosting en AWS Amplify (deploy manual con `scripts/deploy_aws.ps1`).
 - `lambda/`: Python 3.12 (única dependencia: pydantic). `puntaje.py` = motor de priorización con reglas oficiales (ver docs/criterios_oficiales.md).
-- AWS: Amplify → API Gateway → Lambda → S3 (perfiles.json, box.json) + DynamoDB (eventos, revisiones, contactos, decisiones, citas, novedades, importaciones) + Textract (fotos de informes) + Bedrock (redactar explicaciones; respaldo opcional al leer informes).
+- AWS: Amplify → API Gateway → Lambda → S3 (perfiles.json) + DynamoDB (eventos, revisiones, contactos, decisiones, gestión, ajustes, evaluaciones, novedades, importaciones) + Textract (fotos de informes) + Bedrock (redactar explicaciones; respaldo opcional al leer informes).
 - `FECHA_REFERENCIA=hoy` en la Lambda → fecha real de Chile; `AAAA-MM-DD` para simular.
 - Contrato de la API en `contrato.md`. **No cambiar campos sin avisar al equipo.**
 - Contexto completo para otro asistente: `docs/CONTEXTO_PARA_CLAUDE.md`.

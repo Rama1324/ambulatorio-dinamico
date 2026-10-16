@@ -157,7 +157,7 @@ def main():
     dur = time.perf_counter() - t0
 
     # brazo R: rúbrica respondida por código
-    r_cats, r_mov = [], 0
+    r_cats = []
     for p in activos:
         dx = decisor.kb_diagnostico(kb, p["lista_espera"]["diagnostico_cie10"])
         resp = rubrica.RespuestaRubrica.model_validate(rubrica.respuesta_determinista(rubrica.historial(p, corte), dx))
@@ -308,7 +308,7 @@ def escribir_md(r, ejemplos):
         "## Regla de decisión", "",
         "Volver a `reglas` si E+F: (1) no supera a A por ≥ 0,10 de κ contra médicos; (2) es inestable en más del 10 % de los casos; "
         "o (3) produce algún subtriage grave.", "",
-        f"- (1) **No evaluable sin etiquetas médicas.**",
+        "- (1) **No evaluable sin etiquetas médicas.**",
         f"- (2) Inestabilidad: {inestable_pct} % → {'cumple' if inestable_pct <= 10 else 'NO cumple'}.",
         f"- (3) Subtriage frente a A: {v['E+F']['bajan']} pacientes bajan → {'cumple' if v['E+F']['bajan'] == 0 else 'NO cumple'} "
         "(los controles impiden bajar sin un humano).", "",

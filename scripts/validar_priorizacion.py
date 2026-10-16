@@ -64,8 +64,7 @@ print("   (los eventos agudos llegan sin aviso: la lista los recoge en cuanto se
 print("3. Fuentes → reglas")
 for f, uso in [("pacientes.csv", "edad (GES), fallecimiento → egreso causal 9"),
                ("lista_espera.csv", "prioridad inicial (categoría base), CIE-10 (tabla HLF, GES, Charlson), fecha de ingreso (antigüedad > 1 año, llegada), estado"),
-               ("eventos_clinicos.csv", "descompensación → fila 'descompensada' tabla HLF, descompensación grave (evaluar en 72 h), LACE (A, E), revisión sugerida"),
+               ("eventos_clinicos.csv", "descompensación → fila 'descompensada' tabla HLF, descompensación grave (revisar prioridad), LACE (A, E), revisión sugerida"),
                ("mediciones.csv", "última medición fuera de rango"),
-               ("citaciones.csv", "2 inasistencias consecutivas (causal 8), primera atención → sale de la lista"),
-               ("agenda_box.csv", "horas libres por box y día (agenda de referencia)")]:
+               ("citaciones.csv", "2 inasistencias consecutivas (causal 8), primera atención → sale de la lista")]:
     print(f"   {f:22s} {uso}")

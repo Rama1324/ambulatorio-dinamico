@@ -41,13 +41,6 @@ def test_riesgo_vital_00002():
     assert p["riesgo_vital"] and p["razones"][0]["factor"] == "riesgo_vital"
     assert all(q["riesgo_vital"] for q in d["pacientes"][:p["posicion"]] if q["categoria"] == "alta")
 
-def test_box_asigna_con_motivo_y_alternativa():
-    _, d = call("GET", "/boxes", {"fecha_corte": "2026-10-13", "especialidad": "Cardiología"})
-    e = d["especialidades"][0]
-    asignados = [p for a in e["asignaciones"] for p in a["pacientes"]]
-    assert asignados and all(p["motivo"] for p in asignados)
-    assert e["alternativa"]["por_que_despues"]
-
 def test_deterioro_agudo_sube_por_tabla_oficial():
     _, antes = call("GET", "/pacientes", {"fecha_corte": "2026-07-01"})
     _, despues = call("GET", "/pacientes", {"fecha_corte": "2026-08-10"})
@@ -170,11 +163,9 @@ def test_explicar_plantilla():
     s, d = call("POST", "/pacientes/PAC-HLF-00002/explicar", body={"fecha_corte": "2026-08-10"})
     assert s == 200 and "validación clínica" in d["explicacion_ia"] and "Angina inestable" in d["explicacion_ia"]
 
-def test_detalle_y_boxes():
+def test_detalle():
     s, d = call("GET", "/pacientes/PAC-HLF-00001")
     assert s == 200 and d["mediciones"]
-    s, d = call("GET", "/boxes")
-    assert s == 200 and d["especialidades"] and d["especialidades"][0]["sugeridos"]
 
 def test_ingresar_paciente_nuevo():
     s, cat = call("GET", "/catalogo")
@@ -306,7 +297,6 @@ def test_gestion_responsable_y_seguimiento():
     assert k["trabajo_pendiente"]["seguimiento_vencido"] >= 1 and k["espera"]["mas_de_1_anio"] >= 1
 
 def test_bug_atendido_respeta_fecha_de_corte():
-    import json as _j
     perfs = app.perfiles()
     p = next(x for x in perfs.values() if x["lista_espera"]["estado"] == "atendido")
     fa = app.puntaje.fecha_atencion(p)
@@ -345,58 +335,12 @@ def test_grupo_proteccion_ordena_despues_de_lace():
     q = fila(d, ultimo["id_paciente"])
     assert q["grupo_proteccion"] == "PRAIS" and q["acg"] == "G3" and q["posicion"] < ultimo["posicion"]
 
-def test_box_horas_distintas_por_paciente():
-    _, b = call("GET", "/boxes", {"fecha_corte": "2026-10-13"})
-    for e in b["especialidades"]:
-        for a in e["asignaciones"]:
-            horas = [p["hora"] for p in a["pacientes"]]
-            assert len(horas) == len(set(horas)), f'{a["id_box"]} repite horas: {horas}'
-            ini, fin = a["bloque"].split("-")
-            assert all(ini <= h < fin for h in horas)
-            assert all(p["hora"] < p["hora_fin"] <= fin for p in a["pacientes"])   # cada hora tiene inicio < término
-    assert all(v["hora"] for v in b["cupo_por_paciente"].values())
-
-def test_citar_reserva_la_hora():
-    q = {"fecha_corte": "2026-10-13", "especialidad": "Gastroenterología"}
-    _, b = call("GET", "/boxes", q)
-    a = next(x for e in b["especialidades"] for x in e["asignaciones"] if len(x["pacientes"]) >= 2)
-    p1, p2 = a["pacientes"][0], a["pacientes"][1]
-    s, r = call("POST", f"/pacientes/{p1['id_paciente']}/contacto", body={"resultado": "citado", "fecha_corte": "2026-10-13",
-                "hora": p1["hora"], "hora_fin": p1["hora_fin"], "id_box": a["id_box"]})
-    assert s == 200 and r["contacto"]["hora"] == p1["hora"]
-    s, r = call("POST", f"/pacientes/{p2['id_paciente']}/contacto", body={"resultado": "citado", "fecha_corte": "2026-10-13",
-                "hora": p1["hora"], "id_box": a["id_box"]})
-    assert s == 409                                                     # la misma hora no se reserva dos veces
-    _, b2 = call("GET", "/boxes", q)
-    a2 = next(x for e in b2["especialidades"] for x in e["asignaciones"] if x["id_box"] == a["id_box"])
-    fila1 = next(p for p in a2["pacientes"] if p["id_paciente"] == p1["id_paciente"])
-    assert fila1["citado"] and fila1["hora"] == p1["hora"] and a2["libres_sin_citar"] == a["libres"] - 1
-    assert [p["hora"] for p in a2["pacientes"]].count(p1["hora"]) == 1   # nadie más recibe esa hora
-    _, d = call("GET", "/disponible", {**q, "cupos": "40"})
-    assert p1["id_paciente"] not in [p["id_paciente"] for p in d["pacientes"]]   # el médico no lo vuelve a proponer
-
 def test_no_contesta_cuenta_intentos():
     _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
     p = next(x for x in d["pacientes"] if x["contactar_hoy"] and not x["contacto"])
     for _ in range(2):
         s, r = call("POST", f"/pacientes/{p['id_paciente']}/contacto", body={"resultado": "no_contesta", "fecha_corte": "2026-10-13"})
     assert r["paciente"]["contacto"]["intentos_sin_respuesta"] == 2 and r["paciente"]["contactar_hoy"]
-
-def test_medico_con_horas_libres():
-    s, d = call("GET", "/disponible", {"fecha_corte": "2026-10-13", "especialidad": "Cardiología", "desde": "14:00", "hasta": "17:00"})
-    assert s == 200 and d["duracion_min"] > 0 and d["cupos"] == 180 // d["duracion_min"]
-    assert d["pacientes"][0]["hora"] == "14:00" and len(d["pacientes"]) == d["cupos"]
-    _, b = call("GET", "/boxes", {"fecha_corte": "2026-10-13", "especialidad": "Cardiología"})
-    citados = {pid for pid, c in b["cupo_por_paciente"].items() if c["citado"]}
-    assert not set(p["id_paciente"] for p in d["pacientes"]) & citados       # no repite a quien ya tiene cita reservada
-    propuestos = {pid for pid, c in b["cupo_por_paciente"].items() if not c["citado"]}
-    assert all(p.get("propuesto_en_box") for p in d["pacientes"] if p["id_paciente"] in propuestos)   # propuesta rotulada
-    _, l = call("GET", "/pacientes", {"fecha_corte": "2026-10-13", "especialidad": "Cardiología"})
-    orden = [p["id_paciente"] for p in l["pacientes"] if p["id_paciente"] not in citados]
-    assert [p["id_paciente"] for p in d["pacientes"]] == orden[:d["cupos"]]                   # respeta el orden de la lista
-    s, d = call("GET", "/disponible", {"especialidad": "Cardiología", "cupos": "5"})
-    assert len(d["pacientes"]) == 5 and d["reservas"] and d["reservas"][0]["por_que_despues"]
-    assert call("GET", "/disponible", {})[0] == 400
 
 def test_validaciones_de_entrada():
     pid = "PAC-HLF-00003"
@@ -407,9 +351,7 @@ def test_validaciones_de_entrada():
                                           "fecha_evento": "2030-01-01", "fecha_corte": "2026-10-13"})[0] == 400
     assert call("POST", f"/pacientes/{pid}/novedad", body={"tipo": "fallecimiento", "fecha": "2031-01-01"})[0] == 400
     assert call("POST", f"/pacientes/{pid}/novedad", body={"tipo": "fallecimiento", "fecha": "13/10/2026"})[0] == 400
-    assert call("POST", f"/pacientes/{pid}/contacto", body={"resultado": "citado", "hora": "25:99"})[0] == 400
-    assert call("GET", "/disponible", {"especialidad": "Cardiología", "desde": "14", "hasta": "x"})[0] == 400
-    assert call("GET", "/disponible", {"especialidad": "Cardiología", "cupos": "muchos"})[0] == 400
+    assert call("POST", f"/pacientes/{pid}/contacto", body={"resultado": "otro"})[0] == 400
 
 def test_importar_hospitalizacion_sin_severidad_cuenta():
     import base64
@@ -445,26 +387,6 @@ def test_decision_clinica_cierra_la_alerta():
     _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
     assert fila(d, pid)["contactar_hoy"] and fila(d, pid)["evaluacion"]["estado"] == "pendiente"
 
-def test_estados_de_cita():
-    q = {"fecha_corte": "2026-10-13", "especialidad": "Neurología"}
-    _, b = call("GET", "/boxes", q)
-    a = next(x for e in b["especialidades"] for x in e["asignaciones"] if len(x["pacientes"]) >= 2)
-    p1, p2 = a["pacientes"][0], a["pacientes"][1]
-    assert p1["estado_cita"] == "propuesta"
-    assert call("POST", f"/pacientes/{p1['id_paciente']}/cita", body={"estado": "confirmada", "fecha_corte": "2026-10-13"})[0] == 404
-    call("POST", f"/pacientes/{p1['id_paciente']}/contacto", body={"resultado": "citado", "fecha_corte": "2026-10-13",
-         "hora": p1["hora"], "hora_fin": p1["hora_fin"], "id_box": a["id_box"]})
-    s, r = call("POST", f"/pacientes/{p1['id_paciente']}/cita", body={"estado": "confirmada", "fecha_corte": "2026-10-13"})
-    assert s == 200 and r["cita"]["estado_cita"] == "confirmada"
-    _, b = call("GET", "/boxes", q)
-    e = b["especialidades"][0]
-    assert e["conteo_citas"]["confirmada"] >= 1 and b["cupo_por_paciente"][p1["id_paciente"]]["estado_cita"] == "confirmada"
-    # cancelar libera la hora: ahora otro paciente puede reservarla
-    call("POST", f"/pacientes/{p1['id_paciente']}/cita", body={"estado": "cancelada", "fecha_corte": "2026-10-13"})
-    s, _ = call("POST", f"/pacientes/{p2['id_paciente']}/contacto", body={"resultado": "citado", "fecha_corte": "2026-10-13",
-                "hora": p1["hora"], "hora_fin": p1["hora_fin"], "id_box": a["id_box"]})
-    assert s == 200
-
 def test_kpis_de_resultado():
     pid = "PAC-HLF-00004"
     call("POST", "/eventos", body={"id_paciente": pid, "tipo_evento": "visita_urgencia", "subtipo": "triage ESI 2", "fecha_corte": "2026-10-13"})
@@ -473,7 +395,7 @@ def test_kpis_de_resultado():
     r = k["reevaluacion"]
     assert r["evaluados"] >= 1 and r["mediana_horas"] is not None and "meta_horas" not in r
     assert r["descompensados_en_lista"] == r["evaluacion_pendiente"] + r["evaluacion_hecha"]
-    assert {"propuestas_sin_reservar", "reservada", "confirmada", "horas_recuperadas"} <= set(k["citas"])
+    assert "citas" not in k   # sin gestión de box
     assert k["contactabilidad"]["intentos"] >= k["contactabilidad"]["efectivos"]
     c = k["concordancia"]
     assert c["n_recomendado"] == 50 and c["suficiente"] == (c["revisiones"] >= 50)
@@ -484,12 +406,6 @@ def test_ges_y_equivalencias_se_informan_para_verificar():
     assert g["ges"]["verificar"] and any("posible incumplimiento" in r["valor"] for r in g["razones"])
     k = next((p for p in d["pacientes"] if p["diagnostico_cie10"] == "K70" and p["estado_clinico"] == "descompensado"), None)
     assert k is None or any("equivalencia usada" in r["valor"] for r in k["razones"] if r["factor"] == "tabla_oficial")
-
-def test_agenda_de_referencia_despues_del_registro():
-    _, b = call("GET", "/boxes", {"fecha_corte": "2026-10-16"})
-    assert b["dia_agenda"] == "2026-10-13" and b["agenda_referencia"]
-    _, b = call("GET", "/boxes", {"fecha_corte": "2026-10-13"})
-    assert not b["agenda_referencia"]
 
 def test_usuario_queda_en_el_registro():
     s, r = call("POST", "/pacientes/PAC-HLF-00005/revision", body={"accion": "confirmar", "fecha_corte": "2026-10-13", "usuario": "Dra. Soto, cardiología"})

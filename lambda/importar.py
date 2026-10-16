@@ -1,9 +1,9 @@
-"""Importación de Excel (.xlsx) o CSV al formato del sistema (perfiles + agenda de box).
+"""Importación de Excel (.xlsx) o CSV al formato del sistema (perfiles de pacientes).
 
 Sin librerías externas: un .xlsx es un ZIP con XML, se lee con zipfile + xml.etree de Python.
 1) Lee cada archivo (cada hoja de un Excel es una tabla).
 2) Reconoce los encabezados aunque vengan con otro nombre, mayúsculas, tildes o espacios.
-3) Detecta qué tabla es (pacientes, lista de espera, eventos, mediciones, citaciones, agenda de box).
+3) Detecta qué tabla es (pacientes, lista de espera, eventos, mediciones, citaciones).
 4) Normaliza fechas, booleanos y categorías, y valida cada fila contra el vocabulario del registro.
 Devuelve un informe por tabla (filas válidas, errores con N° de fila, columnas mapeadas) y las filas listas.
 """
@@ -31,9 +31,6 @@ TABLAS = {
                    "campos": ["id_paciente", "fecha_medicion", "tipo_medicion", "valor", "unidad", "fuera_de_rango"]},
     "citaciones": {"nombre": "Citaciones", "requeridas": ["id_paciente", "fecha_cita", "estado_cita"],
                    "campos": ["id_paciente", "id_cita", "id_box", "fecha_cita", "especialidad", "estado_cita", "minutos_atencion_real"]},
-    "agenda_box": {"nombre": "Agenda de box", "requeridas": ["id_box", "fecha", "especialidad", "capacidad_cupos"],
-                   "campos": ["id_box", "fecha", "especialidad", "bloque_inicio", "bloque_fin", "capacidad_cupos", "cupos_usados",
-                              "minutos_sobretiempo"]},
 }
 
 # Otros nombres con que suelen venir las columnas (ya normalizados: minúsculas, sin tildes, "_" en vez de espacios)
@@ -75,11 +72,6 @@ SINONIMOS = {
     "fecha_cita": ["fecha", "f_cita", "fecha_hora_cita", "fecha_citacion"],
     "estado_cita": ["estado", "resultado_cita", "asistencia"],
     "minutos_atencion_real": ["minutos_atencion", "duracion", "duracion_min"],
-    "bloque_inicio": ["inicio", "hora_inicio"],
-    "bloque_fin": ["fin", "termino", "hora_fin", "hora_termino"],
-    "capacidad_cupos": ["capacidad", "cupos", "cupos_totales", "cupos_ofertados"],
-    "cupos_usados": ["usados", "ocupados", "cupos_ocupados", "atendidos"],
-    "minutos_sobretiempo": ["sobretiempo", "atraso", "minutos_atraso"],
 }
 
 VOCAB = {
@@ -227,7 +219,7 @@ def a_id_paciente(v):
 
 
 CONVERSORES = {
-    "edad": a_entero, "capacidad_cupos": a_entero, "cupos_usados": a_entero, "minutos_sobretiempo": a_entero,
+    "edad": a_entero,
     "minutos_atencion_real": a_entero, "valor": a_numero,
     "fallecido": a_bool, "fuera_de_rango": a_bool,
     "fecha_defuncion": a_fecha, "fecha_ingreso_lista": a_fecha, "fecha_evento": a_fecha, "fecha_medicion": a_fecha,
@@ -338,10 +330,10 @@ TIPO_MEDICION = {"presion_sistolica": "presion_sistolica", "pas": "presion_sisto
 
 
 def combinar(datos, existentes, catalogo):
-    """Une lo importado con los perfiles existentes (sin duplicar). Devuelve (perfiles_tocados, agenda, resumen, avisos)."""
+    """Une lo importado con los perfiles existentes (sin duplicar). Devuelve (perfiles_tocados, resumen, avisos)."""
     import copy
     perfs, avisos = {}, []
-    res = {"pacientes_nuevos": 0, "pacientes_actualizados": 0, "eventos": 0, "mediciones": 0, "citaciones": 0, "bloques_agenda": 0}
+    res = {"pacientes_nuevos": 0, "pacientes_actualizados": 0, "eventos": 0, "mediciones": 0, "citaciones": 0}
 
     def perfil(pid, crear=False):
         if pid in perfs:
@@ -428,15 +420,7 @@ def combinar(datos, existentes, catalogo):
             lambda r, p: {"id_cita": r.get("id_cita") or "", "id_box": r.get("id_box") or "", "fecha_cita": r["fecha_cita"],
                           "especialidad": r.get("especialidad") or p["lista_espera"].get("especialidad", ""),
                           "estado_cita": r["estado_cita"], "minutos_atencion_real": r.get("minutos_atencion_real")})
-
-    agenda = []
-    for r in datos["agenda_box"]:
-        agenda.append({"fecha": r["fecha"], "id_box": r["id_box"], "especialidad": r["especialidad"],
-                       "bloque": f'{r.get("bloque_inicio") or ""}-{r.get("bloque_fin") or ""}'.strip("-"),
-                       "capacidad": r["capacidad_cupos"], "usados": r.get("cupos_usados") or 0,
-                       "sobretiempo_min": r.get("minutos_sobretiempo") or 0})
-    res["bloques_agenda"] = len(agenda)
-    return perfs, agenda, res, avisos
+    return perfs, res, avisos
 
 
 def plantilla_csv(tabla):
@@ -448,6 +432,5 @@ def plantilla_csv(tabla):
         "eventos_clinicos": ["PAC-0001", "EV-0001", "02-10-2026", "hospitalizacion", "ingreso hospitalario", "grave", "Descompensación IC"],
         "mediciones": ["PAC-0001", "02-10-2026", "presion_sistolica", "165", "mmHg", "si"],
         "citaciones": ["PAC-0001", "CT-0001", "BOX-12", "21-09-2026", "Cardiología", "no_asistio", ""],
-        "agenda_box": ["BOX-12", "13-10-2026", "Cardiología", "08:30", "13:30", "10", "7", "0"],
     }
     return "﻿" + ";".join(TABLAS[tabla]["campos"]) + "\n" + ";".join(ejemplos[tabla]) + "\n"

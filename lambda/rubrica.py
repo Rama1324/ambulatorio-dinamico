@@ -11,7 +11,7 @@ import json
 import os
 import time
 import unicodedata
-from typing import Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, Field, ValidationError
 

@@ -3,8 +3,8 @@
 ## 0. Estructura
 ```
 ambulatorio/
-├── data/            ← CSV del hospital + perfiles.json + box.json (NO van a git)
-├── lambda/          ← app.py (API), puntaje.py (reglas), explicar.py (Bedrock), local_server.py
+├── data/            ← CSV del hospital + perfiles.json (NO van a git)
+├── lambda/          ← app.py (enrutador) + módulos por dominio (ver README), puntaje.py (reglas), local_server.py
 ├── front/           ← React + Vite
 ├── tests/           ← pytest
 ├── template.yaml    ← infraestructura AWS SAM
@@ -14,8 +14,7 @@ ambulatorio/
 ## 1. Probar TODO en local (sin AWS) — 5 min
 Terminal 1 (raíz del proyecto):
 ```powershell
-python scripts/generar_box.py data          # crea data/box.json (una vez)
-pip install pytest; python -m pytest -q tests   # deben pasar 9 tests
+pip install pytest; python -m pytest -q tests   # deben pasar los 131 tests
 $env:LOCAL="1"; $env:DATA_DIR="data"; python lambda/local_server.py
 ```
 Terminal 2:
@@ -25,8 +24,8 @@ cd front
 npm install
 npm run dev
 ```
-Abrir http://localhost:5173 → debe decir **"API conectada"**. Probar: elegir paciente → Explicar con IA → Simular evento → Confirmar → pestaña Uso de box.
-(Sin `.env.local` el front corre en modo mock: solo lectura.)
+Abrir http://localhost:5173 → debe decir **"API conectada"**. Probar: elegir paciente → Explicar con IA → Simular evento → Confirmar.
+(El front necesita la API: sin `.env.local` no carga la lista.)
 
 ## 2. Credenciales AWS (una persona, la que deploya)
 Instalar **AWS CLI v2** y **AWS SAM CLI** (instaladores MSI oficiales de AWS). Luego:
@@ -58,7 +57,6 @@ sam deploy --guided
 Al final muestra **Outputs**: `ApiUrl` y `BucketName`. Subir los datos:
 ```powershell
 aws s3 cp data/perfiles.json s3://<BucketName>/perfiles.json
-aws s3 cp data/box.json      s3://<BucketName>/box.json
 curl.exe "<ApiUrl>/health"     # {"ok": true, "pacientes": 500}
 ```
 Para redeployar cambios de la Lambda: `sam build; sam deploy`.

@@ -29,7 +29,7 @@ if (-not $SoloFront) {
 $api = & $aws cloudformation describe-stacks --stack-name $Stack --profile $Perfil --region $Region --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text
 $bucket = & $aws cloudformation describe-stacks --stack-name $Stack --profile $Perfil --region $Region --query "Stacks[0].Outputs[?OutputKey=='BucketName'].OutputValue" --output text
 if (-not $SoloFront) {
-    # 2) Datos (no van a git): perfiles.json y box.json al bucket privado
+    # 2) Datos (no van a git): perfiles.json al bucket privado
     & $aws s3 cp "$raiz\data\perfiles.json" "s3://$bucket/perfiles.json" --profile $Perfil --region $Region | Out-Null
     & $aws s3 cp "$raiz\data\box.json" "s3://$bucket/box.json" --profile $Perfil --region $Region | Out-Null
     $salud = curl.exe -s "$api/health"

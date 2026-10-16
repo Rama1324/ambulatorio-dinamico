@@ -1,6 +1,6 @@
 """Deja la demo publicada en su estado inicial: borra de DynamoDB todo lo registrado desde la app
 (eventos, revisiones, llamadas, decisiones, citas, novedades, pacientes ingresados e importaciones).
-No toca perfiles.json ni box.json (están en S3).
+No toca perfiles.json (está en S3).
 
 Uso, desde la raíz del repo (perfil AWS "hack" con credenciales vigentes):
   python scripts/limpiar_demo.py            # muestra cuántos registros hay, no borra

@@ -5,7 +5,7 @@ flowchart LR
   U[Gestor / equipo clínico] -->|navegador| A[AWS Amplify Hosting<br/>React + Vite]
   A -->|HTTPS| G[API Gateway HTTP API]
   G --> L[AWS Lambda<br/>Python 3.12]
-  L -->|lee| S[(Amazon S3<br/>perfiles.json, box.json)]
+  L -->|lee| S[(Amazon S3<br/>perfiles.json)]
   L -->|eventos nuevos y revisiones| D[(Amazon DynamoDB)]
   L -->|explicación en lenguaje clínico| B[Amazon Bedrock<br/>Converse API]
 ```
