@@ -174,6 +174,17 @@ export function Ficha({ p, total, detalle, fecha, demo, onCambio, onAviso, onDes
 
       {tab === "registrar" && (
         <>
+          {demo && (
+            <Caja titulo="Simular evento (demostración)" className="border-ambar/50">
+              <div className="flex flex-wrap gap-2">
+                <select value={tipoEv} onChange={(e) => setTipoEv(e.target.value)} className="flex-1 min-w-0 h-9 px-2 border border-outline-variant rounded bg-surface-container-lowest">
+                  {Object.entries(EVENTOS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                </select>
+                <button onClick={() => registrarEvento(EVENTOS[tipoEv], "Evento simulado")} disabled={cargando} className="shrink-0 h-9 px-4 rounded bg-ambar text-background font-semibold disabled:opacity-50">Simular</button>
+              </div>
+            </Caja>
+          )}
+          {!demo && <p className="text-[12px] text-on-surface-variant">Para simular un evento en una demostración, marque «Explorar fechas anteriores» arriba a la derecha.</p>}
           <Informe p={p} fecha={fecha} cargando={cargando} onConfirmar={(ev) => registrarEvento(ev, "Evento del informe registrado")} onAviso={onAviso}
             onRegistrado={async (r) => { await onCambio(); onDestacar(p.id_paciente);
               onAviso({ titulo: `La IA leyó el informe y registró: ${r.registrados.map((e) => e.subtipo).join(", ")}. Lista actualizada`, antes: r.posicion_antes, despues: r.posicion_despues, cat: r.paciente?.categoria }); }} />
@@ -184,16 +195,6 @@ export function Ficha({ p, total, detalle, fecha, demo, onCambio, onAviso, onDes
               : { titulo: `${p.nombre_fantasia}: ${r.mensaje}` });
           }} onAviso={onAviso} />
 
-          {demo && (
-            <Caja titulo="Simular evento (demostración)" className="border-ambar/50">
-              <div className="flex gap-2">
-                <select value={tipoEv} onChange={(e) => setTipoEv(e.target.value)} className="flex-1 h-9 px-2 border border-outline-variant rounded bg-surface-container-lowest">
-                  {Object.entries(EVENTOS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-                </select>
-                <button onClick={() => registrarEvento(EVENTOS[tipoEv], "Evento simulado")} disabled={cargando} className="px-4 rounded bg-ambar text-background font-semibold disabled:opacity-50">Simular</button>
-              </div>
-            </Caja>
-          )}
         </>
       )}
 
