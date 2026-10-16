@@ -36,7 +36,8 @@ if (-not $SoloFront) {
     & $aws s3 cp "$raiz\data\perfiles.json" "s3://$bucket/perfiles.json" --profile $Perfil --region $Region | Out-Null
     $salud = curl.exe -s "$api/health"
     if ($salud -notmatch '"ok": true') { throw "La API no responde bien: $salud" }
-    $lista = curl.exe -s "$api/pacientes"   # /health no lee los criterios: la lista sí
+    # /health no lee los criterios: la lista sí (reintenta: la Lambda tarda unos segundos en cambiar de versión)
+    for ($i = 0; $i -lt 6; $i++) { $lista = curl.exe -s "$api/pacientes"; if ($lista -match '"pacientes"') { break }; Start-Sleep 10 }
     if ($lista -notmatch '"pacientes"') { throw "La lista no carga: $($lista.Substring(0, [Math]::Min(300, $lista.Length)))" }
     Write-Host "API OK: $api" -ForegroundColor Green
 }
