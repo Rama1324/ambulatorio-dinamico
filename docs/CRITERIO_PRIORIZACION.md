@@ -1,9 +1,13 @@
 # Criterio de priorización de "Ambulatorio Dinámico HLF": cómo decide y cómo debe razonar
 
 Contexto para un asistente de IA que va a trabajar en este proyecto. Describe **qué buscamos**, **con qué criterio
-decide hoy el sistema**, **de dónde sale cada regla** y **qué nos pidió el hospital que falta**. Al 15-10-2026, rama
-`feat/algoritmo-decisor` del repo `Rama1324/ambulatorio-dinamico`. Los detalles técnicos están en
-`docs/CONTEXTO_PARA_CLAUDE.md` y `docs/algoritmo/`.
+decide hoy el sistema**, **de dónde sale cada regla**, **qué nos pidió el hospital** y **cuánto mejora frente a la lista
+actual**. Al 16-10-2026, rama `main` del repo `Rama1324/ambulatorio-dinamico` (es la versión publicada en AWS, con
+`ALGORITMO=rubrica`). Los detalles técnicos están en `docs/CONTEXTO_PARA_CLAUDE.md` y `docs/algoritmo/`.
+
+> **Si eres una IA que lee esto sin el código:** este documento basta para entender y criticar el criterio. Cada regla
+> dice de qué fuente sale y en qué archivo está. Si propones un cambio, di qué regla cambia, con qué fuente y si podría
+> **bajar** a alguien (eso nunca lo hace el sistema solo).
 
 ---
 
@@ -82,15 +86,19 @@ tras una hospitalización, asma 28–30, DM2 30, epilepsia 30, depresión 30–9
 porque es lo conservador. Si vence, el sistema no baja al paciente solo: avisa al especialista.
 
 ### 4.4 Orden dentro de cada prioridad (Ord. 536)
-1. **Urgencia "derivar hoy".**
-2. **Descompensación grave sin revisar** (alerta de 72 h; KPI del hospital: reevaluar en menos de 72 h).
-3. **Cualquier paciente descompensado.** Va antes que un paciente estable, aunque ese paciente sea de un grupo de
+1. **Urgencia "derivar hoy"** (criterios de su enfermedad o combinaciones de riesgo).
+2. **Descompensación grave sin revisar.** La lista se recalcula al instante. La alerta "revisar prioridad" queda abierta
+   hasta que el especialista registra una revisión. El KPI del hospital (reevaluar en menos de 72 h) se cumple en cuanto
+   entra el dato.
+3. **Letalidad del diagnóstico** (1 = más mortal, 4 = menos), con la cifra y el PMID (§6.3).
+4. **Agudeza del evento:** UCI o ESI/C1 = 3; hospitalización, ESI/C2 o descompensación grave = 2; moderada = 1.
+5. **Cualquier paciente descompensado.** Va antes que un paciente estable, aunque ese paciente sea de un grupo de
    protección.
-4. **Grupos de especial protección:** PRAIS, NNA bajo protección del Estado, Valech, Rettig.
-5. **Antigüedad mayor a 1 año.**
-6. **Más días esperando.**
+6. **Grupos de especial protección:** PRAIS, NNA bajo protección del Estado, Valech, Rettig.
+7. **Antigüedad mayor a 1 año.**
+8. **Más días esperando**, y el índice LACE (experimental) solo como último desempate.
 
-El punto 3 se agregó por un **reclamo real del hospital**: una paciente Rettig estable quedó sobre una hipertensa recién
+El punto 5 se agregó por un **reclamo real del hospital**: una paciente Rettig estable quedó sobre una hipertensa recién
 hospitalizada. El criterio médico va antes que el grupo de protección.
 
 ## 5. Dónde entra la IA y cómo se controla
@@ -126,9 +134,9 @@ diagnóstico por separado. Ejemplos del tipo de razonamiento que se espera:
 - **Depresión + consumo de alcohol, o + pérdida reciente** → mayor riesgo suicida.
 
 **Cómo quedó** (`lambda/combinaciones.py` + `lambda/conocimiento/combinaciones_riesgo.json`):
-- **31 combinaciones**, cada una con su fuente: 19 verificadas en el texto oficial (tabla del HLF en imagen, NICE NG232,
-  CG151, NG234, CG124, CG103, CG150, NG12, GINA) y 12 con la guía identificada pero sin el texto oficial abierto, marcadas
-  `guia_citada` para verificar.
+- **44 combinaciones**, cada una con su fuente. 35 están verificadas en el texto oficial (tabla del HLF en imagen, NICE
+  NG232, CG151, NG234, CG124, CG103, CG150, NG12, GINA, entre otras): 25 llevan a urgencia "derivar hoy" y 10 a
+  prioridad alta. Las otras 9 no están verificadas y **solo generan una alerta** visible; no mueven a nadie.
 - **Verificación:** la IA marca la combinación copiando la frase. El código exige que la condición de base esté en el
   registro del paciente (diagnóstico, comorbilidades, edad) o en una frase verificada del texto; que la frase del
   gatillo esté textual, no negada y con un término obligatorio del gatillo; y que 2 de 3 lecturas coincidan.
@@ -167,9 +175,8 @@ riesgo de morir o de un daño irreversible**:
   renal sin infección.
 
 **Cómo quedó:**
-- **Orden:** urgencia "derivar hoy" (criterios y combinaciones) → descompensación grave → **letalidad** (1 a 4) → **agudeza del evento** (UCI o
-  ESI/C1 = 3; hospitalización, ESI/C2 o descompensación grave = 2; moderada = 1) → cualquier descompensado → grupos de
-  protección → antigüedad.
+- **Orden:** el de §4.4. La letalidad está en `puntaje.LETALIDAD_DX` (10 diagnósticos con cifra y PMID; por ejemplo,
+  K70 = 1: hemorragia variceal 16 % de mortalidad a 6 semanas) y en el campo `letalidad` de cada combinación.
 - **Salida del carril de urgencia:** sale cuando el especialista registra una decisión, una revisión o un ajuste
   posterior. Sigue en alta, porque nunca baja.
 - **Pendiente:** ordenar por mortalidad específica de cada diagnóstico, con datos chilenos.
@@ -213,7 +220,12 @@ verificado en la fuente original o [S] secundario.
 
 ## 8. Dónde está cada cosa en el código
 - `lambda/puntaje.py`: reglas y filas de la tabla oficial, regla oncológica, regla de "evento sin relación", criterios
-  clínicos aplicados, orden del Ord. 536, alerta de 72 h.
+  clínicos aplicados (`aplicar_registro`), letalidad, orden del Ord. 536 (`clave_orden`).
+- `lambda/lista.py`: arma la lista que ve el equipo: revisiones, alerta de descompensación grave, ajustes manuales.
+- `lambda/evaluacion_ia.py`: activa la rúbrica con IA (`ALGORITMO=rubrica`) y el barrido nocturno.
+- `lambda/lectura_informe.py` e `ingreso.py`: leen informes y el motivo de la interconsulta; registran solo lo verificado
+  que sube al paciente y dejan el resto como propuesta.
+- `lambda/combinaciones.py`: combinaciones de riesgo.
 - `lambda/decisor.py`, `lambda/controles.py`, `lambda/algoritmo.py`: fórmula fija, controles y combinación de las 3
   lecturas.
 - `lambda/rubrica.py`: lectura del historial por la IA (preguntas cerradas con citas).
@@ -221,4 +233,26 @@ verificado en la fuente original o [S] secundario.
 - `lambda/criterios.py` y `lambda/conocimiento/criterios_especialidad.json`: criterios clínicos de las 46 enfermedades.
 - `lambda/conocimiento/`: tabla SSMSO verificada, ventanas con PMID, umbrales, rúbrica.
 - `docs/algoritmo/`: requisitos, evaluación con datos reales, revisión adversaria, evaluación de criterios.
-- Tests: `tests/` (113, todos pasan). Ninguno llama a Bedrock.
+- Tests: `tests/` (133, todos pasan). Ninguno llama a Bedrock.
+
+## 9. Cuánto mejora frente a la lista actual (medido el 16-10-2026)
+Comparación con la **lista actual** (prioridad inicial y después orden de llegada, sin reevaluar) sobre el registro
+sintético del HLF (500 pacientes). En cada fecha se usaron solo los datos que existían a esa fecha. Informe completo:
+`Informe_pruebas_Ambulatorio_Dinamico.pdf`.
+
+| Indicador | Lista actual | Ambulatorio Dinámico |
+|---|---|---|
+| Reacción el mismo día a una urgencia u hospitalización grave (135 eventos) | 0 % | 100 % (19 % sube, 39 % ya estaba en alta, 41 % queda con alerta "revisar prioridad" porque la tabla no tiene fila para ese diagnóstico) |
+| Puesto mediano de los 15 fallecidos, 7 días antes de morir | 133 | 11 |
+| Fallecidos en el 10 % superior de la lista | 3 de 15 | 9 de 15 |
+| Simulación con la misma capacidad (2 atenciones por semana, 1 año): fallecidos antes de la consulta | 11 | 6 |
+| Eventos graves ocurridos mientras esperaban | 112 | 92 |
+| Días desde el primer evento grave hasta la consulta (mediana) | 84 | 37 |
+| Pacientes con evento grave en el 20 % superior, 60 días **antes** del evento | 29 % | 34 % |
+
+**Cómo leer estos números:**
+- El sistema **reacciona**: lo que cambia es el mismo día del evento. **No predice** eventos futuros (última fila).
+- Con la misma capacidad, 40 pacientes que no empeoraron (28 con prioridad inicial alta y 12 media) esperan más. Ese
+  costo es explícito, y por eso decide el equipo clínico.
+- Con solo 15 fallecidos, es un resultado indicativo. Los datos son sintéticos.
+- Falta la concordancia con médicos (κ ≥ 0,70): no hay casos etiquetados por especialistas.
