@@ -278,15 +278,15 @@ def test_bug_contacto_apaga_alerta():
     _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
     assert not fila(d, p["id_paciente"])["contactar_hoy"] and fila(d, p["id_paciente"])["riesgo_vital"]   # revisada, sigue priorizada
 
-def test_plazo_72h_corre_desde_que_el_evento_llega():
+def test_sin_plazo_fijo_la_alerta_sigue_pendiente_hasta_que_revisa_el_especialista():
     _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-14"})
     v = [p for p in d["pacientes"] if p["riesgo_vital"] and p["evaluacion"]["estado"] != "evaluada" and p["id_paciente"].startswith("PAC-HLF")
          and not p["evaluacion"]["llego_al_sistema"] > "2026-10-13"]
     assert v and all(p["evaluacion"]["llego_al_sistema"] == "2026-10-13" and p["evaluacion"]["dias_en_revision"] == 1
-                     and p["evaluacion"]["estado"] == "pendiente" for p in v)   # el registro se cargó el 13-10: aún en plazo
+                     and p["evaluacion"]["estado"] == "pendiente" for p in v)   # el registro se cargó el 13-10
     _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-20"})
-    assert all(p["evaluacion"]["estado"] == "atrasada" for p in d["pacientes"] if p["id_paciente"] in {x["id_paciente"] for x in v}
-               and p["evaluacion"]["estado"] != "evaluada")
+    assert all(p["evaluacion"]["estado"] == "pendiente" and p["contactar_hoy"] and "plazo_dias" not in p["evaluacion"]
+               for p in d["pacientes"] if p["id_paciente"] in {x["id_paciente"] for x in v} and p["evaluacion"]["estado"] != "evaluada")
 
 def test_gestion_responsable_y_seguimiento():
     _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
@@ -432,7 +432,7 @@ def test_404():
 def test_decision_clinica_cierra_la_alerta():
     _, d = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
     p = next(x for x in d["pacientes"] if x["contactar_hoy"] and not x["contacto"] and not x["decision"])
-    assert p["evaluacion"]["estado"] in ("pendiente", "atrasada") and p["evaluacion"]["dias_desde_evento"] >= 0
+    assert p["evaluacion"]["estado"] == "pendiente" and p["evaluacion"]["dias_desde_evento"] >= 0
     pid = p["id_paciente"]
     assert call("POST", f"/pacientes/{pid}/decision", body={"decision": "mantener"})[0] == 400        # falta responsable
     assert call("POST", f"/pacientes/{pid}/decision", body={"decision": "otra", "responsable": "Dra. X"})[0] == 400
@@ -471,8 +471,8 @@ def test_kpis_de_resultado():
     call("POST", f"/pacientes/{pid}/decision", body={"decision": "mantener", "responsable": "Dr. Rojas", "fecha_corte": "2026-10-13"})
     _, k = call("GET", "/kpis", {"fecha_corte": "2026-10-13"})
     r = k["reevaluacion"]
-    assert r["evaluados"] >= 1 and r["mediana_horas"] is not None and r["meta_horas"] == 72
-    assert r["descompensados_en_lista"] == r["evaluacion_pendiente"] + r["evaluacion_atrasada"] + r["evaluacion_hecha"]
+    assert r["evaluados"] >= 1 and r["mediana_horas"] is not None and "meta_horas" not in r
+    assert r["descompensados_en_lista"] == r["evaluacion_pendiente"] + r["evaluacion_hecha"]
     assert {"propuestas_sin_reservar", "reservada", "confirmada", "horas_recuperadas"} <= set(k["citas"])
     assert k["contactabilidad"]["intentos"] >= k["contactabilidad"]["efectivos"]
     c = k["concordancia"]

@@ -362,7 +362,7 @@ def _r(pid, **cambios):
 def test_a2_marca_grave_sin_fecha_no_tumba_la_lista():
     r, p = _r("PAC-HLF-00489", riesgo_vital=True, fecha_descompensacion=None, registro_descompensacion=None)
     out = app._enriquecer(r, p, None, None, date(2026, 6, 1))
-    assert out["evaluacion"]["estado"] in ("pendiente", "atrasada")
+    assert out["evaluacion"]["estado"] == "pendiente"
 
 
 def test_a3_a4_senales_del_algoritmo_y_decisiones_humanas():
@@ -443,4 +443,4 @@ def test_descompensado_va_antes_que_grupo_de_proteccion_estable():
     for clave in (decisor.clave_orden_536, puntaje.clave_orden):
         assert [x["id_paciente"] for x in sorted([maria, iris], key=clave)] == ["IRIS", "MARIA"]
     grave = {**iris, "id_paciente": "GRAVE", "riesgo_vital": True}
-    assert sorted([iris, grave], key=decisor.clave_orden_536)[0]["id_paciente"] == "GRAVE"   # la alerta de 72 h sigue primero
+    assert sorted([iris, grave], key=decisor.clave_orden_536)[0]["id_paciente"] == "GRAVE"   # la descompensación grave sigue primero

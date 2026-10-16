@@ -156,7 +156,6 @@ export default function App() {
   const paciente = sel && data.pacientes.find((p) => p.id_paciente === sel);
   const vitales = data.pacientes.filter((p) => p.riesgo_vital);
   const porContactar = vitales.filter((p) => p.contactar_hoy);
-  const atrasadas = vitales.filter((p) => p.evaluacion?.estado === "atrasada").length;
   const altas = data.pacientes.filter((p) => p.categoria === "alta").length;
   const gesVenc = data.pacientes.filter((p) => p.ges?.vencida).length;
   const tiempoReal = info?.modo === "tiempo_real" && !demo;
@@ -241,7 +240,7 @@ export default function App() {
 
         {vista !== "simple" && vista !== "indicadores" && <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-5">
           <Indicador n={data.total} t="Pacientes en espera · ver todos" onClick={() => verLista()} />
-          <Indicador n={porContactar.length} t={`Descompensación grave: revisar prioridad${atrasadas ? ` (${atrasadas} con más de 72 h)` : ""}`} tono={porContactar.length ? "rojo" : null} onClick={() => setVista("hoy")} />
+          <Indicador n={porContactar.length} t="Descompensación grave: revisar prioridad" tono={porContactar.length ? "rojo" : null} onClick={() => setVista("hoy")} />
           <Indicador n={altas} t="Prioridad alta" onClick={() => verLista(() => setFiltroCat("alta"))} />
           <Indicador n={pendientes} t="Pendientes de revisión del especialista" tono={pendientes ? "ambar" : null} onClick={() => verLista(() => setFiltroGestion("pendiente_revision"))} />
           <Indicador n={masDeUnAnio} t="Esperan más de 1 año" onClick={() => verLista(() => { setEsperaLarga(true); setDiasEspera(365); })} />
@@ -329,8 +328,8 @@ export default function App() {
                               <div className="text-[13px] text-on-surface-variant">{p.diagnostico_cie10} {p.diagnostico_texto}</div>
                               <div className="flex flex-wrap gap-1 mt-0.5">
                                 {p.urgencia_hoy && <Marca tono="rojo" title="Cumple una excepción de urgencia de los criterios clínicos: no debe esperar cita electiva">Derivar hoy a urgencia</Marca>}
-                                {p.contactar_hoy && p.riesgo_vital && <Marca tono="rojo" title={`Descompensación grave del ${fmt(p.evaluacion?.fecha_evento)}: su prioridad debe revisarse dentro de 72 h desde que el evento llegó al sistema`}>
-                                  {p.evaluacion?.estado === "atrasada" ? `Revisión atrasada · ${p.evaluacion.dias_en_revision} d` : "Revisar prioridad ≤ 72 h"}</Marca>}
+                                {p.contactar_hoy && p.riesgo_vital && <Marca tono="rojo" title={`Descompensación grave del ${fmt(p.evaluacion?.fecha_evento)}: el especialista debe revisar su prioridad`}>
+                                  Revisar prioridad</Marca>}
                                 {p.riesgo_vital && !p.contactar_hoy && <Marca tono="azul" title={p.evaluacion?.cierre?.texto}>Prioridad revisada</Marca>}
                                 {!p.riesgo_vital && p.estado_clinico === "descompensado" && <Marca tono="rojo">Descompensado</Marca>}
                                 {p.ajuste_manual && <Marca tono="azul" title={`${p.ajuste_manual.motivo_texto}: ${p.ajuste_manual.explicacion} (${p.ajuste_manual.usuario})`}>Ajuste manual</Marca>}
@@ -522,7 +521,7 @@ function Novedad({ p, fecha, onListo, onAviso }) {
 
 // Excel (.xlsx) de la lista tal como se está viendo (mismos filtros), con el fundamento de cada paciente,
 // los ajustes manuales, los egresados y los filtros usados. Ver src/excel.js.
-const EVAL_TXT = { pendiente: "Pendiente (≤ 72 h)", atrasada: "Atrasada (> 72 h)", evaluada: "Evaluada" };
+const EVAL_TXT = { pendiente: "Pendiente de revisión", evaluada: "Revisada" };
 const REV_TXT = { pendiente: "Pendiente", confirmado: "Confirmada", ajustado: "Ajustada", requiere_revision: "Requiere nueva revisión" };
 function exportarExcel(pacientes, fecha, { excluidos = [], filtros = [] } = {}) {
   const lista = [["N°", "N° en su especialidad", "Prioridad", "Prioridad inicial (SIC)", "Paciente", "RUT / ID", "Edad", "Sexo", "Comuna", "Especialidad",
@@ -793,7 +792,7 @@ function Ficha({ p, total, detalle, fecha, esApi, demo, onCambio, onAviso, onDes
           <b>Urgencia revisada</b>{p.urgencia_cerrada.responsable && ` por ${p.urgencia_cerrada.responsable}`}: sale del carril de urgencia y sigue en prioridad alta.</span></div>}
         {p.contactar_hoy && p.riesgo_vital && <div className="mt-3 p-2.5 rounded bg-error-container text-on-error-container text-[14px] flex gap-2"><Icono n="call" className="text-[20px]" /><span>
           <b>Descompensación grave: revisar su prioridad.</b> Evento del {fmt(p.evaluacion?.fecha_evento)}, en el sistema desde el {fmt(p.evaluacion?.llego_al_sistema)}.
-          {p.evaluacion?.estado === "atrasada" ? <b> Atrasada: pasaron más de 72 h sin revisión.</b> : " Plazo: 72 h."} No hay registro posterior de estabilización ni de evaluación; el especialista decide.</span></div>}
+          {" "}No hay registro posterior de estabilización ni de evaluación; el especialista decide.</span></div>}
         {p.riesgo_vital && !p.contactar_hoy && p.evaluacion?.cierre && <div className="mt-3 p-2.5 rounded bg-hlf-claro text-hlf text-[14px] flex gap-2"><Icono n="task_alt" className="text-[20px]" /><span>
           <b>Prioridad revisada: {p.evaluacion.cierre.texto}</b>{p.evaluacion.cierre.responsable && ` · ${p.evaluacion.cierre.responsable}`}{p.decision?.seguimiento && ` · seguimiento ${fmt(p.decision.seguimiento)}`}</span></div>}
         {p.estado_revision === "requiere_revision" && <div className="mt-2 p-2.5 rounded bg-ambar-container text-ambar text-[14px] flex gap-2"><Icono n="rate_review" className="text-[20px]" /><span><b>Requiere nueva revisión:</b> {p.revision_vencida_por} después de la última revisión.</span></div>}
@@ -991,7 +990,7 @@ function EvolucionPaciente({ p, fecha }) {
       v: rz.tabla_oficial.valor.split("→").slice(-1)[0].trim(), d: `${rz.tabla_oficial.valor.split("→")[0].replaceAll('"', "").trim()} · Fuente: ${rz.tabla_oficial.fuente}` });
   }
   if (rz.riesgo_vital) {
-    pasos.push({ icon: "priority_high", rojo: true, t: "Descompensación grave", v: "Su prioridad debe revisarse en 72 h", d: rz.riesgo_vital.fuente });
+    pasos.push({ icon: "priority_high", rojo: true, t: "Descompensación grave", v: "El especialista debe revisar su prioridad", d: rz.riesgo_vital.fuente });
   }
   if (p.categoria_sistema && p.categoria !== p.categoria_sistema) pasos.push({ icon: "how_to_reg", t: "Decisión del equipo clínico",
     v: `Prioridad ${ETIQUETA[p.categoria].toLowerCase()} (el sistema proponía ${ETIQUETA[p.categoria_sistema].toLowerCase()})`, d: `${p.revision?.motivo || ""}${p.revision?.usuario ? ` · ${p.revision.usuario}` : ""}` });
@@ -1200,7 +1199,8 @@ function Indicadores({ fecha, esApi, data, esp, setEsp, onVer }) {
 
   const exportar = () => descargarExcel(`indicadores_HLF_${k.fecha_corte}${espApi ? `_${espApi}` : ""}.xlsx`, [
     { nombre: "Metas del hospital", filas: [["Meta", "Valor", "Meta del hospital", "Cómo se mide"],
-      ["Reevaluación tras un evento grave", re.evaluados ? `${num(re.mediana_horas)} h (mediana)` : "Sin datos", "< 72 h", "Horas desde que el evento llega al sistema hasta que el especialista revisa la prioridad"],
+      ["Actualización tras un evento", "Al instante (milisegundos)", "Inmediata", "La lista se recalcula al registrar un evento, un informe o un paciente nuevo"],
+      ["Tiempo hasta la revisión del especialista", re.evaluados ? `${num(re.mediana_horas)} h (mediana)` : "Sin datos", "—", "Horas desde que el evento llega hasta que el especialista revisa la prioridad (informativo)"],
       ["Concordancia con el especialista", kap == null ? "Sin datos" : `kappa ${num(kap, 2)} · ${cc.acuerdo_pct}% de acuerdo · n = ${cc.revisiones}`, "kappa ≥ 0,70", "Prioridad propuesta vs. decisión del especialista"],
       ["Cobertura con criterio común", `${k.cobertura.pct}% (${k.cobertura.evaluados} de ${k.cobertura.en_espera})`, "100%", k.cobertura.criterio]] },
     { nombre: "Por especialidad", filas: [["Especialidad", "En espera", "Alta", "Media", "Baja", "Más de 1 año", "Más de 500 días", "Mediana (días)", "Máxima (días)",
@@ -1238,12 +1238,10 @@ function Indicadores({ fecha, esApi, data, esp, setEsp, onVer }) {
 
       <Seccion titulo="Metas del hospital" sub="Los tres indicadores que fijó el HLF para el desafío. Se miden con lo registrado en la herramienta.">
         <div className="grid gap-4 lg:grid-cols-3">
-          <Meta titulo="Reevaluación tras un evento grave" valor={re.evaluados ? `${num(re.mediana_horas)} h` : "—"} meta="menos de 72 horas"
-            estado={!re.evaluados ? null : re.evaluados_menos_72h === re.evaluados ? "ok" : "mal"}
-            detalle={<>{re.evaluados
-              ? <>Mediana de horas entre la llegada del evento y la revisión de la prioridad: {re.evaluados_menos_72h} de {re.evaluados} revisadas en menos de 72 h; {re.sin_evaluar} sin revisar.</>
-              : <>Todavía no hay eventos registrados en la herramienta que el especialista haya revisado. Se mide desde que el evento llega hasta que se confirma, ajusta o mueve la prioridad.</>}
-              {" "}Hoy hay <b>{re.descompensados_en_lista}</b> descompensaciones graves: {re.evaluacion_hecha} revisadas, {re.evaluacion_pendiente} en plazo y <b className={re.evaluacion_atrasada ? "text-error" : ""}>{re.evaluacion_atrasada} atrasadas</b>.</>} />
+          <Meta titulo="Actualización tras un evento" valor="al instante" meta="inmediata" estado="ok"
+            detalle={<>Cada evento, informe o paciente nuevo recalcula la lista en milisegundos.{re.evaluados
+              ? <> El especialista revisó la prioridad en una mediana de {num(re.mediana_horas)} h ({re.evaluados} revisadas; {re.sin_evaluar} sin revisar).</> : null}
+              {" "}Hoy hay <b>{re.descompensados_en_lista}</b> descompensaciones graves: {re.evaluacion_hecha} revisadas y <b className={re.evaluacion_pendiente ? "text-error" : ""}>{re.evaluacion_pendiente} por revisar</b>.</>} />
           <Meta titulo="Concordancia con el especialista" valor={kap == null ? "—" : `κ ${num(kap, 2)}`} meta="kappa ≥ 0,70"
             estado={!cc.suficiente ? null : kap >= cc.meta ? "ok" : "mal"}
             detalle={cc.revisiones
@@ -1261,7 +1259,7 @@ function Indicadores({ fecha, esApi, data, esp, setEsp, onVer }) {
           <Tarjeta titulo="Prioridad alta" valor={fin.alta} tono="rojo" sub={`${pct(fin.alta, fin.total)}% de la lista · ${signo(fin.alta - ini.alta)}`} />
           <Tarjeta titulo="Esperan más de 1 año" valor={es.mas_de_1_anio} tono="ambar" sub={`${pct(es.mas_de_1_anio, fin.total)}% · ${es.mas_de_500_dias} con más de 500 días`} />
           <Tarjeta titulo="Mediana de espera" valor={`${num(es.mediana_dias, 0)} días`} sub={`Máxima: ${es.maxima_dias} días`} />
-          <Tarjeta titulo="Descompensaciones graves" valor={fin.graves} tono="rojo" sub={`${re.evaluacion_hecha} revisadas · ${re.evaluacion_pendiente} en plazo · ${re.evaluacion_atrasada} atrasadas`} />
+          <Tarjeta titulo="Descompensaciones graves" valor={fin.graves} tono="rojo" sub={`${re.evaluacion_hecha} revisadas · ${re.evaluacion_pendiente} por revisar`} />
           <Tarjeta titulo="Egresos del período" valor={fin.egresos - ini.egresos} tono="verde" sub={`${fin.atendidos - ini.atendidos} atendidos · ${fin.fallecidos - ini.fallecidos} fallecidos`} />
         </div>
       </Seccion>
@@ -2060,7 +2058,7 @@ function Informe({ p, fecha, cargando, onConfirmar, onAviso, onRegistrado }) {
 }
 
 // Dos pestañas con los mismos datos del día:
-//   "Hoy": descompensaciones graves que requieren evaluación médica (plazo 72 h) y a quién llamar.
+//   "Hoy": descompensaciones graves cuya prioridad debe revisar el especialista y a quién llamar.
 //   "Gestión de box": cómo llenar las horas libres; propuesta → reservada → confirmada → atendida / no asistió / cancelada.
 const ESTADO_CITA = { propuesta: ["Propuesta", "gris"], reservada: ["Reservada", "azul"], confirmada: ["Confirmada", "azul"],
   atendida: ["Atendida", "azul"], no_asistio: ["No asistió", "ambar"], cancelada: ["Cancelada", "gris"] };
@@ -2104,9 +2102,8 @@ function Hoy({ parte, vitales, todosPacientes, fecha, esp, setEsp, onVer, esApi,
   };
 
   const Evaluacion = ({ p }) => p.evaluacion && (
-    <div className={`text-[12px] font-semibold ${p.evaluacion.estado === "atrasada" ? "text-error" : "text-on-surface-variant"}`}>
-      Evento grave del {fmt(p.evaluacion.fecha_evento)} · en el sistema desde el {fmt(p.evaluacion.llego_al_sistema)} ({p.evaluacion.dias_en_revision} día{p.evaluacion.dias_en_revision !== 1 ? "s" : ""})
-      {p.evaluacion.estado === "atrasada" ? " · REVISIÓN ATRASADA (> 72 h)" : " · nueva, dentro del plazo de 72 h"}</div>
+    <div className="text-[12px] font-semibold text-on-surface-variant">
+      Evento grave del {fmt(p.evaluacion.fecha_evento)} · en el sistema desde el {fmt(p.evaluacion.llego_al_sistema)} ({p.evaluacion.dias_en_revision} día{p.evaluacion.dias_en_revision !== 1 ? "s" : ""})</div>
   );
   const conteo = (b?.especialidades || []).reduce((s, e) => {
     Object.entries(e.conteo_citas || {}).forEach(([k, v]) => { s[k] = (s[k] || 0) + v; }); return s;
@@ -2141,7 +2138,7 @@ function Hoy({ parte, vitales, todosPacientes, fecha, esp, setEsp, onVer, esApi,
           <b>Resumen del {fmt(fecha)}{esp !== "Todas" ? ` · ${esp}` : ""}:</b>{" "}
           {parte === "hoy"
             ? <>{todos.length ? <>Hay <b>{todos.length} pacientes con descompensación grave</b>: <b className="text-hlf">{todos.length - pendientes.length} con la prioridad ya revisada</b>
-                {pendientes.length > 0 && <>, <b className="text-error">{pendientes.length} esperan revisión de su prioridad</b>{todos.filter((p) => p.evaluacion?.estado === "atrasada").length > 0 && <> ({todos.filter((p) => p.evaluacion?.estado === "atrasada").length} con más de 72 h)</>}</>}.
+                {pendientes.length > 0 && <>, <b className="text-error">{pendientes.length} esperan revisión de su prioridad</b></>}.
                 </> : "No hay descompensaciones graves pendientes de revisión."}</>
             : <>quedan <b>{horasLibres} horas libres</b> en los box. <b>{conteo.propuesta || 0} propuestas</b> (aún no son citas) · <b className="text-hlf">{citasHechas} citas reservadas</b>
                 {conteo.confirmada ? <> ({conteo.confirmada} confirmadas)</> : null}{conteo.no_asistio ? <> · {conteo.no_asistio} no asistieron</> : null}.</>}
@@ -2153,8 +2150,8 @@ function Hoy({ parte, vitales, todosPacientes, fecha, esp, setEsp, onVer, esApi,
 
       <div className="grid gap-5 lg:grid-cols-12 items-start">
         {parte === "hoy" && <>
-        <Caja titulo={`Descompensaciones graves: revisar prioridad (${pendientes.length}: ${pendientes.filter((p) => p.evaluacion?.estado !== "atrasada").length} nuevas · ${pendientes.filter((p) => p.evaluacion?.estado === "atrasada").length} atrasadas)`} className="lg:col-span-7 border-l-4 border-l-error">
-          <p className="text-[13px] text-on-surface-variant mb-3">Tuvieron un evento grave después de la interconsulta y no hay registro posterior de estabilización ni de evaluación. Su prioridad debe revisarla el especialista dentro de 72 h desde que el evento llegó al sistema (KPI del hospital). Llamar o citar no cierra la alerta.</p>
+        <Caja titulo={`Descompensaciones graves: revisar prioridad (${pendientes.length})`} className="lg:col-span-7 border-l-4 border-l-error">
+          <p className="text-[13px] text-on-surface-variant mb-3">Tuvieron un evento grave después de la interconsulta y no hay registro posterior de estabilización ni de evaluación. La lista ya se recalculó al llegar el evento; falta que el especialista revise su prioridad. Llamar o citar no cierra la alerta.</p>
           {todos.length === 0 && <p className="text-on-surface-variant">Nadie pendiente{esp !== "Todas" && ` en ${esp}`}.</p>}
           {agrupar(pendientes).map(([nombreEsp, grupo]) => {
             return (
@@ -2441,7 +2438,7 @@ function Criterios({ ia }) {
       <Caja titulo="Cómo se ordena la lista">
         <ol className="list-decimal pl-5 space-y-2">
           <li><b>Prioridad (alta, media, baja).</b> Se parte de la prioridad asignada por el especialista al revisar la interconsulta. Si después el paciente presenta una descompensación (urgencia, hospitalización o evento grave) que no estaba en la interconsulta, la prioridad sube a la que indica la <i>Tabla de priorización SSMSO 2025, Hospital Dra. Eloísa Díaz</i> (págs. 84–111) para ese diagnóstico descompensado. Si llega un <b>cáncer confirmado o sospechoso</b>, sube a alta (todas las filas de cáncer activo de la tabla del HLF son alta). La lista se mueve sola: el sistema sube automáticamente, pero <b>nunca baja una prioridad por sí solo</b>; bajar lo decide el equipo clínico.</li>
-          <li><b>Descompensación grave: requiere evaluación.</b> Evento grave sin estabilización posterior en un diagnóstico cuya fila de la tabla es prioridad alta. Va primero dentro de su prioridad y pide evaluación médica dentro de 72 h (KPI del hospital). El sistema no declara "riesgo vital": eso lo decide el médico. La alerta se cierra cuando el especialista revisa: una decisión clínica registrada, confirmar o ajustar la prioridad, o un ajuste manual de la posición (llamar o citar no la cierran); si pasan más de 72 h, queda "atrasada".</li>
+          <li><b>Descompensación grave: requiere evaluación.</b> Evento grave sin estabilización posterior en un diagnóstico cuya fila de la tabla es prioridad alta. Va primero dentro de su prioridad y pide que el especialista revise su prioridad. El sistema no declara "riesgo vital": eso lo decide el médico. La alerta se cierra cuando el especialista revisa: una decisión clínica registrada, confirmar o ajustar la prioridad, o un ajuste manual de la posición (llamar o citar no la cierran).</li>
           <li><b>Orden dentro de cada prioridad</b> (MINSAL, Ord. 536 del 21-03-2025): criterio médico (primero la descompensación grave, luego cualquier paciente descompensado: va antes que un paciente estable aunque este pertenezca a un grupo de protección), grupos de especial protección (PRAIS, NNA bajo protección del Estado, Valech, Rettig), antigüedad en lista mayor a 1 año y fecha de ingreso. {ia
             ? <>No se usa ningún puntaje adicional: <b>sin LACE</b>, solo la cascada oficial.</>
             : <>El <b>puntaje LACE</b> es experimental: solo desempata a pacientes con la misma prioridad y antigüedad.</>}</li>
@@ -2496,7 +2493,7 @@ function Criterios({ ia }) {
           <li><b>Verificación.</b> El código comprueba en el registro cada cita: que exista, que sea de verdad una descompensación, que la estabilización sea posterior y que la medición realmente empeore (con los valores registrados, no los que escribe la IA).</li>
           <li><b>Fórmula fija.</b> Con lo verificado, la prioridad sale de la tabla del HLF. Un evento sigue vigente durante su ventana con evidencia publicada (PubMed); sin evidencia, no vence.</li>
           <li><b>Controles.</b> Si la IA no puede leer un dato, lo responde el registro. Si una cita no existe o no respalda lo dicho, las 3 lecturas no coinciden o la IA falla, se usan las reglas <b>sin pedirle nada a nadie</b>. Solo cuando la evidencia indica que un paciente podría <b>bajar</b> de prioridad, el sistema no lo baja: lo deja como está y avisa al especialista (en este registro, 3 de 409 pacientes).</li>
-          <li><b>Cuándo.</b> Al llegar un evento o un informe, el paciente se reevalúa en segundos (KPI: menos de 72 h). Un barrido nocturno revisa al resto.</li>
+          <li><b>Cuándo.</b> Al llegar un paciente, un evento o un informe, la lista se recalcula al instante. Un barrido nocturno revisa al resto.</li>
         </ol>
         <p className="text-[13px] text-on-surface-variant mt-2">Probado con 409 pacientes y 2.454 lecturas reales: 0 lecturas fallidas, 3 lecturas iguales en el 100 % de los pacientes, nadie baja sin una persona y solo 3 pacientes requieren al especialista. Cuando la IA decidía sola, concordaba con la tabla oficial apenas κ 0,09; por eso decide la fórmula.</p>
       </Caja>}

@@ -27,8 +27,8 @@ def evaluar(lecturas, resultados, reglas):
         if ORDEN_CAT[cat] < ORDEN_CAT[reglas["categoria"]]:
             motivos.append({"motivo": "bajaria", "detalle": f"la rúbrica daría {cat} y la categoría vigente es {reglas['categoria']}: bajar requiere un humano"})
         elif reglas.get("riesgo_vital") and not all(x["descompensacion_grave"] for x in validos):
-            # misma categoría pero sin la marca de descompensación grave: perdería la alerta de 72 h y bajaría en el orden
-            motivos.append({"motivo": "bajaria", "detalle": "la rúbrica quitaría la marca de descompensación grave (alerta de 72 h y primer lugar dentro de "
+            # misma categoría pero sin la marca de descompensación grave: perdería la alerta de revisión y bajaría en el orden
+            motivos.append({"motivo": "bajaria", "detalle": "la rúbrica quitaría la marca de descompensación grave (alerta de revisión y primer lugar dentro de "
                                                             "su prioridad): quitarla requiere un humano"})
         if abs(ORDEN_CAT[cat] - ORDEN_CAT[reglas["categoria"]]) > 1:
             motivos.append({"motivo": "discrepancia", "detalle": f"rúbrica {cat} vs reglas {reglas['categoria']} (más de 1 nivel)"})

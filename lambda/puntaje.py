@@ -58,7 +58,6 @@ PATRON_ONCOLOGICO = ("toda fila de cáncer activo o sospechoso de la tabla del H
                      "alta", "88, 94, 95, 111")
 # Mediciones que reflejan semanas o meses (no un momento): las únicas que pueden aparecer como razón de prioridad
 MEDICIONES_ESTABLES = ("HbA1c", "PHQ9")
-DIAS_EVALUACION = 3  # KPI del hospital: reevaluación clínica < 72 h tras un evento
 
 # Garantía GES de oportunidad: atención por especialista (días). auge.minsal.cl/problemasdesalud/index/<N°>
 # cie10: (N° problema GES, nombre, días, edad mínima)
@@ -344,7 +343,7 @@ def puntuar(perfil, corte):
     if riesgo_vital:
         razones.insert(0, {"factor": "riesgo_vital",
                            "valor": f'Descompensación grave ({fila[0]}) sin registro posterior de estabilización: su prioridad '
-                                    f'debe revisarse dentro de 72 h desde que el evento llega al sistema; el especialista decide',
+                                    f'debe revisarla el especialista apenas el evento llega al sistema; el especialista decide',
                            "fuente": "MINSAL: criticidad / riesgo vital (SSMSO 2025, pág. 4) · " f"{FUENTE_TABLA}, pág. {fila[2]}"})
     elif estado == "estabilizado":
         razones.append({"factor": "evento", "valor": f'{ult_estab["subtipo"]} ({ult_estab["fecha_evento"]}): '

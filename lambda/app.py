@@ -285,7 +285,7 @@ def _enriquecer(r, perfil, revision, pos_ant, corte=None, contacto=None, decisio
                 out["categoria"] = revision["categoria_ajustada"]  # el equipo clínico decide
     else:
         out["revision_sugerida"] = senales
-    # Descompensación grave (KPI del hospital: reevaluación < 72 h tras un evento): la PRIORIDAD debe revisarse.
+    # Descompensación grave: la PRIORIDAD debe revisarla el especialista (la lista ya se recalculó al instante).
     # La alerta se cierra solo con una revisión del especialista: decisión clínica, confirmar/ajustar la prioridad
     # o un ajuste manual de la posición, registrados después del evento. Llamar o citar no la cierran.
     def posterior(x):
@@ -317,15 +317,15 @@ def _enriquecer(r, perfil, revision, pos_ant, corte=None, contacto=None, decisio
             cierre = {"por": "ajuste_manual", "texto": f'posición ajustada a mano: {ajuste["motivo_texto"]}', "responsable": ajuste.get("usuario"),
                       "fecha": ajuste["fecha"]}
         dias = r.get("dias_desde_descompensacion") or 0
-        # El plazo de 72 h corre desde que el evento LLEGA al sistema (antes nadie podía reaccionar): fecha de registro
-        # en la app o, para el registro cargado, la fecha de los datos. En simulación histórica, desde el evento.
+        # Desde cuándo está en el sistema (dato informativo, sin plazo): fecha de registro en la app o, para el registro
+        # cargado, la fecha de los datos. En simulación histórica, desde el evento.
         llegada = (r.get("registro_descompensacion") or "")[:10] or (
             REGISTRO_AL if corte_iso >= REGISTRO_AL else r.get("fecha_descompensacion"))
         llegada = max(llegada or corte_iso, r.get("fecha_descompensacion") or llegada or corte_iso)
         en_revision = max(0, (date.fromisoformat(corte_iso) - date.fromisoformat(llegada)).days)
-        out["evaluacion"] = {"estado": "evaluada" if cierre else ("atrasada" if en_revision > puntaje.DIAS_EVALUACION else "pendiente"),
+        out["evaluacion"] = {"estado": "evaluada" if cierre else "pendiente",
                              "dias_desde_evento": dias, "fecha_evento": r.get("fecha_descompensacion"), "llego_al_sistema": llegada,
-                             "dias_en_revision": en_revision, "plazo_dias": puntaje.DIAS_EVALUACION, "cierre": cierre}
+                             "dias_en_revision": en_revision, "cierre": cierre}
         out["contactar_hoy"] = not cierre or out["urgencia_hoy"]
     return out
 
@@ -1121,7 +1121,6 @@ def _resumen_especialidad(nombre, pacs, excluidos):
             "mediana_dias": _mediana(dias), "maxima_dias": max(dias, default=0),
             "graves": sum(p["riesgo_vital"] for p in pacs),
             "graves_sin_revisar": sum(bool(p["riesgo_vital"] and p["contactar_hoy"]) for p in pacs),
-            "graves_atrasadas": sum(bool(p.get("evaluacion") and p["evaluacion"]["estado"] == "atrasada") for p in pacs),
             "pendientes_revision": sum(p["gestion"]["estado"] == "pendiente_revision" for p in pacs),
             "sin_responsable": sum(not p["gestion"]["responsable"] for p in pacs),
             "egresos": len(excluidos), "fallecidos": sum(e["motivo"] == "fallecido" for e in excluidos),
@@ -1129,7 +1128,7 @@ def _resumen_especialidad(nombre, pacs, excluidos):
 
 
 def kpis(corte, especialidad=None):
-    """Indicadores de resultado (todo el hospital o una especialidad): reevaluación tras un evento (meta < 72 h),
+    """Indicadores de resultado (todo el hospital o una especialidad): actualización inmediata tras un evento,
     concordancia con el especialista (kappa con su n), cobertura, espera, trabajo pendiente, contactabilidad,
     resumen por especialidad y tramos de espera."""
     todo = lista(corte)
@@ -1172,10 +1171,9 @@ def kpis(corte, especialidad=None):
         "reevaluacion": {
             "recalculo": "automático al registrar cada evento (milisegundos)",
             "eventos_graves_registrados": len(horas) + sin_evaluar, "evaluados": len(horas),
-            "evaluados_menos_72h": sum(h < 72 for h in horas), "sin_evaluar": sin_evaluar,
-            "mediana_horas": None if not horas else round(_mediana(horas), 1), "meta_horas": 72,
+            "sin_evaluar": sin_evaluar, "mediana_horas": None if not horas else round(_mediana(horas), 1),
             "descompensados_en_lista": len(vitales), "evaluacion_pendiente": estados.count("pendiente"),
-            "evaluacion_atrasada": estados.count("atrasada"), "evaluacion_hecha": estados.count("evaluada")},
+            "evaluacion_hecha": estados.count("evaluada")},
         "citas": {"propuestas_sin_reservar": sum(not p["citado"] for e in b["especialidades"] for a in e["asignaciones"]
                                                   for p in a["pacientes"]),
                   **por_estado,
@@ -1396,7 +1394,7 @@ def _fila_box(p):
             "categoria": p["categoria"], "diagnostico_texto": p["diagnostico_texto"], "dias_espera": p["dias_espera"],
             "riesgo_inasistencia": p["riesgo_inasistencia"], "riesgo_vital": p["riesgo_vital"], "motivo": _motivo(p),
             "contactar_hoy": p["contactar_hoy"], "contacto": p["contacto"], "evaluacion": p.get("evaluacion"),
-            "accion": "pedir revisión de su prioridad al especialista (plazo 72 h)" if p["contactar_hoy"]
+            "accion": "pedir revisión de su prioridad al especialista" if p["contactar_hoy"]
             else (p["evaluacion"]["cierre"]["texto"] if p.get("evaluacion") and p["evaluacion"]["cierre"] else None)
             or ("confirmar asistencia por teléfono (2 inasistencias seguidas)" if p["riesgo_inasistencia"] else "citar")}
 

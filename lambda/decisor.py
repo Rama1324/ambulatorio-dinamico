@@ -160,7 +160,7 @@ def decidir(perfil, resp, corte, kb):
                                     "fuente": f"{fuente_tabla}, pág. {fila['pagina']}"})
                     if grave:
                         razones.insert(0, {"factor": "riesgo_vital", "valor": f'Descompensación grave ({fila["texto_pdf"].capitalize()}) sin registro '
-                                           "posterior de estabilización: su prioridad debe revisarse dentro de 72 h; el especialista decide",
+                                           "posterior de estabilización: su prioridad debe revisarla el especialista; el especialista decide",
                                            "fuente": f"MINSAL: criticidad / riesgo vital · {fuente_tabla}, pág. {fila['pagina']}"})
                 else:
                     revision.append({"motivo": "descompensacion_sin_fila", "bloqueante": False,
