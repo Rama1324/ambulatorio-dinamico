@@ -3,6 +3,7 @@ from datetime import date, timedelta
 
 import explicar
 import puntaje
+import vecinos
 from catalogo import ESTADOS_GESTION, MOTIVOS_PENDIENTE
 from datos import (REGISTRO_AL, posterior, ajustes_orden, contactos, decisiones, evaluaciones_por_paciente, gestiones, hoy,
                    perfiles_combinados)
@@ -208,6 +209,7 @@ def lista(corte, especialidad=None, perfs=None, revs=None):
         p["posicion"] = i
         por_esp[p["especialidad"]] = por_esp.get(p["especialidad"], 0) + 1
         p["posicion_especialidad"] = por_esp[p["especialidad"]]
+    vecinos.agregar(pacientes, con_lace=not rubrica_activa)  # por qué va antes o después de sus vecinos
     exc = [{"id_paciente": r["id_paciente"], "motivo": r["motivo"], "fecha": r.get("fecha"),
             "nombre_fantasia": perfs[r["id_paciente"]]["paciente"].get("nombre_fantasia"),
             "especialidad": perfs[r["id_paciente"]]["lista_espera"].get("especialidad"),

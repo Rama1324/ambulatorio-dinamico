@@ -186,6 +186,17 @@ def test_lo_que_sube_el_sistema_rige_sin_esperar_validacion():
     assert not any(x["gestion"]["estado"] == "pendiente_revision" and x["estado_revision"] == "pendiente" and not (x.get("rubrica") or {}).get("requiere_revision")
                    for x in d["pacientes"])
 
+def test_cada_paciente_explica_su_lugar_frente_a_sus_vecinos():
+    d = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})[1]
+    ps = d["pacientes"]
+    assert ps[0]["comparacion"]["arriba"] is None and ps[-1]["comparacion"]["abajo"] is None
+    for a, b in zip(ps, ps[1:]):
+        assert a["comparacion"]["abajo"]["id_paciente"] == b["id_paciente"] and b["comparacion"]["arriba"]["id_paciente"] == a["id_paciente"]
+        assert a["comparacion"]["abajo"]["criterio"] not in ("orden del equipo",)  # siempre una razón real del orden
+    alta_media = next(a for a, b in zip(ps, ps[1:]) if a["categoria"] == "alta" and b["categoria"] == "media")
+    c = alta_media["comparacion"]["abajo"]
+    assert c["criterio"] == "prioridad clínica" and c["clinico"] and c["este"].startswith("prioridad alta")
+
 def test_entrada_mal_formada_da_400():
     assert call("GET", "/pacientes", {"fecha_corte": "hola"})[0] == 400
     assert call("GET", "/kpis", {"fecha_corte": "2026-13-45"})[0] == 400

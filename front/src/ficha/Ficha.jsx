@@ -18,7 +18,7 @@ const EVENTOS = {
     motivo_clinico: "amputación traumática de pierna (accidente)", relacionado: false },
 };
 
-export function Ficha({ p, total, detalle, fecha, demo, onCambio, onAviso, onDestacar }) {
+export function Ficha({ p, total, detalle, fecha, demo, onCambio, onAviso, onDestacar, onVer }) {
   const [resumen, setResumen] = useState(null);
   const [cargando, setCargando] = useState(null);
   const [ajuste, setAjuste] = useState(null);
@@ -100,6 +100,12 @@ export function Ficha({ p, total, detalle, fecha, demo, onCambio, onAviso, onDes
       <Caja titulo={`Por qué está en el N° ${p.posicion} y cómo se ha movido`}>
         <EvolucionPaciente p={p} fecha={fecha} />
       </Caja>
+      {p.comparacion && (p.comparacion.arriba || p.comparacion.abajo) && <Caja titulo="Comparado con sus vecinos en la lista">
+        <Vecino v={p.comparacion.arriba} arriba onVer={onVer} />
+        <Vecino v={p.comparacion.abajo} onVer={onVer} />
+        <p className="text-[12px] text-on-surface-variant mt-2">Se comparan con los criterios del orden de la lista, en este orden: prioridad, urgencia «derivar hoy»,
+          descompensación grave, mortalidad, gravedad del evento, descompensado o estable; recién después grupo de protección y tiempo de espera (Ord. MINSAL 536/2025).</p>
+      </Caja>}
       </>}
 
       {tab === "gestion" && <>
@@ -210,6 +216,27 @@ export function Ficha({ p, total, detalle, fecha, demo, onCambio, onAviso, onDes
         </ol>
       </Caja>}
     </>
+  );
+}
+
+// Por qué va después del de arriba o antes del de abajo: el primer criterio del orden en que se diferencian.
+function Vecino({ v, arriba, onVer }) {
+  if (!v) return null;
+  const otro = <button onClick={() => onVer?.(v.id_paciente)} className="text-primary font-semibold hover:underline">N° {v.posicion} · {v.nombre_fantasia}</button>;
+  const quien = arriba ? <>{otro}</> : "este paciente";
+  const despues = arriba ? "este paciente" : <>N° {v.posicion}</>;
+  let razon;
+  if (!v.este) razon = <>{v.texto[0].toUpperCase() + v.texto.slice(1)}.</>;
+  else if (v.clinico) razon = <>Lo de {quien} es más grave por <b>{v.criterio}</b>: <b>{v.este}</b>; {despues}: {v.otro}.</>;
+  else razon = <>Misma gravedad clínica (igual prioridad, descompensación y mortalidad). Desempata <b>{v.criterio}</b>: {quien}, {v.este}; {despues}, {v.otro}.</>;
+  return (
+    <div className="flex gap-2 py-2 border-b border-outline-variant/50 last:border-0 text-[14px]">
+      <Icono n={arriba ? "arrow_upward" : "arrow_downward"} className={`text-[20px] ${arriba ? "text-on-surface-variant" : "text-primary"}`} />
+      <div>
+        <div>{arriba ? "Va después de " : "Va antes de "}{otro} <span className="text-on-surface-variant text-[13px]">({v.diagnostico_texto}, {v.especialidad}, prioridad {v.categoria})</span></div>
+        <div className="text-[13px] mt-0.5">{razon}</div>
+      </div>
+    </div>
   );
 }
 

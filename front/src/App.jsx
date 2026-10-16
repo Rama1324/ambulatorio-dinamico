@@ -184,7 +184,7 @@ export default function App() {
 
             {paciente && <aside className="lg:col-span-5 xl:col-span-4 lg:sticky lg:top-4 flex flex-col gap-3 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto lg:overflow-x-hidden" aria-label="Detalle del paciente" id="ficha">
               <button onClick={() => setSel(null)} className="self-end text-[13px] text-on-surface-variant hover:text-on-surface flex items-center gap-1"><Icono n="close" className="text-[18px]" />Cerrar detalle</button>
-              <Ficha key={paciente.id_paciente} p={paciente} total={data.total} detalle={detalle} fecha={fecha} demo={demo} onCambio={cargar} onAviso={mostrarAviso}
+              <Ficha key={paciente.id_paciente} p={paciente} total={data.total} detalle={detalle} fecha={fecha} demo={demo} onCambio={cargar} onAviso={mostrarAviso} onVer={setSel}
                 onDestacar={(id) => { setDestacado(id); setTimeout(() => setDestacado(null), 3000); }} />
             </aside>}
           </div>
