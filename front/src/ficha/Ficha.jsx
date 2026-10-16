@@ -90,7 +90,7 @@ export function Ficha({ p, total, detalle, fecha, demo, onCambio, onAviso, onDes
         {p.categoria !== p.categoria_sistema && <p className="mt-2 text-[13px] text-on-surface-variant">El sistema proponía prioridad {p.categoria_sistema}; el equipo clínico la cambió a {p.categoria}. Motivo: {p.revision?.motivo}</p>}
       </Caja>
 
-      <div className="flex border-b border-outline-variant bg-surface-container-lowest rounded-t text-[14px] sticky top-0 z-10 overflow-x-auto" role="tablist">
+      <div className="shrink-0 flex border-b border-outline-variant bg-surface-container-lowest rounded-t text-[14px] sticky top-0 z-10 overflow-x-auto" role="tablist">
         {[["resumen", "Resumen"], ["gestion", "Gestión"], ["registrar", "Registrar"], ["puntaje", "Fundamento"], ["historia", "Historia"]].map(([k, t]) => (
           <button key={k} onClick={() => setTab(k)} className={`flex-1 py-2 border-b-2 -mb-px ${tab === k ? "border-primary text-primary font-semibold" : "border-transparent text-on-surface-variant"}`}>{t}</button>
         ))}
