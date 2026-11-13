@@ -7,3 +7,6 @@ data/*
 __pycache__/
 *.csv
 perfiles.json
+
+# copias de trabajo de los agentes y archivos locales del asistente
+.claude/
