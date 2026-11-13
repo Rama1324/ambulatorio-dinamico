@@ -6,6 +6,7 @@ import time
 import uuid
 from datetime import date, datetime, timezone
 
+import bitacora
 import puntaje
 from catalogo import AJUSTE_MANUAL, DECISIONES, MIN_EXPLICACION, MOTIVOS_PENDIENTE, RESULTADOS_CONTACTO, TIPOS_EVENTO, catalogo
 from datos import ahora, fecha_de, fecha_valida, guardar, guardar_evento, perfiles_combinados
@@ -76,10 +77,14 @@ def post_evento(body):
         "registrado": ahora(),
         "usuario": body.get("usuario", "equipo clínico"),
     }
+    foto = bitacora.fotos([pid], corte)  # estado antes del evento: el dictamen documenta el antes y el después
     guardar_evento(pid, ev)
     evaluacion = None
     if algoritmo_activo() == "rubrica":  # el disparador: solo este paciente se reevalúa, en el momento
         evaluacion = evaluar_y_guardar(pid, corte)
+    dictamen = bitacora.registrar(pid, corte, {"tipo": "evento", "id_evento": ev["id_evento"],
+                                               "descripcion": f'{ev["tipo_evento"]} · {ev["subtipo"]} ({ev["severidad"]})'},
+                                  foto.get(pid), canal="app", usuario=ev["usuario"], evaluacion=evaluacion)
     despues = lista(corte, vista)
     fila = next((p for p in despues["pacientes"] if p["id_paciente"] == pid), None)
     ms = round((time.perf_counter() - t0) * 1000)
@@ -87,6 +92,8 @@ def post_evento(body):
            "total": despues["total"], "reevaluado_en_ms": ms}
     if evaluacion:
         out["evaluacion"] = evaluacion
+    if dictamen:
+        out["dictamen"] = dictamen
     return 200, out
 
 

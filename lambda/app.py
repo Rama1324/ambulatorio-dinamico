@@ -14,8 +14,13 @@ Modo AWS:   BUCKET, PERFILES_KEY, TABLE (DynamoDB pk=id_paciente, sk=texto).
 """
 import json
 
+import aprendizaje
+import base_conocimiento
+import bitacora
 import datos
 import importar
+import ingesta
+import seguridad  # noqa: F401  (identidad y permisos: los aplica el handler)
 import informe  # noqa: F401  (los tests lo usan como app.informe)
 import puntaje  # noqa: F401  (los tests lo usan como app.puntaje)
 from acciones import post_decision, post_evento, post_contacto, post_gestion, post_novedad, post_orden, post_revision
@@ -50,13 +55,28 @@ def _resp(status, body):
     return {"statusCode": status, "headers": CORS, "body": json.dumps(body, ensure_ascii=False, default=str)}
 
 
-def _rutear(method, partes, qs, body):
+def _rutear_modulos(method, partes, qs, body, cabeceras):
+    """Rutas de los módulos por dominio: cada `rutear` devuelve (status, cuerpo) o None si la ruta no es suya."""
+    for intento in (lambda: ingesta.rutear(method, partes, qs, body, cabeceras),          # /ingesta/…
+                    lambda: bitacora.rutear(method, partes, qs, body),                    # /decisiones, /pacientes/{id}/decisiones
+                    lambda: aprendizaje.rutear(method, partes, qs, body),                 # /aprendizaje, /criterios-locales, enmiendas
+                    lambda: base_conocimiento.rutear(method, partes, qs, body)):          # /conocimiento
+        r = intento()
+        if r is not None:
+            return r
+    return None
+
+
+def _rutear(method, partes, qs, body, cabeceras=None):
     if method == "OPTIONS":
         return 200, {}
     if method == "GET" and partes in ([], ["health"]):
         return 200, {"ok": True, "pacientes": len(perfiles()), "fecha_hoy": hoy().isoformat(),
                      "modo": "tiempo_real" if datos.TIEMPO_REAL else "simulacion", "datos": "sinteticos",
                      "datos_hasta": datos.datos_hasta(), "registro_al": datos.REGISTRO_AL}
+    r = _rutear_modulos(method, partes, qs, body, cabeceras or {})
+    if r is not None:
+        return r
     if method == "GET" and partes == ["pacientes"]:
         return 200, lista(fecha_de(qs), qs.get("especialidad") or None)
     if method == "GET" and partes == ["catalogo"]:
@@ -111,13 +131,16 @@ def handler(event, context=None):
         except ValueError:
             return _resp(400, {"error": "el cuerpo de la solicitud no es JSON válido"})
         partes = [p for p in path.split("/") if p]
+        cabeceras = {str(k).lower(): v for k, v in (event.get("headers") or {}).items()}
         if method == "GET" and len(partes) == 2 and partes[0] == "plantillas" and partes[1] in importar.PLANTILLAS:
             return {"statusCode": 200, "headers": {**CORS, "Content-Type": "text/csv; charset=utf-8",
                                                    "Content-Disposition": f'attachment; filename="plantilla_{partes[1]}.csv"'},
                     "body": importar.plantilla_csv(partes[1])}
-        r = _rutear(method, partes, qs, body)
+        r = _rutear(method, partes, qs, body, cabeceras)
         return _resp(*r) if r else _resp(404, {"error": f"ruta no encontrada: {method} {path}"})
     except datos.EntradaInvalida as e:
         return _resp(400, {"error": str(e)})
+    except getattr(datos, "Conflicto", ()) as e:  # el paciente cambió desde que se abrió su ficha (rev_vista): recargar
+        return _resp(409, {"error": str(e), "codigo": "conflicto_edicion"})
     except Exception as e:  # nunca devolver 502 sin CORS: el front no podría leer el error
         return _resp(500, {"error": str(e)})
