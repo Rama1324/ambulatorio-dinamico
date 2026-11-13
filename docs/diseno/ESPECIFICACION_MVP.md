@@ -98,8 +98,9 @@ Perfil armado = ítem `perfil` + sus `evento#` (sin los anulados; con `relaciona
 **Decisión:** el conocimiento oficial (tabla SSMSO/HLF, Ord. 536, GES, criterios, combinaciones, evidencia) es chico
 (≈300 KB, ~400 entradas) y estructurado: se guarda como **archivos JSON versionados junto al código** y se recupera **por
 clave** (CIE-10, especialidad, tipo de evento), no por similitud. El conocimiento que nace de la retroalimentación
-(criterios locales) vive en DynamoDB (§6). Alternativas descartadas para el MVP: base vectorial / Bedrock Knowledge Bases
-(costo fijo, recuperación no determinista y más difícil de auditar para un corpus tan chico).
+(criterios locales) vive en DynamoDB (§6). Alternativa descartada para el MVP: búsqueda vectorial / Bedrock Knowledge
+Bases. No por costo (hoy hay opciones que escalan a cero), sino porque con un corpus tan chico y estructurado la
+recuperación por clave es exacta, reproducible y auditable, y una búsqueda por similitud no lo es.
 
 - `lambda/conocimiento/manifiesto.json` (lo genera `scripts/empaquetar_conocimiento.py`): por cada fuente
   `{id, titulo, tipo, archivo, version, sha256, fecha, origen_url, estado, entradas}` y el **paquete**
