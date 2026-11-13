@@ -4,12 +4,12 @@ import copy
 import json
 import time
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date
 
 import bitacora
 import puntaje
 from catalogo import AJUSTE_MANUAL, DECISIONES, MIN_EXPLICACION, MOTIVOS_PENDIENTE, RESULTADOS_CONTACTO, TIPOS_EVENTO, catalogo
-from datos import ahora, fecha_de, fecha_valida, guardar, guardar_evento, perfiles_combinados
+from datos import ahora, cambios_perfil, fecha_de, fecha_valida, guardar, guardar_evento, guardar_perfil, perfiles_combinados
 from evaluacion_ia import algoritmo_activo, evaluar_y_guardar
 from lista import fila_de, lista
 from modelos import SUBTIPOS
@@ -142,11 +142,14 @@ def post_novedad(pid, body):
         texto = f"atendido en consulta nueva de especialidad el {fecha}: sale de la lista"
     else:
         return 400, {"error": "tipo debe ser comorbilidad, diagnostico, riesgo, fallecimiento o atendido"}
-    p["eventos_clinicos"] = [e for e in p.get("eventos_clinicos", []) if not e.get("id_evento", "").startswith("EV-DEMO")]
-    marca = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    guardar({"id_paciente": pid, "sk": "paciente#", "perfil": json.dumps(p, ensure_ascii=False, default=str)})
+    # El perfil (datos del paciente y de su interconsulta) es el único ítem que se pisa: primero queda la traza con lo
+    # que cambió (antes y después, quién y cuándo) y recién entonces se guarda. Los eventos van aparte y no se tocan.
+    marca = ahora()
+    antes, despues = cambios_perfil(perfs[pid], p)
     guardar({"id_paciente": pid, "sk": f"novedad#{marca}", "novedad": json.dumps(
-        {"tipo": tipo, "detalle": texto, "usuario": body.get("usuario", "equipo clínico"), "fecha": marca}, ensure_ascii=False)})
+        {"tipo": tipo, "detalle": texto, "usuario": body.get("usuario", "equipo clínico"), "fecha": marca,
+         "antes": antes, "despues": despues}, ensure_ascii=False, default=str)})
+    guardar_perfil(pid, p)
     fila = fila_de(pid, corte)
     return 200, {"id_paciente": pid, "mensaje": texto, "paciente": fila, "en_lista": fila is not None}
 

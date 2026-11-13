@@ -7,9 +7,12 @@ import importar
 import privacidad
 import puntaje
 from catalogo import catalogo
-from datos import ahora, fecha_de, fecha_valida, guardar, guardar_evento, perfiles_combinados
+from datos import (ahora, cambios_perfil, fecha_de, fecha_valida, guardar, guardar_evento, guardar_lote, guardar_perfil,
+                   items_de_perfil, perfiles_combinados)
 from evaluacion_ia import algoritmo_activo, cliente_llm, evaluar_y_guardar
 from lista import lista
+
+CANAL_ARCHIVO = "archivo"  # lo que llega por un Excel o CSV cargado en la app
 
 
 def normalizar_rut(valor):
@@ -67,7 +70,7 @@ def post_paciente(body):
                          "origen_derivacion": body.get("origen_derivacion") or "CESFAM/APS", "estado": "en_espera"},
         "eventos_clinicos": [], "mediciones": [], "citaciones": [],
     }
-    guardar({"id_paciente": pid, "sk": "paciente#", "perfil": json.dumps(perfil, ensure_ascii=False)})
+    guardar_perfil(pid, perfil)
     motivo = (body.get("motivo_interconsulta") or "").strip()
     motivo = privacidad.ocultar(motivo, [nombre], [rut])  # a la IA no va el nombre ni el RUT
     clasif = _aplicar_criterios(pid, dx["diagnostico_cie10"], motivo, ingreso, body)
@@ -125,10 +128,34 @@ def post_importar(body):
     out = {"informe": informe, "resumen": resumen, "avisos": avisos, "cargado": False,
            "impacto": _impacto(existentes, perfs, perfiles_combinados()[1], fecha_de(body))}
     if body.get("confirmar"):
-        for pid, p in perfs.items():
-            guardar({"id_paciente": pid, "sk": "paciente#", "perfil": json.dumps(p, ensure_ascii=False, default=str)})
+        _guardar_importacion(existentes, perfs, body.get("usuario", "equipo clínico"))
         out["cargado"] = True
     return 200, out
+
+
+def _guardar_importacion(existentes, perfs, usuario):
+    """Guarda solo lo nuevo, como ítems: el perfil si el paciente es nuevo o cambió, y cada evento, medición y cita
+    nuevos por separado. Así cada registro importado tiene su propia traza (canal, momento en que llegó) y volver a
+    cargar el mismo archivo no duplica nada. Los eventos llevan `registrado`: un evento que llega después de una
+    revisión la deja sin efecto, igual que uno registrado en la app."""
+    marca, items, cambiados = ahora(), [], []
+    for pid, p in perfs.items():  # primero se arma todo (un dato inválido corta aquí, antes de escribir nada)
+        viejo = existentes.get(pid)
+        llega = {**p, "eventos_clinicos": [{**e, "registrado": marca, "canal": CANAL_ARCHIVO} for e in p.get("eventos_clinicos", [])]}
+        if viejo is None:
+            items += items_de_perfil(llega, origen=CANAL_ARCHIVO)
+            continue
+        antes, despues = cambios_perfil(viejo, p)
+        if antes or despues:
+            cambiados.append((pid, p, antes, despues))
+        ya = {i["sk"] for i in items_de_perfil({**viejo, "eventos_clinicos": viejo.get("eventos_clinicos", []) + viejo.get("eventos_anulados", [])})}
+        items += [i for i in items_de_perfil({**llega, "paciente": None}, origen=CANAL_ARCHIVO) if i["sk"] not in ya]
+    for pid, p, antes, despues in cambiados:  # el perfil es el único ítem que se pisa: lo que cambió queda en una novedad
+        guardar({"id_paciente": pid, "sk": f"novedad#{marca}", "novedad": json.dumps(
+            {"tipo": "importacion", "detalle": "datos del paciente actualizados desde un archivo", "usuario": usuario,
+             "fecha": marca, "antes": antes, "despues": despues}, ensure_ascii=False, default=str)})
+        guardar_perfil(pid, p)
+    guardar_lote(items)
 
 
 def _impacto(existentes, nuevos, revs, corte, limite=100):
