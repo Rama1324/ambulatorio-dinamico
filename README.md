@@ -13,6 +13,22 @@ En el dataset del hospital (13-10-2026): los 17 pacientes con descompensación g
 N° 171** de la lista congelada (16 fuera de los primeros 50); con este sistema quedan en la **mediana N° 9** y la lista se
 actualiza en el momento en que entra el dato.
 
+## MVP (noviembre 2026): lista activa, decisiones documentadas y aprendizaje con el especialista
+Cada evento clínico que llega (app, Excel/CSV, API para sistemas, zona de carga S3, informe) se evalúa con criterios con
+fuente y la IA (Bedrock) que **lee y cita**; cada decisión queda **documentada** con la información, fuentes y versiones
+usadas; un especialista dice si fue **adecuada o incorrecta** y el sistema **aprende** (criterio local propuesto →
+aprobado por jefatura → aplicado y citado). Nunca baja una prioridad sola.
+
+| Documento | Para quién |
+|---|---|
+| [`docs/informes/INFORME_USUARIOS.md`](docs/informes/INFORME_USUARIOS.md) | Propósito, IA y especialista, guía paso a paso para probarla |
+| [`docs/informes/INFORME_TECNICO.md`](docs/informes/INFORME_TECNICO.md) | Arquitectura, AWS, integraciones, priorización, verificación, diferencias con el anexo técnico |
+| [`docs/DECISIONES.md`](docs/DECISIONES.md) | 12 decisiones de arquitectura con alternativas, mediciones y costos |
+| [`DEPLOY.md`](DEPLOY.md) · [`docs/operacion/RUNBOOK.md`](docs/operacion/RUNBOOK.md) | Despliegue en AWS y operación |
+| [`contrato.md`](contrato.md) | Contrato de la API |
+
+**Probarlo en un comando** (sin AWS, IA simulada): `python scripts/demo.py` → http://localhost:5174
+
 ## Estructura
 ```
 ambulatorio-dinamico/
@@ -47,12 +63,11 @@ ambulatorio-dinamico/
 ```
 
 ## Probar en local
-```powershell
-python -m pytest -q tests
-$env:LOCAL="1"; $env:DATA_DIR="data"; python lambda/local_server.py      # API en localhost:3001
-cd front; npm install; npm run dev                                         # app en localhost:5173
+```bash
+python scripts/demo.py                 # API (3001) + página (5174), IA simulada; --reglas, --bedrock <perfil>, --hoy
+python -m pytest -q tests              # 327 pruebas
+python scripts/generar_escenarios.py   # archivos de ejemplo en data/demo (con ESPERADO.md)
 ```
-(con `front/.env.local` → `VITE_API_URL=http://localhost:3001`)
 
 ## KPIs del hospital
 | KPI | Cómo se cubre |
