@@ -344,10 +344,10 @@ def revisar_samconfig(t):
 VARIABLES_EXIGIDAS = {
     "TABLE", "BUCKET", "COLA_EVALUACION_URL", "MODEL_ID", "MODEL_ID_REDACCION", "BEDROCK_REGION", "ALGORITMO",
     "FECHA_REFERENCIA", "REGISTRO_AL", "AUTH", "ORIGEN_PERMITIDO", "LECTURAS_IA", "GUARDRAIL_ID", "GUARDRAIL_VERSION",
-    "PREFIJO_ENTRADA", "TEMA_ALERTAS_ARN", "SEGMENTOS_SCAN",
+    "PREFIJO_ENTRADA", "TEMA_ALERTAS_ARN", "SEGMENTOS_SCAN", "BEDROCK_CACHE",
 }
 # Las que el codigo lee pero no van en la plantilla: solo locales, o las pone Lambda, o tienen respaldo en otra.
-VARIABLES_FUERA = {"LOCAL", "DATA_DIR", "AWS_REGION", "TEXTRACT_REGION", "PERFILES_KEY"}
+VARIABLES_FUERA = {"LOCAL", "DATA_DIR", "AWS_REGION", "TEXTRACT_REGION", "PERFILES_KEY", "PUERTO"}  # PUERTO: solo lambda/local_server.py
 
 
 def revisar_variables(t):

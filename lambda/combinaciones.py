@@ -18,6 +18,7 @@ from typing import List
 
 from pydantic import BaseModel, ValidationError, field_validator
 
+import cliente_ia
 import informe
 from modelos import buscar_cita, normalizar
 
@@ -123,8 +124,11 @@ def armar_prompt(cond, edad, sexo, texto):
     return f"LO QUE SE SABE DEL PACIENTE: {sabe}\n\nCOMBINACIONES (lista cerrada):\n{lista}\n\nTEXTO:\n{texto}"
 
 
-def detectar(texto, perfil, cliente, lecturas=LECTURAS):
-    """Devuelve {aplicadas: [...], alertas: [...], lecturas, errores, tokens}."""
+def detectar(texto, perfil, cliente, lecturas=None):
+    """Devuelve {aplicadas: [...], alertas: [...], lecturas, errores, tokens}. Lee LECTURAS_IA veces (por defecto 3) y
+    exige 2 lecturas iguales y verificadas (con 1 lectura, 1 de 1: sin control de estabilidad)."""
+    lecturas = lecturas or cliente_ia.lecturas_ia(LECTURAS)
+    umbral = cliente_ia.umbral_votos(lecturas)
     kb, cond = cargar(), condiciones(perfil)
     pac, le = perfil["paciente"], perfil["lista_espera"]
     descr = [f'{le.get("diagnostico_cie10")} {le.get("diagnostico_texto")}'] + \
@@ -166,13 +170,14 @@ def detectar(texto, perfil, cliente, lecturas=LECTURAS):
                 otras.setdefault(normalizar(o.cita), {"descripcion": o.descripcion[:200], "cita": o.cita})
     aplicadas = []
     for cid, n in votos.items():
-        if n >= 2:                                           # 2 de 3 lecturas
+        if n >= umbral:                                      # 2 de 3 lecturas (ver cliente_ia.umbral_votos)
             c = kb["por_id"][cid]
             aplicadas.append({"id": cid, "nombre": c["nombre"], "efecto": c["efecto"], "desenlace": c["desenlace"],
                               "cita_gatillo": citas[cid][0], "cita_base": citas[cid][1] or None,
                               "fuente": c["fuente"], "estado": c["estado"], "letalidad": c.get("letalidad"), "riesgo": c.get("riesgo")})
     return {"aplicadas": aplicadas, "alertas": list(otras.values()),
             "lecturas": len([r for r, _, _ in crudas if r]), "errores": [e for _, _, e in crudas if e],
+            "lecturas_configuradas": lecturas, "control_estabilidad": lecturas >= 2,
             "tokens_entrada": sum((u.get("tokens_entrada") or 0) for _, u, _ in crudas),
             "tokens_salida": sum((u.get("tokens_salida") or 0) for _, u, _ in crudas), "version": kb["kb"]["version"]}
 

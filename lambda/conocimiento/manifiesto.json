@@ -3,8 +3,8 @@
  "nota": "Generado por scripts/empaquetar_conocimiento.py: no editar a mano. sha256 = huella del contenido canónico de cada JSON (claves ordenadas, sin espacios) o del texto de cada .py con saltos de línea \\n; no depende del formato del archivo.",
  "paquete": {
   "etiqueta": "kb-2026.11.0",
-  "huella": "4bef6ac6aafe",
-  "generado": "2026-11-13T03:54:10+00:00"
+  "huella": "9aae9abd8dbc",
+  "generado": "2026-11-14T15:13:26+00:00"
  },
  "fuentes": [
   {
@@ -219,8 +219,8 @@
   }
  ],
  "motor": {
-  "huella": "49d4510e0041",
-  "sha256": "49d4510e0041aeeddbe33cd8f8efdc924a39208e7523b2f3424e3da63b0ec8a6",
+  "huella": "a0363ce99386",
+  "sha256": "a0363ce9938665608d652ec3e8d2a49efc2cb3b3f45c0d11fb103e1bb2040514",
   "archivos": [
    {
     "archivo": "lambda/puntaje.py",
@@ -240,19 +240,19 @@
    },
    {
     "archivo": "lambda/rubrica.py",
-    "sha256": "6bcdc0b2b803846e9ee750c0279bfdac242e26e922685163bf2b46e5d50c6fce"
+    "sha256": "f7d11afd883a9fec213d6c03dda22807d3bb3a12475d76521d47b06f289c9759"
    },
    {
     "archivo": "lambda/criterios.py",
-    "sha256": "025dc49f72bfdfdcc96e7c0caed1ce7d30b8f88d028748b44cfa67e2949087bc"
+    "sha256": "ea83c9d723c66eee5ad21d945d88376d3592b6ed73cff21a2be3433c9863e64a"
    },
    {
     "archivo": "lambda/combinaciones.py",
-    "sha256": "90aeb83de67a08ed03a97a52756422255bd090e4706da3da642bec52c3ed40ec"
+    "sha256": "ad29dad647e63ab30420f87290db3896e225db8ab76e85352b83319f293a94a0"
    },
    {
     "archivo": "lambda/lector_documento.py",
-    "sha256": "300b178c9da36a77bc12a4f43892d2224b6b397d8550ef18cb76141d1ff92c8a"
+    "sha256": "752a8c7ac9346892e6ac7e5c335476d0ab62c9acfbf723a38f24332af2047818"
    }
   ],
   "constantes": [

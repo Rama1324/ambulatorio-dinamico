@@ -15,6 +15,7 @@ from typing import List, Literal
 
 from pydantic import BaseModel, Field, ValidationError
 
+import cliente_ia
 import informe
 from modelos import SUBTIPOS, buscar_cita, normalizar
 
@@ -109,8 +110,40 @@ def verificar(h: Hallazgo, texto):
     return i, None
 
 
-def leer_documento(texto, cliente, lecturas=LECTURAS, diagnostico=None):
-    """Lee el documento N veces y devuelve {aceptados, propuestos, descartados, informativos, lecturas, tokens}."""
+# Modo simulado (MODEL_ID=simulado): evento que encuentra el lector por reglas (informe.PATRONES) → hallazgo de la lista
+# cerrada. Lo que el lector por reglas no sabe leer (cáncer, urgencia leve, reducción de dosis) no se simula: no se inventa.
+DESDE_REGLAS = {
+    ("hospitalizacion", "ingreso UCI"): "ingreso_uci",
+    ("hospitalizacion", "ingreso hospitalario"): "hospitalizacion",
+    ("visita_urgencia", "descompensación grave"): "descompensacion_grave",
+    ("visita_urgencia", "triage ESI 2"): "descompensacion_grave",  # la lista cerrada define descompensacion_grave = "o triage ESI 1-2"
+    ("visita_urgencia", "descompensación"): "descompensacion",
+    ("examen_alterado", "resultado alterado"): "examen_alterado",
+    ("cambio_farmaco", "aumento dosis"): "aumento_tratamiento",
+    ("control_aps", "estabilización"): "estabilizacion",
+    ("control_aps", "buena respuesta"): "estabilizacion",
+}
+
+
+def hallazgos_por_reglas(texto):
+    """Hallazgos del lector por reglas, con la frase del documento como cita (el código la verifica igual que a la IA).
+    'relacionado' queda 'desconocido': las reglas no saben si el motivo es por la enfermedad que espera (no baja a nadie)."""
+    out, vistos = [], set()
+    for c in informe.candidatos_por_reglas(texto):
+        tipo = DESDE_REGLAS.get((c["tipo_evento"], c["subtipo"]))
+        cita = (c.get("evidencia") or "").strip()
+        if not tipo or tipo in vistos or not 4 <= len(cita) <= 400:
+            continue
+        vistos.add(tipo)
+        out.append({"tipo": tipo, "cita": cita, "motivo": "", "relacionado": "desconocido"})
+    return out
+
+
+def leer_documento(texto, cliente, lecturas=None, diagnostico=None):
+    """Lee el documento N veces (LECTURAS_IA, por defecto 3) y devuelve {aceptados, propuestos, descartados, informativos,
+    lecturas, tokens}. Un hallazgo se registra solo si aparece en TODAS las lecturas; con 1 lectura no hay control de
+    estabilidad (la cita igual se verifica contra el documento)."""
+    lecturas = lecturas or cliente_ia.lecturas_ia(LECTURAS)
     with ThreadPoolExecutor(max_workers=lecturas) as ex:
         crudas = list(ex.map(lambda _: _leer(texto, cliente, diagnostico), range(lecturas)))
     validas = [r for r, _, err in crudas if r is not None]
@@ -159,6 +192,7 @@ def leer_documento(texto, cliente, lecturas=LECTURAS, diagnostico=None):
     aceptados.sort(key=lambda h: orden.index(h["tipo"]))
     return {"version": VERSION, "aceptados": aceptados, "propuestos": propuestos, "descartados": descartados,
             "informativos": informativos, "lecturas": len(validas), "errores": errores,
+            "lecturas_configuradas": lecturas, "control_estabilidad": lecturas >= 2,
             "tokens_entrada": sum((u.get("tokens_entrada") or 0) for _, u, _ in crudas),
             "tokens_salida": sum((u.get("tokens_salida") or 0) for _, u, _ in crudas)}
 

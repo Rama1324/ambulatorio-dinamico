@@ -16,6 +16,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from pydantic import BaseModel, ValidationError
 
+import cliente_ia
 import informe
 from modelos import buscar_cita, normalizar
 
@@ -136,8 +137,11 @@ def _verifica(cita, doc):
     return i >= 0 and not informe._negado(doc, i)
 
 
-def clasificar(texto, enf, cliente, lecturas=LECTURAS):
-    """Devuelve {nivel, criterio_id, criterio, cita, urgencia, cita_urgencia, lecturas, estable, errores}."""
+def clasificar(texto, enf, cliente, lecturas=None):
+    """Devuelve {nivel, criterio_id, criterio, cita, urgencia, cita_urgencia, lecturas, estable, errores}. Lee LECTURAS_IA
+    veces (por defecto 3) y exige 2 lecturas iguales y verificadas (con 1 lectura, 1 de 1: sin control de estabilidad)."""
+    lecturas = lecturas or cliente_ia.lecturas_ia(LECTURAS)
+    votos = cliente_ia.umbral_votos(lecturas)
     crit, urg = opciones(enf)
     sistema, usuario = armar_prompt(enf, texto)
     doc = normalizar(texto)
@@ -165,12 +169,13 @@ def clasificar(texto, enf, cliente, lecturas=LECTURAS):
             citas.setdefault(r.urgencia, r.cita_urgencia)
     mayor_c = Counter(criterios).most_common(1)
     mayor_u = Counter(urgencias).most_common(1)
-    cid = mayor_c[0][0] if mayor_c and mayor_c[0][1] >= 2 else None    # 2 de 3 lecturas iguales y verificadas
-    uid = mayor_u[0][0] if mayor_u and mayor_u[0][1] >= 2 else None
+    cid = mayor_c[0][0] if mayor_c and mayor_c[0][1] >= votos else None    # 2 de 3 lecturas iguales y verificadas
+    uid = mayor_u[0][0] if mayor_u and mayor_u[0][1] >= votos else None
     return {"enfermedad_id": enf["id"], "enfermedad": enf["enfermedad"], "especialidad": enf["especialidad"],
             "nivel": crit[cid][0] if cid else None, "criterio_id": cid, "criterio": crit[cid][1] if cid else None,
             "cita": citas.get(cid), "urgencia": urg[uid] if uid else None, "cita_urgencia": citas.get(uid),
             "lecturas": len([r for r, _, _ in crudas if r]), "errores": [e for _, _, e in crudas if e],
+            "lecturas_configuradas": lecturas, "control_estabilidad": lecturas >= 2,
             "tokens_entrada": sum((u.get("tokens_entrada") or 0) for _, u, _ in crudas),
             "tokens_salida": sum((u.get("tokens_salida") or 0) for _, u, _ in crudas),
             "fuente": enf.get("fuente_url") or FUENTE.format(v=cargar()["kb"].get("version", "?")), "riesgo": enf.get("riesgo")}

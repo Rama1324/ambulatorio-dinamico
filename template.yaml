@@ -175,6 +175,11 @@ Parameters:
     MinValue: 1
     MaxValue: 3
     Description: Lecturas independientes de la IA por paciente (1 a 3). Con 3 se exige acuerdo entre lecturas; cada una es una llamada a Bedrock.
+  BedrockCache:
+    Type: String
+    Default: "0"
+    AllowedValues: ["0", "1"]
+    Description: 1 = caché de prompts de Bedrock (cachePoint tras la parte estable del prompt). Apagado hasta medirlo con la cuenta.
 
   GuardrailId:
     Type: String
@@ -334,6 +339,7 @@ Globals:
         AUTH: !Ref Autenticacion
         ORIGEN_PERMITIDO: !If [OrigenEsSitio, !Sub "https://main.${AppWeb.DefaultDomain}", !Ref OrigenPermitido]
         LECTURAS_IA: !Ref LecturasIA
+        BEDROCK_CACHE: !Ref BedrockCache
         GUARDRAIL_ID: !Ref GuardrailId
         GUARDRAIL_VERSION: !Ref GuardrailVersion
         PREFIJO_ENTRADA: entrada/

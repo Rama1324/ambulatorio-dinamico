@@ -3,10 +3,51 @@
 El LLM NO decide la prioridad: solo redacta, en lenguaje clínico claro, las 'razones'
 que ya calculó puntaje.py. Si Bedrock falla, devuelve una explicación por plantilla
 para que el demo nunca se caiga.
-Variables de entorno: MODEL_ID (obligatoria para usar Bedrock), BEDROCK_REGION (opcional).
+Variables de entorno: MODEL_ID (obligatoria para usar Bedrock; "simulado" = siempre la plantilla), MODEL_ID_REDACCION
+(opcional: otro modelo solo para redactar), BEDROCK_REGION, GUARDRAIL_ID/GUARDRAIL_VERSION (opcionales).
 """
 import json
 import os
+import time
+
+import cliente_ia
+
+_sin_thinking = set()  # modelos que rechazaron additionalModelRequestFields.thinking: no se les vuelve a mandar
+
+
+def _converse(config, sistema, usuario, max_tokens, extra=None):
+    """Una llamada de redacción (tarea "resumen"): guardrail si está configurado, métrica de costo y, si el modelo rechaza
+    los campos adicionales (thinking), un reintento sin ellos que se recuerda. Devuelve la respuesta de converse."""
+    import boto3
+    model_id = cliente_ia.modelo(redaccion=True)
+    kw = {"region_name": os.environ["BEDROCK_REGION"]} if os.environ.get("BEDROCK_REGION") else {}
+    client = boto3.client("bedrock-runtime", config=config, **kw)
+    args = {"modelId": model_id, "system": [{"text": sistema}], "messages": [{"role": "user", "content": [{"text": usuario}]}],
+            "inferenceConfig": {"maxTokens": max_tokens}, **cliente_ia.guardrail()}
+    t0 = time.perf_counter()
+    try:
+        if extra and model_id not in _sin_thinking:
+            try:
+                r = client.converse(**args, additionalModelRequestFields=extra)
+            except Exception as e:
+                if not cliente_ia.rechaza(e, cliente_ia.RECHAZA_THINKING):
+                    raise
+                _sin_thinking.add(model_id)
+                print(json.dumps({"aviso": "ia", "modelo": model_id, "detalle": "el modelo rechaza additionalModelRequestFields: se reintenta sin ellos"}))
+                r = client.converse(**args)
+        else:
+            r = client.converse(**args)
+    except Exception as e:
+        cliente_ia.metrica("resumen", model_id, time.perf_counter() - t0, error=e)
+        raise
+    cliente_ia.metrica("resumen", model_id, time.perf_counter() - t0, cliente_ia.uso(r))
+    return r
+
+
+def _usa_plantilla():
+    """Sin IA configurada o en modo simulado (MODEL_ID=simulado) se redacta con la plantilla, y se dice: fuente 'plantilla'."""
+    m = cliente_ia.modelo(redaccion=True)
+    return not m or cliente_ia.simulado() or cliente_ia.simulado(m)
 
 PROMPT_SISTEMA = """Eres un asistente de gestión de listas de espera de un hospital público chileno.
 Redactas para un gestor de salud y el equipo clínico.
@@ -57,20 +98,12 @@ def plantilla(p):
 
 def explicar(paciente):
     """Devuelve (texto, fuente) donde fuente es 'bedrock' o 'plantilla'."""
-    model_id = os.environ.get("MODEL_ID")
-    if not model_id:
+    if _usa_plantilla():
         return plantilla(paciente), "plantilla"
     try:
-        import boto3
-        kw = {"region_name": os.environ["BEDROCK_REGION"]} if os.environ.get("BEDROCK_REGION") else {}
         from aws_config import CORTA
-        client = boto3.client("bedrock-runtime", config=CORTA, **kw)
-        r = client.converse(
-            modelId=model_id,
-            system=[{"text": PROMPT_SISTEMA}],
-            messages=[{"role": "user", "content": [{"text": "Datos del paciente:\n" + json.dumps(_datos(paciente), ensure_ascii=False)}]}],
-            inferenceConfig={"maxTokens": 1200},  # holgado: el razonamiento también gasta tokens. Sin 'temperature' (no la aceptan)
-        )
+        # maxTokens holgado: el razonamiento también gasta tokens. Sin 'temperature' (no la aceptan)
+        r = _converse(CORTA, PROMPT_SISTEMA, "Datos del paciente:\n" + json.dumps(_datos(paciente), ensure_ascii=False), 1200)
         texto = "".join(b.get("text", "") for b in r["output"]["message"]["content"]).strip()  # puede venir un bloque de razonamiento antes
         if r.get("stopReason") == "max_tokens" and "." in texto:
             texto = texto[:texto.rindex(".") + 1]  # cortado: dejar solo oraciones completas
@@ -205,19 +238,15 @@ def _limpia(r):
 
 def resumen_equipo(d, corte):
     """Devuelve (secciones, fuente). fuente: 'bedrock' o 'plantilla'."""
-    model_id = os.environ.get("MODEL_ID")
-    if not model_id:
+    if _usa_plantilla():
         return resumen_plantilla(d, corte), "plantilla"
     try:
-        import boto3
         from botocore.config import Config
-        kw = {"region_name": os.environ["BEDROCK_REGION"]} if os.environ.get("BEDROCK_REGION") else {}
-        # ~10 s sin razonamiento extendido (con razonamiento eran ~20 s); 20 s de margen bajo los 29 s de API Gateway
+        # ~10 s sin razonamiento extendido (con razonamiento eran ~20 s); 20 s de margen bajo los 29 s de API Gateway.
+        # Si el modelo rechaza 'thinking' (algunos modelos nuevos), _converse reintenta sin ese campo.
         cfg = Config(connect_timeout=3, read_timeout=20, retries={"max_attempts": 1})
-        r = boto3.client("bedrock-runtime", config=cfg, **kw).converse(
-            modelId=model_id, system=[{"text": PROMPT_RESUMEN}],
-            messages=[{"role": "user", "content": [{"text": "Datos del paciente:\n" + json.dumps(_datos_resumen(d, corte), ensure_ascii=False, default=str)}]}],
-            inferenceConfig={"maxTokens": 1500}, additionalModelRequestFields={"thinking": {"type": "disabled"}})
+        r = _converse(cfg, PROMPT_RESUMEN, "Datos del paciente:\n" + json.dumps(_datos_resumen(d, corte), ensure_ascii=False, default=str),
+                      1500, extra={"thinking": {"type": "disabled"}})
         crudo = "".join(b.get("text", "") for b in r["output"]["message"]["content"])
         return _limpia(json.loads(crudo[crudo.find("{"): crudo.rfind("}") + 1])), "bedrock"
     except Exception as e:

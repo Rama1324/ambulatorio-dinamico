@@ -123,15 +123,24 @@ Si no hay ninguno responde {{"tipo_evento": null}}. Un hallazgo negado o descart
 
 
 def sugerencia_bedrock(texto):
+    import time
+    import cliente_ia
     model_id = os.environ.get("MODEL_ID")
-    if not model_id:
+    if not model_id or cliente_ia.simulado(model_id):  # simulado: lo que no encuentran las reglas no se inventa
         return None
+    t0 = time.perf_counter()
     try:
         import boto3
         from aws_config import CORTA
-        r = boto3.client("bedrock-runtime", region_name=_region(), config=CORTA).converse(
-            modelId=model_id, system=[{"text": PROMPT.format(vocab=json.dumps({t: list(s) for t, s in SUBTIPOS.items()}, ensure_ascii=False))}],
-            messages=[{"role": "user", "content": [{"text": privacidad.ocultar(texto)}]}], inferenceConfig={"maxTokens": 1200})
+        try:
+            r = boto3.client("bedrock-runtime", region_name=_region(), config=CORTA).converse(
+                modelId=model_id, system=[{"text": PROMPT.format(vocab=json.dumps({t: list(s) for t, s in SUBTIPOS.items()}, ensure_ascii=False))}],
+                messages=[{"role": "user", "content": [{"text": privacidad.ocultar(texto)}]}], inferenceConfig={"maxTokens": 1200},
+                **cliente_ia.guardrail())
+        except Exception as e:
+            cliente_ia.metrica("documento", model_id, time.perf_counter() - t0, error=e)
+            raise
+        cliente_ia.metrica("documento", model_id, time.perf_counter() - t0, cliente_ia.uso(r))
         crudo = "".join(b.get("text", "") for b in r["output"]["message"]["content"])  # puede venir un bloque de razonamiento antes
         ev = json.loads(crudo[crudo.find("{"): crudo.rfind("}") + 1])
         if not ev.get("tipo_evento") or ev.get("tipo_evento") not in SUBTIPOS or ev.get("subtipo") not in SUBTIPOS[ev["tipo_evento"]]:
