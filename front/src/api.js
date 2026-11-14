@@ -1,4 +1,7 @@
 // Cliente de la API (AWS o lambda/local_server.py). La URL viene de VITE_API_URL (front/.env.local en local).
+import * as auth from "./auth.js";
+
+export { auth };
 export const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
 // Fechas del control "Explorar fechas anteriores": cada 14 días desde abril hasta la fecha del registro.
@@ -26,12 +29,24 @@ export function setUsuario(nombre) {
   try { localStorage.setItem("hlf_usuario", usuario); } catch { /* sin almacenamiento */ }
 }
 
-async function req(method, path, body) {
+// Rol declarado en la demo (AUTH=ninguna): viaja en la cabecera X-Rol y es solo informativo (la API no lo verifica).
+// Con inicio de sesión (Cognito) el rol sale de los grupos del token y esta cabecera no cuenta.
+let rol = "";
+try { rol = localStorage.getItem("hlf_rol") || ""; } catch { /* sin almacenamiento */ }
+export const getRol = () => rol;
+export function setRol(r) {
+  rol = (r || "").trim();
+  try { localStorage.setItem("hlf_rol", rol); } catch { /* sin almacenamiento */ }
+}
+
+async function req(method, path, body, reintento = true) {
   const b = body && method === "POST" && usuario && !body.usuario ? { ...body, usuario } : body;
-  const r = await fetch(API_URL + path, {
-    method, headers: { "content-type": "application/json" }, ...(b ? { body: JSON.stringify(b) } : {}),
-  });
-  const data = await r.json();
+  const token = await auth.token(); // null en la demo; con Cognito, el token vigente (o lleva al inicio de sesión)
+  const headers = { "content-type": "application/json", ...(rol ? { "x-rol": rol } : {}),
+    ...(token ? { authorization: `Bearer ${token}` } : {}) };
+  const r = await fetch(API_URL + path, { method, headers, ...(b ? { body: JSON.stringify(b) } : {}) });
+  if (r.status === 401 && token && reintento && (await auth.noAutorizado())) return req(method, path, body, false);
+  const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(data.error || `Error ${r.status}`);
   return data;
 }
@@ -45,6 +60,8 @@ export const getHistoria = (id, fechaCorte, especialidad) => req("GET", `/pacien
 export const getKpis = (fechaCorte, especialidad) => req("GET", `/kpis?${conFecha(fechaCorte, especialidad)}`);
 export const getEstadisticas = (fechaCorte, especialidad) => req("GET", `/estadisticas?${conFecha(fechaCorte, especialidad)}`);
 export const getCatalogo = () => req("GET", "/catalogo");
+// Quién está conectado, con qué roles y qué puede hacer: {usuario, roles, origen, auth, se_exige, permisos, aviso?}
+export const getYo = () => req("GET", "/yo");
 export const urlPlantilla = (tabla) => `${API_URL}/plantillas/${tabla}`;
 
 // Registros del equipo clínico (cada uno queda con usuario y fecha)
