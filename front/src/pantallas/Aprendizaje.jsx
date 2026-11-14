@@ -12,11 +12,12 @@ import { fmt } from "../util";
 const MIN = 20;
 const ESTADO_CL = { propuesto: ["Propuesto", "text-ambar bg-ambar-container/60"], vigente: ["Vigente", "text-verde bg-verde-container/60"],
   rechazado: ["Rechazado", "text-on-surface-variant bg-surface-container-low"], retirado: ["Retirado", "text-on-surface-variant bg-surface-container-low"] };
-const num = (x, d = 2) => (x == null ? "—" : String(Math.round(x * 10 ** d) / 10 ** d).replace(".", ","));
+const num = (x, d = 2) => (x == null ? "—" : x.toFixed(d).replace(".", ","));
 
 export function Aprendizaje({ data, esp, setEsp, fecha, onVer, onCambio, onAviso }) {
   const [a, setA] = useState(null);
   const [error, setError] = useState(null);
+  const [resuelto, setResuelto] = useState(null);  // resultado de la última resolución (el criterio cambia de sección al resolverse)
   const espApi = esp === "Todas" ? null : esp;
   const cargar = useCallback(async () => {
     try { setError(null); setA(await api.getAprendizaje(espApi)); } catch (e) { setError(e.message); }
@@ -64,17 +65,19 @@ export function Aprendizaje({ data, esp, setEsp, fecha, onVer, onCambio, onAviso
         </div>
       </div>
 
+      {resuelto && <ResultadoResolucion r={resuelto} onVer={onVer} onCerrar={() => setResuelto(null)} />}
+
       <Caja titulo={`Criterios locales propuestos (${de("propuesto").length})`} accion={<span className="text-[12px] text-on-surface-variant">Versión de los criterios locales: {a.capa_local?.version ?? 0}</span>}>
         {de("propuesto").length === 0 ? <p className="text-[14px] text-on-surface-variant">No hay criterios esperando aprobación. Aparecen cuando un especialista marca una decisión como
           incorrecta con el motivo «Falta un criterio».</p>
           : <div className="flex flex-col gap-3">{de("propuesto").map((c) => <Criterio key={c.id} c={c} precedentes={precedentesDe(c)} onVer={onVer} onAviso={onAviso}
-            onResuelto={async () => { await Promise.all([cargar(), onCambio?.()]); }} fecha={fecha} />)}</div>}
+            onResuelto={async (r) => { setResuelto(r); await Promise.all([cargar(), onCambio?.()]); }} fecha={fecha} />)}</div>}
       </Caja>
 
       <Caja titulo={`Criterios locales vigentes (${de("vigente").length})`}>
         {de("vigente").length === 0 ? <p className="text-[14px] text-on-surface-variant">Todavía no hay criterios locales aprobados: la lista usa solo la tabla del HLF y los criterios oficiales.</p>
           : <div className="flex flex-col gap-3">{de("vigente").map((c) => <Criterio key={c.id} c={c} aplica={aplicaA(c)} esp={esp} onVer={onVer} onAviso={onAviso}
-            onResuelto={async () => { await Promise.all([cargar(), onCambio?.()]); }} fecha={fecha} />)}</div>}
+            onResuelto={async (r) => { setResuelto(r); await Promise.all([cargar(), onCambio?.()]); }} fecha={fecha} />)}</div>}
       </Caja>
 
       {(de("rechazado").length > 0 || de("retirado").length > 0) && <details className="bg-surface-container-lowest border border-outline-variant rounded">
@@ -138,7 +141,6 @@ function Criterio({ c, precedentes, aplica, esp, onVer, onAviso, onResuelto, fec
   const [accion, setAccion] = useState(null);
   const [motivo, setMotivo] = useState("");
   const [enviando, setEnviando] = useState(false);
-  const [resultado, setResultado] = useState(null);
   const [est, colorEst] = ESTADO_CL[c.estado] || [c.estado, ""];
   const ACC = { aprobar: "Aprobar", rechazar: "Rechazar", retirar: "Retirar" };
   const resolver = async () => {
@@ -146,9 +148,9 @@ function Criterio({ c, precedentes, aplica, esp, onVer, onAviso, onResuelto, fec
     setEnviando(true);
     try {
       const r = await api.postResolverCriterio(c.id, { accion, motivo: motivo.trim(), fecha_corte: fecha });
-      setResultado({ accion, ...r }); setAccion(null); setMotivo("");
+      setAccion(null); setMotivo("");
       onAviso?.({ titulo: `Criterio ${c.id}: ${r.criterio?.estado || accion}${r.pacientes_con_cambio ? ` · ${plural(r.pacientes_con_cambio, "paciente cambia", "pacientes cambian")} de prioridad` : ""}` });
-      await onResuelto?.();
+      await onResuelto?.({ accion, ...r });
     } catch (e) { onAviso?.({ titulo: "No se pudo resolver el criterio: " + e.message }); } finally { setEnviando(false); }
   };
   return (
@@ -169,14 +171,6 @@ function Criterio({ c, precedentes, aplica, esp, onVer, onAviso, onResuelto, fec
           {v.categoria_sistema && v.categoria_final && ` (sistema: ${v.categoria_sistema} → especialista: ${v.categoria_final})`}{v.motivo ? `: «${v.motivo}»` : ""} ·{" "}
           <button onClick={() => onVer(v.id_paciente)} className="text-primary hover:underline">{v.id_paciente}</button></li>)}</ul>
       </div>}
-      {resultado && <div className="rounded bg-hlf-claro text-hlf p-2 text-[13px]">
-        {resultado.accion === "aprobar" ? <>Aprobado. {resultado.pacientes_con_cambio ? `Cambió la prioridad de ${plural(resultado.pacientes_con_cambio, "paciente", "pacientes")}` : "No cambió la prioridad de nadie"}
-          {resultado.dictamenes?.length ? `; quedaron ${plural(resultado.dictamenes.length, "decisión", "decisiones")} para revisión en «Decisiones»` : ""}.
-          {resultado.dictamenes?.length > 0 && <ul className="list-disc pl-5 mt-1">{resultado.dictamenes.map((d) => <li key={d.id_dictamen}>
-            <button onClick={() => onVer(d.id_paciente)} className="underline">{d.id_paciente}</button>: {d.categoria_antes} → {d.categoria}</li>)}</ul>}</>
-          : `Criterio ${resultado.criterio?.estado || resultado.accion}.`}
-        {resultado.conservan_prioridad?.length > 0 && <p className="mt-1">Conservan su prioridad mientras un especialista los revisa: {resultado.conservan_prioridad.map((x) => x.id_paciente || x).join(", ")}.</p>}
-      </div>}
       {onResuelto && (c.estado === "propuesto" || c.estado === "vigente") && (puede("jefatura")
         ? <div className="flex flex-col gap-2 mt-1">
           <div className="flex flex-wrap gap-2">
@@ -194,5 +188,21 @@ function Criterio({ c, precedentes, aplica, esp, onVer, onAviso, onResuelto, fec
         </div>
         : <p className="text-[12px] text-on-surface-variant">Aprobar, rechazar o retirar un criterio lo hace la jefatura (elija el rol arriba).</p>)}
     </article>
+  );
+}
+
+// Qué pasó al resolver un criterio: a cuántos pacientes les cambió la prioridad y las decisiones que quedaron para revisión.
+function ResultadoResolucion({ r, onVer, onCerrar }) {
+  return (
+    <div className="rounded border border-hlf/40 bg-hlf-claro text-hlf p-3 text-[14px]">
+      <div className="flex justify-between gap-2"><b>Criterio {r.criterio?.id}: {r.criterio?.estado || r.accion}</b><button onClick={onCerrar} className="text-[13px] underline">Cerrar</button></div>
+
+        {r.accion === "aprobar" ? <>Aprobado. {r.pacientes_con_cambio ? `Cambió la prioridad de ${plural(r.pacientes_con_cambio, "paciente", "pacientes")}` : "No cambió la prioridad de nadie"}
+          {r.dictamenes?.length ? `; quedaron ${plural(r.dictamenes.length, "decisión", "decisiones")} para revisión en «Decisiones»` : ""}.
+          {r.dictamenes?.length > 0 && <ul className="list-disc pl-5 mt-1">{r.dictamenes.map((d) => <li key={d.id_dictamen}>
+            <button onClick={() => onVer(d.id_paciente)} className="underline">{d.id_paciente}</button>: {d.categoria_antes} → {d.categoria}</li>)}</ul>}</>
+          : `Criterio ${r.criterio?.estado || r.accion}.`}
+        {r.conservan_prioridad?.length > 0 && <p className="mt-1">Conservan su prioridad mientras un especialista los revisa: {r.conservan_prioridad.map((x) => x.id_paciente || x).join(", ")}.</p>}
+      </div>
   );
 }

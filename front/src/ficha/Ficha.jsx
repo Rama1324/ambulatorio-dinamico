@@ -253,7 +253,7 @@ export function Ficha({ p, total, detalle, fecha, demo, esp, onCambio, onAviso, 
             <li key={i} className={`grid grid-cols-[96px_1fr] gap-2 py-1.5 border-b border-outline-variant/50 ${x.nuevo ? "bg-ambar-container/50" : ""}`}>
               <span className="text-on-surface-variant text-[13px] leading-tight">{fmt(x.f)}<br /><span className="text-[11px]">{hace(x.f, fecha)}</span></span>
               {x.anulado ? <span className="text-on-surface-variant"><span className="line-through">{x.t}</span>
-                <span className="block text-[12px]">Anulado por {x.anulado.usuario || "—"} el {fmtHora(x.anulado.fecha)}{x.anulado.id_evento ? ` · ${x.anulado.id_evento}` : ""}</span></span>
+                <span className="block text-[12px]">Anulado por {x.anulado.usuario || "—"} el {fmtHora(x.anulado.registrada)}{x.anulado.id_evento ? ` · ${x.anulado.id_evento}` : ""}</span></span>
                 : <span><span className={x.rojo ? "text-error font-semibold" : x.ambar ? "text-ambar" : ""}>{x.t}{x.d && <span className="text-on-surface-variant font-normal"> · {x.d}</span>}</span>
                   {x.enmiendas?.map((m, k) => <span key={k} className="block text-[12px] text-primary">Corregido por {m.usuario || "—"} el {fmtHora(m.fecha)}: {m.texto}</span>)}
                   {x.ev?.id_evento && !demo && puede("especialista") && <Enmienda p={p} ev={x.ev} fecha={fecha} onAviso={onAviso} onCambio={onCambio} />}</span>}
@@ -315,7 +315,7 @@ function Enmienda({ p, ev, fecha, onAviso, onCambio }) {
 }
 
 // Lo primero que se ve al abrir un paciente: dónde está, cómo cambió su prioridad y por qué.
-const MOTIVOS = ["urgencia", "combinacion", "criterio_registro", "criterio_clinico", "oncologico", "tabla_oficial", "piso"];
+const MOTIVOS = ["urgencia", "criterio_local", "combinacion", "criterio_registro", "criterio_clinico", "oncologico", "tabla_oficial", "piso"];
 function Resultado({ p, total, esp, fecha, onFundamento }) {
   const rz = p.razones || [];
   const m = MOTIVOS.map((f) => rz.find((r) => r.factor === f && !r.sin_regla)).find(Boolean);
@@ -387,7 +387,7 @@ function ResumenEquipo({ resumen, cargando, onPedir }) {
 }
 
 // Qué pasó con el evento recién registrado: puesto y prioridad antes/después, la regla que lo explica y sus nuevos vecinos.
-const FACTORES_CAMBIO = ["urgencia", "combinacion", "criterio_registro", "oncologico", "riesgo_vital", "tabla_oficial"];
+const FACTORES_CAMBIO = ["criterio_local", "urgencia", "combinacion", "criterio_registro", "oncologico", "riesgo_vital", "tabla_oficial"];
 function ResultadoEvento({ r, onVer, onCerrar }) {
   const p = r.paciente;
   if (!p) return null;

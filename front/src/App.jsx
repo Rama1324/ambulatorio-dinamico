@@ -56,6 +56,7 @@ export default function App() {
   const puede = useMemo(() => crearPuede(roles), [roles.join()]); // eslint-disable-line react-hooks/exhaustive-deps
   const [lote, setLote] = useState(null);  // "Recepción de datos" → ver las decisiones de un lote
   const [nPendientes, setNPendientes] = useState(null);
+  const [modeloIA, setModeloIA] = useState(null);  // modelo registrado en las decisiones (/health no lo informa)
   const fecha = demo ? fechas[iFecha] : fechas[fechas.length - 1];
 
   const pedido = useRef(0);  // si llegan respuestas en desorden (cambio rápido de especialidad o fecha), vale solo la última
@@ -71,7 +72,8 @@ export default function App() {
   useEffect(() => {
     if (!data) return;
     let vivo = true;
-    api.getDecisiones("pendiente", esp === "Todas" ? null : esp, 1000).then((r) => vivo && setNPendientes(r.total)).catch(() => vivo && setNPendientes(null));
+    api.getDecisiones("pendiente", esp === "Todas" ? null : esp, 1000).then((r) => { if (!vivo) return; setNPendientes(r.total);
+      const m = r.decisiones.find((d) => d.informacion_utilizada?.ia?.modelo)?.informacion_utilizada.ia.modelo; if (m) setModeloIA(m); }).catch(() => vivo && setNPendientes(null));
     return () => { vivo = false; };
   }, [data, esp]);
   useEffect(() => {
@@ -101,9 +103,10 @@ export default function App() {
   const pendientes = data.pacientes.filter((p) => p.gestion?.estado === "pendiente_revision").length;
   const masDeUnAnio = data.pacientes.filter((p) => p.dias_espera > 365).length;
   // modo de decisión: /health trae el algoritmo; que la IA sea simulada se sabe por el modelo registrado en las evaluaciones
-  const modelo = data.pacientes.find((p) => p.rubrica?.modelo)?.rubrica?.modelo;
+  const modelo = data.pacientes.find((p) => p.rubrica?.modelo)?.rubrica?.modelo || modeloIA;
   const modoDecision = info?.algoritmo === "rubrica" ? (modelo === "simulado" ? ["IA simulada (demostración, sin Amazon Bedrock) + criterios con fuente", "text-ambar"]
-    : ["IA con Amazon Bedrock + criterios con fuente", ""]) : ["Solo reglas con fuente (sin IA)", ""];
+    : modelo ? [`IA con Amazon Bedrock (${modelo}) + criterios con fuente`, ""] : ["IA que lee el historial + criterios con fuente (modelo aún no informado)", ""])
+    : ["Solo reglas con fuente (sin IA)", ""];
   const irDecisionesLote = (id) => { setLote(id); setVista("decisiones"); };
 
   return (

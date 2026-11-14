@@ -26,7 +26,17 @@ export function Decisiones({ data, esp, setEsp, fecha, lote, onQuitarLote, onVer
   }, [estado, espApi, lote]);
   useEffect(() => { cargar(); }, [cargar]);
 
-  const porId = useMemo(() => Object.fromEntries((data?.pacientes || []).map((p) => [p.id_paciente, p])), [data]);
+  // nombre y diagnóstico de cada paciente: la lista cargada es de una especialidad; si hay decisiones de otras (p. ej. un lote),
+  // se pide una vez la lista de todo el hospital
+  const [todos, setTodos] = useState(null);
+  const faltan = (r?.decisiones || []).some((d) => !data?.pacientes.some((p) => p.id_paciente === d.id_paciente));
+  useEffect(() => {
+    if (!faltan || todos) return;
+    let vivo = true;
+    api.getPacientes(fecha).then((x) => vivo && setTodos(x.pacientes)).catch(() => {});
+    return () => { vivo = false; };
+  }, [faltan, todos, fecha]);
+  const porId = useMemo(() => Object.fromEntries([...(todos || []).map((p) => ({ ...p, rev: undefined })), ...(data?.pacientes || [])].map((p) => [p.id_paciente, p])), [data, todos]);
   const idsRecientes = new Set(recientes.map((x) => x.d.id_dictamen));
   const lista = (r?.decisiones || []).filter((d) => (!lote || d.disparador?.id_lote === lote) && !idsRecientes.has(d.id_dictamen));
 

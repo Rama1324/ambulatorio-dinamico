@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import * as api from "../api";
 import { Caja, Icono } from "../componentes/comunes";
 import { CANAL, fmtHora } from "../componentes/Decision";
-import { plural } from "../constantes";
 import { CargarDatos } from "./CargarDatos";
 
 const VIAS = [
@@ -102,7 +101,7 @@ function Lote({ l, onVerLote }) {
             l.estado && l.estado !== "procesado" && `estado: ${l.estado}`, l.evaluacion === "en_cola" && "evaluación en cola"].filter(Boolean).join(" · ")}</div>
         </div>
         {n(l.dictamenes) > 0 ? <button onClick={() => onVerLote(l.id_lote)} className="px-3 py-1.5 rounded bg-primary text-on-primary font-semibold text-[13px] flex items-center gap-1">
-          <Icono n="fact_check" className="text-[16px]" />Ver sus {plural(n(l.dictamenes), "decisión", "decisiones")}</button>
+          <Icono n="fact_check" className="text-[16px]" />{n(l.dictamenes) === 1 ? "Ver su decisión" : `Ver sus ${n(l.dictamenes)} decisiones`}</button>
           : <span className="text-[12px] text-on-surface-variant">Sin decisiones nuevas</span>}
       </div>
       <div className="flex flex-wrap gap-2 mt-2">

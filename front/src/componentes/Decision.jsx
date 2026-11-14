@@ -131,7 +131,7 @@ export function DetalleDictamen({ d }) {
         <ul className="space-y-1.5">
           {(d.fundamento || []).map((r, i) => (
             <li key={i} className={`pl-2 border-l-4 ${r.factor === "criterio_local" ? "border-primary" : r.sin_regla ? "border-outline-variant" : "border-error/50"}`}>
-              <span className="text-on-surface-variant">{FACTOR[r.factor] || r.factor}:</span> {r.valor}
+              <span className="text-on-surface-variant">{FACTOR[r.factor] || r.factor}:</span> {textoEvento(r.valor)}
               <div className="text-[12px] text-on-surface-variant italic">Fuente: {r.fuente}</div>
             </li>))}
         </ul>
@@ -204,6 +204,7 @@ export function FormVeredicto({ pid, categoria, idDictamen, rev, fecha, onListo,
       if (e.status === 409 && e.codigo === "conflicto_edicion") {
         onAviso?.({ titulo: "El paciente tiene información nueva desde que abrió esta decisión: se recargó. Revísela de nuevo." });
         setError("El paciente recibió información nueva mientras tenía esto abierto. Se recargaron los datos: revise y vuelva a responder.");
+        if (e.datos?.rev_actual != null) setRevVista(e.datos.rev_actual);  // lo nuevo ya está a la vista: la próxima respuesta se basa en ello
         onConflicto?.();
       } else setError(e.message);
     } finally { setEnviando(false); }
