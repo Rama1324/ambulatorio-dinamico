@@ -6,6 +6,8 @@ import { AjusteManual, Contacto, DecisionClinica, GestionCaso, Novedad } from ".
 import { EvolucionPaciente } from "./Evolucion";
 import { Informe } from "./Informe";
 import { fmt, fmtHace, hace } from "../util";
+import { Aprendido, FormVeredicto, TarjetaDecision, fmtHora } from "../componentes/Decision";
+import { usePuede } from "../permisos";
 
 // Simulación (modo demostración): eventos con un motivo clínico propio de la enfermedad del paciente, más dos sin relación
 // con ella (apendicitis, esguince) que NO deben subirlo. La gravedad la pone el vocabulario del registro, no esta lista.
@@ -43,10 +45,20 @@ function eventosSimulables(p) {
   return [...propios, ...SIN_RELACION];
 }
 
-export function Ficha({ p, total, detalle, fecha, demo, esp, onCambio, onAviso, onDestacar, onVer }) {
+export function Ficha({ p, total, detalle, fecha, demo, esp, onCambio, onAviso, onDestacar, onVer, onIrAprendizaje }) {
+  const puede = usePuede();
   const [resumen, setResumen] = useState(null);
   const [cargando, setCargando] = useState(null);
-  const [ajuste, setAjuste] = useState(null);
+  const [aprendido, setAprendido] = useState(null);  // lo que aprendió el sistema con la última revisión hecha en esta ficha
+  const [decisiones, setDecisiones] = useState(null);
+  const [motivos, setMotivos] = useState([]);
+  useEffect(() => { api.catalogoCache().then((c) => setMotivos(c.motivos_veredicto || [])).catch(() => {}); }, []);
+  // historia de decisiones del sistema de este paciente (más reciente primero): se recarga cuando el paciente cambia (rev)
+  useEffect(() => {
+    let vivo = true;
+    api.getDecisionesPaciente(p.id_paciente).then((r) => vivo && setDecisiones(r.decisiones || [])).catch(() => vivo && setDecisiones([]));
+    return () => { vivo = false; };
+  }, [p.id_paciente, p.rev]);
   const [tipoEv, setTipoEv] = useState(0);
   const simulables = eventosSimulables(p);
   const [resultado, setResultado] = useState(null);  // qué pasó con el último evento registrado desde la ficha
@@ -67,20 +79,15 @@ export function Ficha({ p, total, detalle, fecha, demo, esp, onCambio, onAviso, 
     onAviso({ titulo: `${origen}. Lista actualizada`, antes: r.posicion_antes, despues: r.posicion_despues, cat: r.paciente?.categoria });
   });
   const [tab, setTab] = useState("resumen");
-  const sinNombre = () => !api.getUsuario() && (onAviso({ titulo: "Escriba su nombre y cargo arriba a la derecha: la revisión queda a su nombre" }), true);
-  const confirmar = () => !sinNombre() && correr("rev", async () => { await api.postRevision(p.id_paciente, { accion: "confirmar", fecha_corte: fecha }); await onCambio(); onAviso({ titulo: "Prioridad confirmada" }); });
-  const guardarAjuste = () => !sinNombre() && correr("rev", async () => {
-    await api.postRevision(p.id_paciente, { accion: "ajustar", categoria_ajustada: ajuste.categoria, motivo: ajuste.motivo, fecha_corte: fecha });
-    setAjuste(null); await onCambio(); onAviso({ titulo: "Cambio de prioridad registrado" });
-  });
   const pedirResumen = () => correr("ia", async () => setResumen(await api.postExplicar(p.id_paciente, fecha)));
 
   // avisos que piden mirar algo; "prioridad ajustada por tabla HLF" no es aviso: es el motivo por el que ya subió (ver Fundamento)
   const avisos = [...new Set((p.revision_sugerida || []).map((s) => s.motivo).filter((m) => !m.includes("prioridad ajustada")))];
   const timeline = detalle ? [
-    ...detalle.eventos_clinicos.map((e) => ({ f: e.fecha_evento, t: `${TIPO_EVENTO[e.tipo_evento] || e.tipo_evento}: ${e.subtipo}`, d: [e.motivo ? `motivo: ${e.motivo}${e.relacionado === false ? " (sin relación con su enfermedad)" : ""}` : null, e.detalle?.startsWith("Informe") ? e.detalle : null, e.fecha_en_documento === false ? "el documento no decía la fecha: se registró con la del día en que se leyó" : null].filter(Boolean).join(" · ") || null, rojo: e.severidad === "grave", nuevo: e.id_evento?.startsWith("EV-DEMO") })),
+    ...detalle.eventos_clinicos.map((e) => ({ ev: e, enmiendas: enmiendasDe(decisiones, e.id_evento), f: e.fecha_evento, t: `${TIPO_EVENTO[e.tipo_evento] || e.tipo_evento}: ${e.subtipo}`, d: [e.motivo ? `motivo: ${e.motivo}${e.relacionado === false ? " (sin relación con su enfermedad)" : ""}` : null, e.detalle?.startsWith("Informe") ? e.detalle : null, e.fecha_en_documento === false ? "el documento no decía la fecha: se registró con la del día en que se leyó" : null].filter(Boolean).join(" · ") || null, rojo: e.severidad === "grave", nuevo: e.id_evento?.startsWith("EV-DEMO") })),
     ...detalle.mediciones.map((m) => ({ f: m.fecha_medicion, t: `${m.tipo_medicion.replace("_", " ")}: ${m.valor} ${m.unidad}`, d: m.fuera_de_rango ? "fuera de rango" : null, ambar: m.fuera_de_rango })),
     ...(detalle.citaciones || []).map((c) => ({ f: c.fecha_cita, t: `Citación ${c.id_box}: ${c.estado_cita.replace("_", " ")}`, ambar: c.estado_cita === "no_asistio" })),
+    ...anulados(decisiones, detalle.eventos_clinicos).map((x) => ({ f: x.fecha, t: x.texto, anulado: x })),
     { f: p.fecha_ingreso_lista, t: "Ingreso de la interconsulta", d: `prioridad inicial ${p.prioridad_inicial}` },
   ].sort((a, b) => b.f.localeCompare(a.f)) : [];
 
@@ -120,8 +127,9 @@ export function Ficha({ p, total, detalle, fecha, demo, esp, onCambio, onAviso, 
       </Caja>
 
       <div className="shrink-0 flex border-b border-outline-variant bg-surface-container-lowest rounded-t text-[14px] sticky top-0 z-10 overflow-x-auto" role="tablist">
-        {[["resumen", "Resumen"], ["gestion", "Gestión"], ["registrar", "Registrar"], ["puntaje", "Fundamento"], ["historia", "Historia"]].map(([k, t]) => (
-          <button key={k} onClick={() => setTab(k)} className={`flex-1 py-2 border-b-2 -mb-px ${tab === k ? "border-primary text-primary font-semibold" : "border-transparent text-on-surface-variant"}`}>{t}</button>
+        {[["resumen", "Resumen"], ["gestion", "Gestión"], ["registrar", "Registrar"], ["decisiones", "Decisiones"], ["puntaje", "Fundamento"], ["historia", "Historia"]].map(([k, t]) => (
+          <button key={k} onClick={() => setTab(k)} className={`flex-1 px-1.5 py-2 border-b-2 -mb-px whitespace-nowrap ${tab === k ? "border-primary text-primary font-semibold" : "border-transparent text-on-surface-variant"}`}>{t}
+            {k === "decisiones" && decisiones?.some((d) => d.necesita_revision && !d.revision) ? <span className="ml-1 inline-block w-2 h-2 rounded-full bg-error align-middle" aria-label="con decisiones pendientes" /> : null}</button>
         ))}
       </div>
 
@@ -168,14 +176,19 @@ export function Ficha({ p, total, detalle, fecha, demo, esp, onCambio, onAviso, 
       <Caja titulo={`Fundamento de la prioridad ${ETIQUETA[p.categoria].toLowerCase()}`}>
         <ul className="space-y-2.5 text-[14px]">
           {p.razones.map((r, i) => (
-            <li key={i} className={["tabla_oficial", "riesgo_vital", "urgencia", "combinacion", "criterio_registro", "oncologico"].includes(r.factor) ? "pl-2 border-l-4 border-error" : "pl-2 border-l-4 border-outline-variant"}>
+            <li key={i} className={r.factor === "criterio_local" ? "pl-2 border-l-4 border-primary" : ["tabla_oficial", "riesgo_vital", "urgencia", "combinacion", "criterio_registro", "oncologico"].includes(r.factor) ? "pl-2 border-l-4 border-error" : "pl-2 border-l-4 border-outline-variant"}>
               <div className="text-[12px] text-on-surface-variant">{FACTOR[r.factor] || r.factor}</div>
               <div>{r.valor}</div>
               {r.riesgo && <div className="text-[13px] mt-0.5"><b>Qué puede pasar:</b> {r.riesgo}</div>}
               <div className="text-[12px] text-on-surface-variant italic">Fuente: {r.fuente}</div>
+              {r.factor === "criterio_local" && <div className="text-[12px] text-primary">Nació de la revisión de especialistas del HLF y lo aprobó una jefatura: ver «Aprendizaje».</div>}
             </li>
           ))}
         </ul>
+        {p.criterios_propuestos?.length > 0 && <div className="mt-3 rounded bg-ambar-container/60 text-ambar p-2.5 text-[13px]">
+          <b>Criterio local propuesto que le calza</b> (no cambia su prioridad hasta que una jefatura lo apruebe):
+          <ul className="list-disc pl-5">{p.criterios_propuestos.map((c) => <li key={c.id}>{c.id} v{c.version}: «{c.texto}» · propuesto el {fmt(c.fecha)}{c.de_este_paciente ? " a partir de la revisión de este paciente" : ""}</li>)}</ul>
+          {onIrAprendizaje && <button onClick={onIrAprendizaje} className="font-semibold underline">Ver en «Aprendizaje»</button>}</div>}
       </Caja>
       <details className="bg-surface-container-lowest border border-outline-variant rounded px-4 py-2.5 text-[14px]">
         <summary className="cursor-pointer font-semibold text-[15px]">Puntaje LACE (experimental)</summary>
@@ -187,20 +200,11 @@ export function Ficha({ p, total, detalle, fecha, demo, esp, onCambio, onAviso, 
       {tab === "resumen" && !demo && (
         <>
           <Caja titulo="Revisión de la prioridad (especialista)">
-            <p className="text-[13px] text-on-surface-variant mb-2">¿Está de acuerdo con la prioridad {ETIQUETA[p.categoria].toLowerCase()} que propone el sistema? Su respuesta queda registrada a su nombre y sirve para medir cuánto coincide el sistema con los especialistas.</p>
-            <div className="flex gap-2">
-              <button onClick={confirmar} disabled={cargando} className="flex-1 py-2 rounded bg-primary text-on-primary font-semibold disabled:opacity-50">Confirmar prioridad</button>
-              <button onClick={() => setAjuste(ajuste ? null : { categoria: p.categoria, motivo: "" })} className="flex-1 py-2 rounded border border-primary text-primary font-semibold">Cambiar prioridad</button>
-            </div>
-            {ajuste && (
-              <div className="mt-3 flex flex-col gap-2">
-                <select value={ajuste.categoria} onChange={(e) => setAjuste({ ...ajuste, categoria: e.target.value })} className="h-9 px-2 border border-outline-variant rounded bg-surface-container-lowest">
-                  {Object.entries(ETIQUETA).map(([k, v]) => <option key={k} value={k}>Prioridad {v.toLowerCase()}</option>)}
-                </select>
-                <input placeholder="Motivo clínico (obligatorio, mínimo 20 caracteres)" value={ajuste.motivo} onChange={(e) => setAjuste({ ...ajuste, motivo: e.target.value })} className="h-9 px-2 border border-outline-variant rounded" />
-                <button disabled={ajuste.motivo.trim().length < 20 || !ajuste.motivo} onClick={guardarAjuste} className="py-2 rounded bg-primary text-on-primary font-semibold disabled:opacity-40">Guardar cambio</button>
-              </div>
-            )}
+            {puede("especialista") ? <FormVeredicto key={`${p.id_paciente}-${p.rev}`} pid={p.id_paciente} categoria={p.categoria} idDictamen={p.dictamen?.id_dictamen} rev={p.rev} fecha={fecha}
+              texto={`¿La prioridad ${ETIQUETA[p.categoria].toLowerCase()} que dejó el sistema es adecuada?${p.dictamen ? ` Su respuesta juzga la última decisión del sistema (${fmtHora(p.dictamen.fecha)}).` : " Este paciente no tiene decisiones nuevas del sistema: su respuesta juzga la prioridad vigente."}`}
+              onAviso={onAviso} onConflicto={onCambio} onListo={async (r) => { setAprendido(r.aprendizaje || {}); await onCambio(); }} />
+              : <p className="text-[13px] text-on-surface-variant">La revisión de la prioridad la hace un especialista o la jefatura (elija el rol arriba).</p>}
+            {aprendido && <div className="mt-3"><Aprendido a={aprendido} pid={p.id_paciente} fecha={fecha} onAviso={onAviso} onCambio={onCambio} onIrAprendizaje={onIrAprendizaje} /></div>}
           </Caja>
         </>
       )}
@@ -234,18 +238,79 @@ export function Ficha({ p, total, detalle, fecha, demo, esp, onCambio, onAviso, 
         </>
       )}
 
+      {tab === "decisiones" && <div className="flex flex-col gap-3">
+        <p className="text-[13px] text-on-surface-variant">Cada vez que llegó información de este paciente, el sistema decidió su prioridad y dejó escrito por qué. Más reciente primero.</p>
+        {!decisiones && [0, 1].map((i) => <div key={i} className="h-32 rounded bg-surface-container-high/50 animate-pulse" aria-hidden="true" />)}
+        {decisiones?.length === 0 && <Caja><p className="text-[14px] text-on-surface-variant">Todavía no hay decisiones del sistema para este paciente: su prioridad viene del registro inicial
+          (la «foto» de la lista). Aparecerán cuando llegue un evento, un informe o una carga de datos.</p></Caja>}
+        {decisiones?.map((d) => <TarjetaDecision key={d.id_dictamen} d={d} paciente={p} motivos={motivos} fecha={fecha} mostrarPaciente={false}
+          onAviso={onAviso} onIrAprendizaje={onIrAprendizaje} onRevisado={async () => { await onCambio(); }} />)}
+      </div>}
+
       {tab === "historia" && <Caja titulo="Historia mientras espera">
         <ol className="text-[14px]">
           {timeline.map((x, i) => (
             <li key={i} className={`grid grid-cols-[96px_1fr] gap-2 py-1.5 border-b border-outline-variant/50 ${x.nuevo ? "bg-ambar-container/50" : ""}`}>
               <span className="text-on-surface-variant text-[13px] leading-tight">{fmt(x.f)}<br /><span className="text-[11px]">{hace(x.f, fecha)}</span></span>
-              <span className={x.rojo ? "text-error font-semibold" : x.ambar ? "text-ambar" : ""}>{x.t}{x.d && <span className="text-on-surface-variant font-normal"> · {x.d}</span>}</span>
+              {x.anulado ? <span className="text-on-surface-variant"><span className="line-through">{x.t}</span>
+                <span className="block text-[12px]">Anulado por {x.anulado.usuario || "—"} el {fmtHora(x.anulado.fecha)}{x.anulado.id_evento ? ` · ${x.anulado.id_evento}` : ""}</span></span>
+                : <span><span className={x.rojo ? "text-error font-semibold" : x.ambar ? "text-ambar" : ""}>{x.t}{x.d && <span className="text-on-surface-variant font-normal"> · {x.d}</span>}</span>
+                  {x.enmiendas?.map((m, k) => <span key={k} className="block text-[12px] text-primary">Corregido por {m.usuario || "—"} el {fmtHora(m.fecha)}: {m.texto}</span>)}
+                  {x.ev?.id_evento && !demo && puede("especialista") && <Enmienda p={p} ev={x.ev} fecha={fecha} onAviso={onAviso} onCambio={onCambio} />}</span>}
             </li>
           ))}
           {!detalle && [0, 1, 2, 3, 4].map((i) => <li key={i} className="h-8 my-1.5 rounded bg-surface-container-high/50 animate-pulse" aria-hidden="true" />)}
         </ol>
       </Caja>}
     </>
+  );
+}
+
+// Enmiendas de eventos (POST /pacientes/{id}/eventos/{id_evento}/enmienda). La API de detalle no devuelve los eventos
+// anulados ni el motivo de la enmienda: se reconstruyen desde las decisiones del sistema de tipo "enmienda" (quién y cuándo).
+const ACCION_ENMIENDA = { anular: "Anular el evento (no existió o es de otro paciente)", no_relacionado: "No tiene relación con la enfermedad por la que espera",
+  relacionado: "Sí tiene relación con la enfermedad por la que espera" };
+const deEnmienda = (decisiones) => (decisiones || []).filter((d) => d.disparador?.tipo === "enmienda");
+const textoEnmienda = (d) => (d.disparador.descripcion || "").match(/«([^»]+)»/)?.[1] || "enmienda";
+function enmiendasDe(decisiones, ide) {
+  return deEnmienda(decisiones).filter((d) => d.disparador.id_evento === ide && !textoEnmienda(d).startsWith("anular"))
+    .map((d) => ({ usuario: d.disparador.usuario, fecha: d.fecha, texto: textoEnmienda(d) }));
+}
+function anulados(decisiones, vigentes) {
+  const ids = new Set(vigentes.map((e) => e.id_evento));
+  return deEnmienda(decisiones).filter((d) => textoEnmienda(d).startsWith("anular") && !ids.has(d.disparador.id_evento))
+    .map((d) => { const m = (d.disparador.descripcion || "").match(/del evento (.+) \((\d{4}-\d{2}-\d{2})\)$/);
+      return { id_evento: d.disparador.id_evento, usuario: d.disparador.usuario, fecha: m?.[2] || d.fecha_corte, registrada: d.fecha,
+        texto: m ? `${TIPO_EVENTO[m[1].split(" · ")[0]] || m[1].split(" · ")[0]}: ${m[1].split(" · ").slice(1).join(" · ")}` : `Evento ${d.disparador.id_evento}` }; });
+}
+
+function Enmienda({ p, ev, fecha, onAviso, onCambio }) {
+  const [abierto, setAbierto] = useState(false);
+  const [accion, setAccion] = useState("anular");
+  const [motivo, setMotivo] = useState("");
+  const [enviando, setEnviando] = useState(false);
+  const opciones = ["anular", ev.relacionado === false ? "relacionado" : "no_relacionado"];
+  const guardar = async () => {
+    if (!api.getUsuario()) { onAviso({ titulo: "Escriba su nombre y cargo arriba a la derecha: la corrección queda a su nombre" }); return; }
+    setEnviando(true);
+    try {
+      await api.postEnmienda(p.id_paciente, ev.id_evento, { accion, motivo: motivo.trim(), fecha_corte: fecha, ...(p.rev != null ? { rev_vista: p.rev } : {}) });
+      setAbierto(false); setMotivo(""); onAviso({ titulo: "Corrección registrada: la prioridad se recalculó" }); await onCambio();
+    } catch (e) {
+      onAviso({ titulo: e.codigo === "conflicto_edicion" ? "El paciente tiene información nueva: se recargó. Revise y vuelva a intentar." : "No se pudo corregir: " + e.message });
+      if (e.codigo === "conflicto_edicion") await onCambio();
+    } finally { setEnviando(false); }
+  };
+  if (!abierto) return <button onClick={() => setAbierto(true)} className="block text-[12px] text-primary hover:underline">Corregir este evento</button>;
+  return (
+    <span className="mt-1 flex flex-col gap-1.5 rounded border border-outline-variant p-2 text-[13px]">
+      <select value={accion} onChange={(e) => setAccion(e.target.value)} className="h-8 px-1 border border-outline-variant rounded bg-surface-container-lowest">
+        {opciones.map((k) => <option key={k} value={k}>{ACCION_ENMIENDA[k]}</option>)}</select>
+      <input value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Motivo (obligatorio, mínimo 20 caracteres)" className="h-8 px-2 border border-outline-variant rounded" />
+      <span className="text-[12px] text-on-surface-variant">No borra el evento: queda la corrección a su nombre. Puede cambiar la prioridad de este paciente (también bajarla: es una decisión de una persona).</span>
+      <span className="flex gap-2"><button onClick={guardar} disabled={motivo.trim().length < 20 || enviando} className="px-3 py-1 rounded bg-primary text-on-primary font-semibold disabled:opacity-40">{enviando ? "Guardando…" : "Guardar corrección"}</button>
+        <button onClick={() => setAbierto(false)} className="px-3 py-1 rounded border border-outline-variant">Cancelar</button></span>
+    </span>
   );
 }
 

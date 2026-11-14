@@ -18,6 +18,7 @@ export const FACTOR = {
   combinacion: "Combinación de riesgo", alerta_combinacion: "Posible combinación de riesgo (revisar)",
   criterio_registro: "Criterio oficial de su diagnóstico", plazo: "Plazo de referencia",
   alerta_clinica: "Alerta clínica",
+  criterio_local: "Criterio local del HLF (aprendido de los especialistas)",
 };
 
 export const TIPO_EVENTO = { visita_urgencia: "Urgencia", hospitalizacion: "Hospitalización", examen_alterado: "Examen alterado", cambio_farmaco: "Cambio de fármaco", control_aps: "Control APS", hallazgo_oncologico: "Hallazgo oncológico", criterio_clinico: "Criterio clínico", combinacion_riesgo: "Combinación de riesgo" };

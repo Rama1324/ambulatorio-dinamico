@@ -1,5 +1,6 @@
 import { Caja, Icono } from "../componentes/comunes";
 import { ordenLista } from "../constantes";
+import { FuentesVersiones } from "./Fuentes";
 
 // Sección plegable con el mismo aspecto de una Caja: la página parte en el resumen y el detalle se abre a pedido.
 function Plegable({ titulo, abierto, children }) {
@@ -128,6 +129,7 @@ export function Criterios({ ia }) {
           ? <p>Las fotos se leen con Amazon Textract (OCR). La IA lee el informe 3 veces y lista los hallazgos (cáncer confirmado o sospechoso, hospitalización, UCI, descompensación, examen alterado, cambio de tratamiento) <b>copiando la frase del documento</b>. El código verifica que la frase esté en el texto; lo que aparece en las 3 lecturas y no puede bajar a nadie <b>se registra solo y la lista se recalcula</b>. Si hay una negación cerca ("se descarta neoplasia"), si las lecturas no coinciden, si el documento podría ser de otro paciente o si el hallazgo podría bajar una prioridad (estabilización), lo confirma el equipo clínico. Un cáncer en remisión no sube (tabla pág. 102).</p>
           : <p>Las fotos de informes se leen con Amazon Textract (OCR). Reglas con detección de negaciones buscan urgencias, hospitalizaciones, exámenes alterados y cambios de fármaco, y cada propuesta se valida con Pydantic, citando la frase exacta del documento. Se verifica que el documento sea del paciente. Ninguna prioridad cambia sin confirmación del equipo clínico. No se hacen predicciones: las alertas se basan en eventos ya registrados.</p>}
       </Plegable>
+      <FuentesVersiones />
       <Plegable titulo="Datos de esta demostración">
         <p>Registro sintético entregado por el hospital: 500 pacientes, 7 especialidades, eventos hasta el 13-10-2026. No contiene pacientes reales. La versión publicada trabaja con la fecha de hoy en Chile; el modo demostración permite ver la lista en fechas anteriores.</p>
       </Plegable>

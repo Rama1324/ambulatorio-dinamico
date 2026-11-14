@@ -47,9 +47,10 @@ async function req(method, path, body, reintento = true) {
   const r = await fetch(API_URL + path, { method, headers, ...(b ? { body: JSON.stringify(b) } : {}) });
   if (r.status === 401 && token && reintento && (await auth.noAutorizado())) return req(method, path, body, false);
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data.error || `Error ${r.status}`);
+  if (!r.ok) throw Object.assign(new Error(data.error || `Error ${r.status}`), { status: r.status, codigo: data.codigo, datos: data });
   return data;
 }
+export const getInfo = () => info;
 const conFecha = (fechaCorte, especialidad) =>
   new URLSearchParams({ fecha_corte: fechaCorte, ...(especialidad ? { especialidad } : {}) });
 
@@ -76,3 +77,21 @@ export const postPaciente = (body) => req("POST", "/pacientes", body);
 export const postImportar = (archivos, confirmar) => req("POST", "/importar", { archivos, confirmar });
 export const postInforme = (id, body) => req("POST", `/pacientes/${id}/informe`, body);
 export const postExplicar = (id, fechaCorte) => req("POST", `/pacientes/${id}/explicar`, { fecha_corte: fechaCorte });
+
+// Catálogo (diagnósticos, motivos de veredicto…): cambia poco, se pide una vez por sesión.
+let catalogo = null;
+export const catalogoCache = () => (catalogo ??= getCatalogo().catch((e) => { catalogo = null; throw e; }));
+
+// Decisiones del sistema (dictámenes), veredicto del especialista y aprendizaje
+export const getDecisiones = (estado = "pendiente", especialidad, limite = 200) =>
+  req("GET", `/decisiones?${new URLSearchParams({ estado, limite, ...(especialidad ? { especialidad } : {}) })}`);
+export const getDecisionesPaciente = (id) => req("GET", `/pacientes/${id}/decisiones`);
+export const getAprendizaje = (especialidad) => req("GET", `/aprendizaje${especialidad ? `?especialidad=${encodeURIComponent(especialidad)}` : ""}`);
+export const postResolverCriterio = (id, body) => req("POST", `/criterios-locales/${id}/resolver`, body);
+export const postEnmienda = (id, idEvento, body) => req("POST", `/pacientes/${id}/eventos/${idEvento}/enmienda`, body);
+
+// Recepción de datos y base de conocimiento
+export const getLotes = (limite = 30) => req("GET", `/ingesta/lotes?limite=${limite}`);
+export const getLote = (id) => req("GET", `/ingesta/lotes/${id}`);
+export const getConocimiento = () => req("GET", "/conocimiento");
+export const getConocimientoDx = (cie10) => req("GET", `/conocimiento/diagnostico/${encodeURIComponent(cie10)}`);
