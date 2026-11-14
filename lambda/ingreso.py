@@ -128,34 +128,15 @@ def post_importar(body):
     out = {"informe": informe, "resumen": resumen, "avisos": avisos, "cargado": False,
            "impacto": _impacto(existentes, perfs, perfiles_combinados()[1], fecha_de(body))}
     if body.get("confirmar"):
-        _guardar_importacion(existentes, perfs, body.get("usuario", "equipo clínico"))
-        out["cargado"] = True
+        # Se guarda por la tubería única de ingesta (ingesta.py): solo lo nuevo, ítem por ítem, con su traza (canal,
+        # momento en que llegó, lote), registro del lote, evaluación y dictamen de cada paciente con información nueva.
+        import ingesta
+        r = ingesta.registrar(datos, canal=CANAL_ARCHIVO, usuario=body.get("usuario", "equipo clínico"),
+                              archivo=", ".join(a.get("nombre", "") for a in archivos), corte=fecha_de(body),
+                              rechazados=ingesta.rechazos_de_informe(informe))
+        out.update(cargado=True, id_lote=r["id_lote"], dictamenes=r["dictamenes"],
+                   ingesta={k: r[k] for k in ("registrados", "duplicados", "fuera_de_lista", "evaluacion", "errores")})
     return 200, out
-
-
-def _guardar_importacion(existentes, perfs, usuario):
-    """Guarda solo lo nuevo, como ítems: el perfil si el paciente es nuevo o cambió, y cada evento, medición y cita
-    nuevos por separado. Así cada registro importado tiene su propia traza (canal, momento en que llegó) y volver a
-    cargar el mismo archivo no duplica nada. Los eventos llevan `registrado`: un evento que llega después de una
-    revisión la deja sin efecto, igual que uno registrado en la app."""
-    marca, items, cambiados = ahora(), [], []
-    for pid, p in perfs.items():  # primero se arma todo (un dato inválido corta aquí, antes de escribir nada)
-        viejo = existentes.get(pid)
-        llega = {**p, "eventos_clinicos": [{**e, "registrado": marca, "canal": CANAL_ARCHIVO} for e in p.get("eventos_clinicos", [])]}
-        if viejo is None:
-            items += items_de_perfil(llega, origen=CANAL_ARCHIVO)
-            continue
-        antes, despues = cambios_perfil(viejo, p)
-        if antes or despues:
-            cambiados.append((pid, p, antes, despues))
-        ya = {i["sk"] for i in items_de_perfil({**viejo, "eventos_clinicos": viejo.get("eventos_clinicos", []) + viejo.get("eventos_anulados", [])})}
-        items += [i for i in items_de_perfil({**llega, "paciente": None}, origen=CANAL_ARCHIVO) if i["sk"] not in ya]
-    for pid, p, antes, despues in cambiados:  # el perfil es el único ítem que se pisa: lo que cambió queda en una novedad
-        guardar({"id_paciente": pid, "sk": f"novedad#{marca}", "novedad": json.dumps(
-            {"tipo": "importacion", "detalle": "datos del paciente actualizados desde un archivo", "usuario": usuario,
-             "fecha": marca, "antes": antes, "despues": despues}, ensure_ascii=False, default=str)})
-        guardar_perfil(pid, p)
-    guardar_lote(items)
 
 
 def _impacto(existentes, nuevos, revs, corte, limite=100):

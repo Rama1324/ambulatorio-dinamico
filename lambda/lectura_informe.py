@@ -5,11 +5,13 @@ import re
 import time
 import uuid
 
+import bitacora
 import informe
+import ingesta
 import privacidad
 import puntaje
-from datos import ahora, fecha_de, guardar_evento, perfiles_combinados
-from evaluacion_ia import algoritmo_activo, cliente_llm, evaluar_y_guardar
+from datos import ahora, fecha_de, perfiles_combinados
+from evaluacion_ia import algoritmo_activo, cliente_llm
 from ingreso import _aplicar_combinaciones, _aplicar_criterios
 from lista import fila_de
 from modelos import Lectura, normalizar
@@ -98,7 +100,9 @@ def _informe_con_ia(pid, lectura, corte, perfs, avisos, dudoso, menciona, body):
     texto_ia = privacidad.ocultar(lectura.texto, [pac.get("nombre_fantasia")], [pac.get("rut")])  # la IA no recibe nombre ni RUT
     r = lector_documento.leer_documento(texto_ia, cliente_llm(), diagnostico=f'{le["diagnostico_texto"]} ({le["diagnostico_cie10"]}, {le["especialidad"]})')
     clasif = combs = None
+    foto = {}
     if not dudoso:
+        foto = bitacora.fotos([pid], corte)  # estado antes de lo que registre el documento: el dictamen muestra antes y después
         pos0 = (fila_de(pid, corte) or {}).get("posicion")
         clasif = _aplicar_criterios(pid, le["diagnostico_cie10"], texto_ia, corte.isoformat(), body)
         combs = _aplicar_combinaciones(pid, perfs[pid], texto_ia, corte.isoformat(), body)
@@ -113,24 +117,33 @@ def _informe_con_ia(pid, lectura, corte, perfs, avisos, dudoso, menciona, body):
         r["propuestos"] = [{**h, "motivo": "no se pudo confirmar que el documento sea de este paciente o es poco legible"} for h in aceptados] + r["propuestos"]
         aceptados = []
     existentes = {(e["fecha_evento"], e["tipo_evento"], e["subtipo"], e.get("motivo") or "") for e in perfs[pid].get("eventos_clinicos", [])}
-    registrados, pos_antes, fila = [], None, None
+    registrados, pos_antes, fila, dictamen = [], None, None, None
     if (clasif and (clasif["nivel"] or clasif["urgencia"])) or (combs and (combs["aplicadas"] or combs["alertas"])):
         pos_antes = pos0
         fila = fila_de(pid, corte)
+    usuario = body.get("usuario", "equipo clínico")
     if aceptados:
         pos_antes = pos_antes if pos_antes is not None else (fila_de(pid, corte) or {}).get("posicion")
         marca = ahora()
+        nuevos = []
         for h in aceptados:
             ev = lector_documento.evento_registrable(h, corte)
             if (ev["fecha_evento"], ev["tipo_evento"], ev["subtipo"], ev.get("motivo") or "") in existentes:
                 continue
-            ev.update(id_evento="EV-DOC-" + uuid.uuid4().hex[:6].upper(), registrado=marca, usuario=body.get("usuario", "equipo clínico"))
-            guardar_evento(pid, ev)
-            registrados.append(ev)
+            ev.update(id_evento="EV-DOC-" + uuid.uuid4().hex[:6].upper(), registrado=marca, usuario=usuario)
+            nuevos.append({**ev, "id_paciente": pid})
             existentes.add((ev["fecha_evento"], ev["tipo_evento"], ev["subtipo"], ev.get("motivo") or ""))
-        if registrados:
-            evaluar_y_guardar(pid, corte)
+        if nuevos:  # tubería única de ingesta: guarda con su traza, evalúa a este paciente y deja el dictamen (canal informe)
+            hecho = ingesta.registrar({"eventos": nuevos}, canal="informe", usuario=usuario, origen="documento_ia", corte=corte,
+                                      antes=foto, detalle=True)["_detalle"]
+            registrados = hecho["eventos"].get(pid, [])
+            dictamen = (hecho["dictamenes"] or [None])[0]
             fila = fila_de(pid, corte)
+    elif (clasif and clasif.get("nivel")) or (combs and combs.get("aplicadas")):
+        # el documento no trajo eventos nuevos, pero los criterios clínicos o una combinación de riesgo sí registraron uno
+        dictamen = bitacora.registrar(pid, corte, {"tipo": "informe", "canal": "informe", "id_evento": None,
+                                                   "descripcion": "criterio clínico o combinación de riesgo leída en un informe"},
+                                      foto.get(pid), canal="informe", usuario=usuario)
     perfil = perfiles_combinados()[0][pid]
     propuestas = []
     for h in r["propuestos"]:
@@ -150,6 +163,8 @@ def _informe_con_ia(pid, lectura, corte, perfs, avisos, dudoso, menciona, body):
            "otro_paciente": any("otro paciente" in a for a in avisos), "fuente": "ia",
            "ia": {k: r[k] for k in ("version", "lecturas", "errores", "tokens_entrada", "tokens_salida")}, "criterio": clasif, "combinaciones": combs,
            "segundos": round(time.perf_counter() - t0, 1)}
+    if dictamen:
+        out["dictamen"] = dictamen
     if not registrados and not propuestas and not (clasif and (clasif["nivel"] or clasif["urgencia"])) and not (combs and combs["aplicadas"]):
         out["mensaje"] = ("La IA no encontró en el informe un hallazgo que cambie la prioridad (cáncer, hospitalización, "
                           "descompensación, examen alterado o cambio de tratamiento)." +

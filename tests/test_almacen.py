@@ -472,9 +472,11 @@ def test_importar_guarda_cada_registro_por_separado_y_con_su_traza(monkeypatch):
     _, lista = call("GET", "/pacientes", {"fecha_corte": "2026-10-13"})
     fila = next(p for p in lista["pacientes"] if p["id_paciente"] == pid)
     assert fila["estado_clinico"] == "descompensado" and fila["estado_revision"] == "requiere_revision"
-    # volver a cargar el mismo archivo no duplica nada (lo que ya estaba ni siquiera se intenta escribir)
+    # volver a cargar el mismo archivo no duplica nada (lo que ya estaba ni siquiera se intenta escribir; solo queda el
+    # registro del lote en la partición reservada _ingesta: qué llegó, cuándo y que eran duplicados)
     n, intentos, alm = len(datos.registros()), [], datos.almacen()
-    monkeypatch.setattr(alm, "_r_poner", lambda it, si_no_existe, real=alm._r_poner: (intentos.append(it["sk"]), real(it, si_no_existe))[1])
+    monkeypatch.setattr(alm, "_r_poner", lambda it, si_no_existe, real=alm._r_poner: (
+        intentos.append(it["sk"]) if not it["id_paciente"].startswith("_") else None, real(it, si_no_existe))[1])
     s, r = call("POST", "/importar", body={"archivos": archivos, "confirmar": True, "fecha_corte": "2026-10-13"})
     assert s == 200 and len(datos.registros()) == n and r["resumen"]["eventos"] == 0 and intentos == []
     # un archivo que cambia datos del paciente deja la novedad con lo que cambió

@@ -307,17 +307,7 @@ def _procesar_tabla(archivo, hoja, filas, tabla, datos):
     item["columnas"] = [{"original": str(enc[i]), "campo": c} for i, c in sorted(m.items())]
     item["ignoradas"] = [str(h) for i, h in enumerate(enc) if i not in m and str(h).strip()]
     for n_fila, f in enumerate(filas[1:], start=2):
-        reg, problemas = {}, []
-        for i, campo in m.items():
-            v = f[i] if i < len(f) else ""
-            try:
-                reg[campo] = CONVERSORES[campo](v) if campo in CONVERSORES and v not in ("", None) else (
-                    None if v in ("", None) else str(v).strip())
-            except (ValueError, TypeError) as e:
-                problemas.append(str(e))
-        faltan = [r for r in TABLAS[tabla]["requeridas"] if reg.get(r) in (None, "")]
-        if faltan:
-            problemas.append("falta " + ", ".join(faltan))
+        reg, problemas = convertir_fila(f, m, tabla)
         if problemas:
             if len(item["errores"]) < 15:
                 item["errores"].append({"fila": n_fila, "motivo": "; ".join(problemas)})
@@ -325,8 +315,48 @@ def _procesar_tabla(archivo, hoja, filas, tabla, datos):
             item["n_errores"] += 1
             continue
         datos[tabla].append(reg)
+        # de qué archivo y fila vino cada registro válido: la ingesta lo usa para decir qué fila rechazó y por qué
+        datos.setdefault("_filas", {}).setdefault(tabla, []).append((archivo, n_fila))
         item["validas"] += 1
     return item
+
+
+def convertir_fila(f, m, tabla):
+    """Una fila (lista de valores) con su mapeo de columnas {índice: campo} → (registro convertido, problemas)."""
+    reg, problemas = {}, []
+    for i, campo in m.items():
+        v = f[i] if i < len(f) else ""
+        try:
+            reg[campo] = CONVERSORES[campo](v) if campo in CONVERSORES and v not in ("", None) else (
+                None if v in ("", None) else str(v).strip())
+        except (ValueError, TypeError) as e:
+            problemas.append(str(e))
+    faltan = [r for r in TABLAS[tabla]["requeridas"] if reg.get(r) in (None, "")]
+    if faltan:
+        problemas.append("falta " + ", ".join(faltan))
+    return reg, problemas
+
+
+def filas_de_json(registros, tabla):
+    """Filas en JSON (API para sistemas) leídas con los mismos nombres de campo, sinónimos y conversores que los archivos.
+    Devuelve (válidas, rechazadas): válidas = [(índice, registro)], rechazadas = [(índice, motivo)]."""
+    mapeos = {}  # cada fila puede traer sus propios nombres de campo: se mapea por conjunto de claves
+    validas, rechazadas = [], []
+    for i, r in enumerate(registros):
+        if not isinstance(r, dict):
+            rechazadas.append((i, "cada fila debe ser un objeto JSON"))
+            continue
+        claves = tuple(r)
+        if claves not in mapeos:
+            mapeos[claves] = mapear(list(claves), tabla)
+        # JSON trae booleanos de verdad: se pasan como "si"/"no" para que los lean los mismos conversores de los archivos
+        valores = ["" if r[k] is None else ("si" if r[k] else "no") if isinstance(r[k], bool) else r[k] for k in claves]
+        reg, problemas = convertir_fila(valores, mapeos[claves], tabla)
+        if problemas:
+            rechazadas.append((i, "; ".join(problemas)))
+        else:
+            validas.append((i, reg))
+    return validas, rechazadas
 
 
 # Rangos normales de referencia del diccionario de datos (para calcular fuera_de_rango si no viene)
@@ -402,41 +432,62 @@ def combinar(datos, existentes, catalogo):
             avisos.append(f"{TABLAS[tabla]['nombre']}: {sin} fila(s) de pacientes que no están en la lista ni en el archivo de pacientes")
 
     def nuevo_evento(r, p):
-        """Normaliza el subtipo al vocabulario del registro y toma la severidad que le corresponde (no la del archivo):
-        así una hospitalización importada sin severidad igual cuenta como descompensación."""
-        from informe import candidatos_por_reglas
-        from modelos import SUBTIPOS
-        tipo, sub = r["tipo_evento"], (r.get("subtipo") or "").strip()
-        vocab = SUBTIPOS[tipo]
-        if sub not in vocab:
-            sub = next((sk for sk in vocab if norm(sk) == norm(sub)), None) or next(
-                (c["subtipo"] for c in candidatos_por_reglas(f'{sub}. {r.get("detalle") or ""}') if c["tipo_evento"] == tipo), None)
-        if sub is None:
-            sub = {"hospitalizacion": "ingreso hospitalario", "control_aps": "control"}.get(tipo)
-        if sub is None:
-            avisos.append(f'{r["id_paciente"]} {r["fecha_evento"]}: no se reconoció el subtipo "{r.get("subtipo")}" de {tipo}; '
-                          f'use uno de: {", ".join(vocab)}')
+        ev, motivo = normalizar_evento(r)
+        if ev is None:
+            avisos.append(f'{r["id_paciente"]} {r["fecha_evento"]}: {motivo}')
             return None
-        return {"id_evento": r.get("id_evento") or f'EV-IMP-{r["id_paciente"]}-{r["fecha_evento"]}-{tipo}-{sub}',
-                "fecha_evento": r["fecha_evento"], "tipo_evento": tipo, "subtipo": sub, "severidad": vocab[sub],
-                "detalle": r.get("detalle") or "", **({"motivo": r["motivo"]} if r.get("motivo") else {}),
-                **({"relacionado": r["relacionado"]} if r.get("relacionado") is not None else {})}
+        return {"id_evento": r.get("id_evento") or f'EV-IMP-{r["id_paciente"]}-{r["fecha_evento"]}-{ev["tipo_evento"]}-{ev["subtipo"]}', **ev}
 
     agregar("eventos_clinicos", "eventos_clinicos", lambda e: (e["fecha_evento"], e["tipo_evento"], e["subtipo"]), nuevo_evento)
-
-    def nueva_medicion(r, p):
-        tipo = TIPO_MEDICION.get(norm(r["tipo_medicion"]), r["tipo_medicion"])
-        fuera = r.get("fuera_de_rango")
-        if fuera is None and tipo in RANGOS:
-            fuera = not (RANGOS[tipo][0] <= r["valor"] <= RANGOS[tipo][1])
-        return {"fecha_medicion": r["fecha_medicion"], "tipo_medicion": tipo, "valor": r["valor"],
-                "unidad": r.get("unidad") or "", "fuera_de_rango": bool(fuera)}
-    agregar("mediciones", "mediciones", lambda m: (m["fecha_medicion"], m["tipo_medicion"], m["valor"]), nueva_medicion)
+    agregar("mediciones", "mediciones", lambda m: (m["fecha_medicion"], m["tipo_medicion"], m["valor"]), lambda r, p: normalizar_medicion(r))
     agregar("citaciones", "citaciones", lambda c: (c["fecha_cita"], c["id_box"], c["estado_cita"]),
-            lambda r, p: {"id_cita": r.get("id_cita") or "", "id_box": r.get("id_box") or "", "fecha_cita": r["fecha_cita"],
-                          "especialidad": r.get("especialidad") or p["lista_espera"].get("especialidad", ""),
-                          "estado_cita": r["estado_cita"], "minutos_atencion_real": r.get("minutos_atencion_real")})
+            lambda r, p: normalizar_cita(r, p["lista_espera"].get("especialidad", "")))
     return perfs, res, avisos
+
+
+def normalizar_evento(r):
+    """Normaliza el subtipo al vocabulario del registro y toma la severidad que le corresponde (no la del archivo ni la
+    del remitente): así una hospitalización importada sin severidad igual cuenta como descompensación.
+    Devuelve (evento sin id, None) o (None, motivo del rechazo). El tipo puede venir ya normalizado (modelos.SUBTIPOS)."""
+    from informe import candidatos_por_reglas
+    from modelos import SUBTIPOS
+    tipo = r.get("tipo_evento")
+    if tipo not in SUBTIPOS:
+        try:
+            tipo = a_vocab("tipo_evento", tipo)
+        except ValueError as e:
+            return None, str(e)
+    sub = (r.get("subtipo") or "").strip()
+    vocab = SUBTIPOS[tipo]
+    esi = re.fullmatch(r"(?:triage\s*)?esi\s*-?\s*([1-5])(?:\s*-\s*5)?", sub.lower()) if tipo == "visita_urgencia" else None
+    if esi:  # los sistemas de urgencia exportan el nivel ESI a secas ("ESI 4", "esi 5"): mismo nivel, nombre del registro
+        sub = {"1": "triage ESI 1", "2": "triage ESI 2", "3": "triage ESI 3"}.get(esi.group(1), "triage ESI 4-5")
+    if sub not in vocab:
+        sub = next((sk for sk in vocab if norm(sk) == norm(sub)), None) or next(
+            (c["subtipo"] for c in candidatos_por_reglas(f'{sub}. {r.get("detalle") or ""}') if c["tipo_evento"] == tipo), None)
+    if sub is None:
+        sub = {"hospitalizacion": "ingreso hospitalario", "control_aps": "control"}.get(tipo)
+    if sub is None:
+        return None, f'no se reconoció el subtipo "{r.get("subtipo")}" de {tipo}; use uno de: {", ".join(vocab)}'
+    return {"fecha_evento": r["fecha_evento"], "tipo_evento": tipo, "subtipo": sub, "severidad": vocab[sub],
+            "detalle": r.get("detalle") or "", **({"motivo": r["motivo"]} if r.get("motivo") else {}),
+            **({"relacionado": r["relacionado"]} if r.get("relacionado") is not None else {})}, None
+
+
+def normalizar_medicion(r):
+    """Tipo de medición con el nombre del registro; fuera_de_rango con los rangos del diccionario si no viene."""
+    tipo = TIPO_MEDICION.get(norm(r["tipo_medicion"]), r["tipo_medicion"])
+    fuera = r.get("fuera_de_rango")
+    if fuera is None and tipo in RANGOS:
+        fuera = not (RANGOS[tipo][0] <= r["valor"] <= RANGOS[tipo][1])
+    return {"fecha_medicion": r["fecha_medicion"], "tipo_medicion": tipo, "valor": r["valor"],
+            "unidad": r.get("unidad") or "", "fuera_de_rango": bool(fuera)}
+
+
+def normalizar_cita(r, especialidad=""):
+    return {"id_cita": r.get("id_cita") or "", "id_box": r.get("id_box") or "", "fecha_cita": r["fecha_cita"],
+            "especialidad": r.get("especialidad") or especialidad, "estado_cita": r["estado_cita"],
+            "minutos_atencion_real": r.get("minutos_atencion_real")}
 
 
 def plantilla_csv(tabla):
