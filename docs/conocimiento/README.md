@@ -31,7 +31,7 @@ El servicio no decide nada ni repite reglas: lee lo mismo que lee el motor (`pun
 ## 2. Fuentes vigentes
 
 <!-- fuentes:inicio · lo escribe scripts/empaquetar_conocimiento.py; no editar a mano -->
-Paquete vigente: **`kb-2026.11.0`** · huella `6c8d773f352c` · motor `614c8bb2289b` · generado 2026-11-14T15:34:24+00:00
+Paquete vigente: **`kb-2026.11.0`** · huella `72464894da99` · motor `0af1fc502dfa` · generado 2026-11-14T15:37:46+00:00
 
 | Fuente (`id`) | Qué es | Versión | Estado | Entradas | Quién la usa |
 |---|---|---|---|---|---|

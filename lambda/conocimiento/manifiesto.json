@@ -3,8 +3,8 @@
  "nota": "Generado por scripts/empaquetar_conocimiento.py: no editar a mano. sha256 = huella del contenido canónico de cada JSON (claves ordenadas, sin espacios) o del texto de cada .py con saltos de línea \\n; no depende del formato del archivo.",
  "paquete": {
   "etiqueta": "kb-2026.11.0",
-  "huella": "6c8d773f352c",
-  "generado": "2026-11-14T15:34:24+00:00"
+  "huella": "72464894da99",
+  "generado": "2026-11-14T15:37:46+00:00"
  },
  "fuentes": [
   {
@@ -219,8 +219,8 @@
   }
  ],
  "motor": {
-  "huella": "614c8bb2289b",
-  "sha256": "614c8bb2289be495ead8f77dd692e497fe3e202d6f9ab02aaad387ba4da7ddc0",
+  "huella": "0af1fc502dfa",
+  "sha256": "0af1fc502dfa0293c5ebf35eac42d2094219a80a9c7b4944e5b671a088330ab3",
   "archivos": [
    {
     "archivo": "lambda/puntaje.py",
@@ -228,7 +228,7 @@
    },
    {
     "archivo": "lambda/decisor.py",
-    "sha256": "d4d2ba059c1362c4725c405a90251d1d90851679f4191ebb3f36d5a2aee7a983"
+    "sha256": "1118a4121b714265ba2d2bf7c1ebc15a44ccf2977bf8dc3079dccbb2550f7852"
    },
    {
     "archivo": "lambda/controles.py",

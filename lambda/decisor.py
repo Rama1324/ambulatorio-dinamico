@@ -175,6 +175,10 @@ def decidir(perfil, resp, corte, kb):
                 else:
                     revision.append({"motivo": "descompensacion_sin_fila", "bloqueante": False,
                                      "detalle": dx.get("detalle") or "la tabla del HLF no define fila de descompensación para este diagnóstico"})
+                    # misma razón que en el modo de reglas (puntaje.puntuar): visible en el fundamento y la decisión va a revisión
+                    razones.append({"factor": "tabla_oficial", "valor": "la tabla del HLF no tiene fila para este diagnóstico descompensado: "
+                                                                       "se mantiene la prioridad y se sugiere revisión clínica",
+                                    "fuente": fuente_tabla, "sin_regla": True})
 
     # Cáncer activo o sospechoso registrado (verificado al leer el documento): lo decide el código con la tabla del HLF
     onco = puntaje.regla_oncologica(eventos, le["especialidad"])
