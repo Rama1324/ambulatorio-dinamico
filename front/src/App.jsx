@@ -169,7 +169,7 @@ export default function App() {
           <span className="text-on-surface-variant">·</span>
           <span className={`flex items-center gap-1 ${modoDecision[1]}`} title="Cómo decide el sistema la prioridad. La IA solo lee y cita; el sistema decide con criterios con fuente.">
             <Icono n={info?.algoritmo === "rubrica" ? "smart_toy" : "rule"} className="text-[16px]" />Decide: {modoDecision[0]}</span>
-          {!sesion && <span className="text-on-surface-variant" title="La API no verifica el rol en la demo">· {rol ? `Rol: ${ROL_TXT[rol]}` : "Todos los roles"} (en la demo el rol se elige; en producción viene del inicio de sesión)</span>}
+          {!sesion && <span className="hidden md:inline text-on-surface-variant" title="La API no verifica el rol en la demo">· {rol ? `Rol: ${ROL_TXT[rol]}` : "Todos los roles"} (en la demo el rol se elige; en producción viene del inicio de sesión)</span>}
           <span className="text-on-surface-variant">·</span>
           <span>{tiempoReal ? <>Lista al <b>{fmt(fecha)}</b></> : <>Fecha anterior: lista al <b>{fmt(fecha)}</b>, solo con registros hasta esa fecha</>}</span>
           {tiempoReal && <details className="relative"><summary className="cursor-pointer text-primary">Información de los datos</summary>
