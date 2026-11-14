@@ -1,6 +1,6 @@
 # Contrato — Ambulatorio Dinámico HLF
 
-Fuente de datos: `perfiles.json` (500 pacientes, ya consolidado) en S3. **Nunca en el repo.**
+Fuente de datos: DynamoDB (ítems por paciente). El registro sintético `perfiles.json` (500 pacientes) se carga con `scripts/cargar_registro.py`; en local se lee de `data/`. **Nunca en el repo.**
 Fecha de referencia del dataset: 2026-10-13. Todo cálculo usa una `fecha_corte`: solo registros con fecha ≤ corte.
 Sin `fecha_corte`, la API usa `FECHA_REFERENCIA` (variable de entorno): `hoy` = fecha real de Chile (versión publicada) o
 `AAAA-MM-DD` para simular (por defecto 2026-10-13). `/health` informa `fecha_hoy` y `modo` (`tiempo_real | simulacion`).
@@ -130,6 +130,33 @@ Respuesta de `POST /ingesta/eventos` (y de `ingesta.registrar`):
   `procesados/<sistema>/archivo.csv.resultado.json` o `errores/…error.json`; con `TEMA_ALERTAS_ARN`, aviso SNS solo con archivo y conteos.
 - Cola: más de 25 pacientes afectados (o `evaluar: "cola"`) con `COLA_EVALUACION_URL` definida → un mensaje SQS por paciente
   (`ingesta.cola_handler`, fallas parciales). Sin cola se evalúa en línea.
+
+## Decisiones, revisión y aprendizaje (lambda/bitacora.py, lambda/aprendizaje.py)
+Detalle de campos: `docs/diseno/ESPECIFICACION_MVP.md` §5 y §6.
+
+| Método | Ruta | Qué hace |
+|---|---|---|
+| GET | `/decisiones?estado=pendiente\|revisada\|todas&especialidad=&limite=&desde=` | Cola de decisiones del sistema (dictámenes): `{estado, total, decisiones[]}`. Pendientes: primero alertas nuevas y patrones con más desacuerdo |
+| GET | `/decisiones/{id_dictamen}` | Un dictamen con su revisión |
+| GET | `/pacientes/{id}/decisiones` | Dictámenes del paciente, el más reciente primero |
+| POST | `/pacientes/{id}/revision` | Además de `accion`: `veredicto` (adecuada\|incorrecta), `motivo_codigo` (ver `GET /catalogo` → `motivos_veredicto`; obligatorio si incorrecta), `id_dictamen`, `rev_vista` (409 si está atrasado). Responde `aprendizaje{precedente, criterio_local, sugerencia, mensaje}` |
+| POST | `/pacientes/{id}/eventos/{id_evento}/enmienda` | `{accion: anular\|no_relacionado\|relacionado, motivo (20+), usuario}`. No borra: agrega `enmienda#` y un dictamen |
+| GET | `/criterios-locales` | Criterios locales con su historial |
+| POST | `/criterios-locales/{id}/resolver` | `{accion: aprobar\|rechazar\|retirar, motivo (20+), usuario}` (rol jefatura). Aprobar crea un dictamen por paciente que cambia; retirar no baja a nadie |
+| GET | `/aprendizaje?especialidad=` | Concordancia (global, por diagnóstico, patrón y regla, con n), criterios locales, precedentes recientes, reglas a validar, versión de la capa local |
+
+Cada fila de `GET /pacientes` agrega `rev`, `dictamen` (resumen del último), `criterios_locales` y `criterios_propuestos`.
+`POST /eventos`, `POST /importar`, `POST /ingesta/eventos` y `POST /pacientes/{id}/informe` devuelven los dictámenes que crearon.
+
+## Conocimiento, identidad y salud
+| Método | Ruta | Qué hace |
+|---|---|---|
+| GET | `/conocimiento` | Paquete vigente (`etiqueta`, `huella`, `integro`), fuentes con versión y huella, motor, capa local, avisos |
+| GET | `/conocimiento/diagnostico/{cie10}` | Todo lo que el sistema sabe y aplica para ese diagnóstico, cada bloque con su fuente y versión |
+| GET | `/yo` | Identidad, roles y modo de autenticación (`ninguna` o `cognito`) |
+
+`GET /pacientes` acepta además `limite`, `desde` (posición, desde 1) y `campos=resumen\|completo`. Las respuestas grandes
+van comprimidas con gzip si el cliente lo acepta. Con `AUTH=cognito` cada ruta exige un rol (`lambda/seguridad.py`, `REGLAS`).
 
 ## Pacientes de demo (del dataset)
 | ID | Historia | Qué muestra |
