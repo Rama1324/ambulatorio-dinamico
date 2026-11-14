@@ -6,10 +6,12 @@ import time
 import uuid
 from datetime import date
 
+import aprendizaje
 import bitacora
 import ingesta
 import puntaje
-from catalogo import AJUSTE_MANUAL, DECISIONES, MIN_EXPLICACION, MOTIVOS_PENDIENTE, RESULTADOS_CONTACTO, TIPOS_EVENTO, catalogo
+from catalogo import (AJUSTE_MANUAL, DECISIONES, MIN_EXPLICACION, MOTIVOS_PENDIENTE, MOTIVOS_VEREDICTO, RESULTADOS_CONTACTO, TIPOS_EVENTO,
+                      VEREDICTOS, catalogo)
 from datos import ahora, cambios_perfil, fecha_de, fecha_valida, guardar, guardar_evento, guardar_perfil, perfiles_combinados
 from evaluacion_ia import algoritmo_activo, evaluar_y_guardar
 from lista import fila_de, lista
@@ -144,18 +146,27 @@ def post_novedad(pid, body):
         return 400, {"error": "tipo debe ser comorbilidad, diagnostico, riesgo, fallecimiento o atendido"}
     # El perfil (datos del paciente y de su interconsulta) es el único ítem que se pisa: primero queda la traza con lo
     # que cambió (antes y después, quién y cuándo) y recién entonces se guarda. Los eventos van aparte y no se tocan.
+    foto = bitacora.fotos([pid], corte)  # estado antes de la novedad: el dictamen documenta el antes y el después
     marca = ahora()
     antes, despues = cambios_perfil(perfs[pid], p)
     guardar({"id_paciente": pid, "sk": f"novedad#{marca}", "novedad": json.dumps(
         {"tipo": tipo, "detalle": texto, "usuario": body.get("usuario", "equipo clínico"), "fecha": marca,
          "antes": antes, "despues": despues}, ensure_ascii=False, default=str)})
     guardar_perfil(pid, p)
+    dictamen = bitacora.registrar(pid, corte, {"tipo": "novedad", "descripcion": f"novedad registrada por el equipo: {texto}"},
+                                  foto.get(pid), canal="app", usuario=body.get("usuario", "equipo clínico"))
     fila = fila_de(pid, corte)
-    return 200, {"id_paciente": pid, "mensaje": texto, "paciente": fila, "en_lista": fila is not None}
+    out = {"id_paciente": pid, "mensaje": texto, "paciente": fila, "en_lista": fila is not None}
+    if dictamen:
+        out["dictamen"] = dictamen
+    return 200, out
 
 
 def post_revision(pid, body):
-    if pid not in perfiles_combinados()[0]:
+    """Revisión del especialista (confirmar | ajustar) con su veredicto sobre la decisión del sistema (adecuada |
+    incorrecta + motivo_codigo), atado al dictamen que juzga. De ahí aprende el sistema (aprendizaje.al_revisar)."""
+    perfs = perfiles_combinados()[0]
+    if pid not in perfs:
         return 404, {"error": "paciente no existe"}
     accion = body.get("accion")
     if accion not in ("confirmar", "ajustar"):
@@ -164,14 +175,42 @@ def post_revision(pid, body):
         return 400, {"error": "escriba su nombre y cargo arriba a la derecha: la revisión queda a su nombre"}
     if accion == "ajustar" and (body.get("categoria_ajustada") not in puntaje.ORDEN_CAT or len((body.get("motivo") or "").strip()) < MIN_EXPLICACION):
         return 400, {"error": f"cambiar la prioridad requiere categoria_ajustada (alta|media|baja) y un motivo clínico de al menos {MIN_EXPLICACION} caracteres"}
+    veredicto = body.get("veredicto") or ("adecuada" if accion == "confirmar" else "incorrecta")
+    motivo_codigo = body.get("motivo_codigo") or None
+    if not body.get("veredicto") and veredicto == "incorrecta" and not motivo_codigo:
+        motivo_codigo = "otro"   # 'ajustar' sin veredicto explícito (la app de antes): queda el precedente, sin aprender nada más
+    if veredicto not in VEREDICTOS:
+        return 400, {"error": f"veredicto debe ser uno de {sorted(VEREDICTOS)}"}
+    if motivo_codigo and motivo_codigo not in MOTIVOS_VEREDICTO or veredicto == "incorrecta" and not motivo_codigo:
+        return 400, {"error": f"un veredicto 'incorrecta' requiere motivo_codigo, uno de {sorted(MOTIVOS_VEREDICTO)}"}
+    if motivo_codigo == "otro" and len((body.get("motivo") or "").strip()) < MIN_EXPLICACION:
+        return 400, {"error": f"si el motivo es 'otro', explíquelo (mínimo {MIN_EXPLICACION} caracteres)"}
     corte = fecha_de(body)
     previa = fila_de(pid, corte)
+    directo = None   # paciente sin dictamen: se documenta el estado vigente (revision_directa) y el veredicto se ata a él
+    if body.get("id_dictamen"):
+        dictamen = bitacora.dictamen_de(pid, body["id_dictamen"])
+        if not dictamen:
+            return 404, {"error": f"el dictamen {body['id_dictamen']} no existe o no es de este paciente"}
+    else:
+        dictamen = bitacora.ultimo(pid) or (directo := bitacora.revision_directa(pid, corte, body.get("usuario")))
     rev = {"accion": accion, "categoria_ajustada": body.get("categoria_ajustada") if accion == "ajustar" else None,
            "categoria_sistema": previa and previa["categoria_sistema"],  # para medir concordancia (kappa)
            "motivo": body.get("motivo"), "fecha_corte": corte.isoformat(),
-           "usuario": body.get("usuario", "equipo clínico"), "fecha": ahora()}
-    guardar({"id_paciente": pid, "sk": f"revision#{rev['fecha']}", "revision": json.dumps(rev, ensure_ascii=False)})
-    return 200, {"id_paciente": pid, "revision": rev}
+           "usuario": body.get("usuario", "equipo clínico"), "fecha": ahora(),
+           "veredicto": veredicto, "motivo_codigo": motivo_codigo, "id_dictamen": dictamen["id_dictamen"],
+           "patron": dictamen.get("patron") or aprendizaje.patron_de(perfs[pid], corte),
+           "categoria_final": body.get("categoria_ajustada") if accion == "ajustar" else (previa and previa["categoria"]),
+           "regla": aprendizaje.regla_principal(dictamen.get("fundamento"))}
+    if motivo_codigo == "criterio_no_aplica":
+        rev["regla_objetada"] = rev["regla"]
+    # primero la revisión, con el control de edición simultánea (rev_vista → 409 si el paciente recibió algo después)
+    guardar({"id_paciente": pid, "sk": f"revision#{rev['fecha']}", "revision": json.dumps(rev, ensure_ascii=False)},
+            rev_vista=body.get("rev_vista"))
+    if directo:
+        bitacora.guardar_dictamen(directo)
+    apr = aprendizaje.al_revisar(pid, rev, dictamen, perfs[pid], corte)
+    return 200, {"id_paciente": pid, "revision": rev, "id_dictamen": dictamen["id_dictamen"], "aprendizaje": apr}
 
 
 def post_contacto(pid, body):

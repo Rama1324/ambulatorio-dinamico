@@ -280,12 +280,17 @@ def test_para_diagnostico_que_no_existe():
 
 
 def test_para_diagnostico_no_muestra_reglas_que_no_se_aplican():
-    """F32 usa los criterios por especialidad; la alerta PHQ-9 de aplicar_registro no le llega (la función termina antes)."""
+    """F32 usa los criterios por especialidad y no tiene criterios oficiales del registro. La alerta PHQ-9 de aplicar_registro
+    sí le llega (antes la función terminaba antes de emitirla: se corrigió) y es lo único que se muestra del registro."""
     d = bc.para_diagnostico("F32")
     assert d["criterios_oficiales"] is None and d["criterios_clinicos"]["id"] == "psiquiatria_07" and d["criterios_clinicos"]["urgencias"]
     assert d["criterios_clinicos"]["fuente"]["id"] == "criterios_especialidad" and d["especialidad"] == "Salud Mental"
     assert d["si_se_descompensa"]["pagina"] == 110 and d["ges"]["plazo_dias"] == 30 and d["rubrica"]["medicion_clave"] == "PHQ9"
-    assert "F32" not in puntaje.criterios_registro() and d["reglas_con_el_registro"] is None
+    assert "F32" not in puntaje.criterios_registro()
+    assert [r["efecto"] for r in d["reglas_con_el_registro"]["reglas"]] == ["alerta"] and "PHQ-9" in d["reglas_con_el_registro"]["reglas"][0]["criterio"]
+    # las reglas que sí exigen criterios oficiales (HbA1c, exacerbaciones…) siguen sin mostrarse donde no se aplican
+    assert bc.para_diagnostico("E11")["reglas_con_el_registro"] and not any(
+        r["efecto"] == "alerta" for r in bc.para_diagnostico("E11")["reglas_con_el_registro"]["reglas"])
 
 
 def test_cada_bloque_cita_su_fuente_con_la_version_vigente():

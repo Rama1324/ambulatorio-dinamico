@@ -108,7 +108,7 @@ def test_tuberia_registra_deduplica_rechaza_y_cuenta_fuera_de_lista(espia):
     assert len(espia["lote"]) == 1
 
 
-def test_por_rut_y_bitacora_vacia_no_rompe_nada():
+def test_por_rut_registra_y_deja_dictamen():
     datos.restablecer()
     s, p = call("POST", "/pacientes", body={"nombre": "Rosa Rut", "edad": 66, "sexo": "F", "diagnostico_cie10": "I50", "rut": "12.345.678-5",
                                             "prioridad_inicial": "baja", "fecha_ingreso_lista": "2026-05-01", **Q})
@@ -116,7 +116,8 @@ def test_por_rut_y_bitacora_vacia_no_rompe_nada():
     pid = p["id_paciente"]
     r = ingesta.registrar({"eventos": [{"rut": "12345678-5", "fecha_evento": "2026-10-12", "tipo_evento": "hospitalizacion",
                                         "subtipo": "ingreso hospitalario"}]}, canal="api", origen="hospitalizacion-hlf", corte=CORTE)
-    assert r["registrados"] == 1 and r["dictamenes"] == [] and not r["errores"]       # la bitácora aún no devuelve dictámenes
+    assert r["registrados"] == 1 and not r["errores"]
+    assert [(d["id_paciente"], d["cambio"]) for d in r["dictamenes"]] == [(pid, "sube")]          # un dictamen por paciente afectado
     assert eventos_de(pid)[0]["canal"] == "api"
     from lista import fila_de
     assert fila_de(pid, CORTE)["riesgo_vital"]                                                     # las reglas rigen de inmediato

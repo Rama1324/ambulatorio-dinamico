@@ -3,6 +3,7 @@ import json
 import re
 import uuid
 
+import bitacora
 import importar
 import privacidad
 import puntaje
@@ -75,14 +76,22 @@ def post_paciente(body):
     motivo = privacidad.ocultar(motivo, [nombre], [rut])  # a la IA no va el nombre ni el RUT
     clasif = _aplicar_criterios(pid, dx["diagnostico_cie10"], motivo, ingreso, body)
     combs = _aplicar_combinaciones(pid, perfil, motivo, ingreso, body)
+    evaluacion = None
     if algoritmo_activo() == "rubrica":  # el modelo evalúa al paciente al ingresar, cruzando lo registrado (no solo la SIC)
         try:
-            evaluar_y_guardar(pid, corte)
+            evaluacion = evaluar_y_guardar(pid, corte)
         except Exception as e:  # si la IA falla, quedan las reglas: el ingreso no se pierde
             print(f"evaluación al ingresar {pid}: {type(e).__name__}: {e}")
+    # dictamen del ingreso (antes no estaba en la lista): qué prioridad quedó y con qué fundamento
+    dictamen = bitacora.registrar(pid, corte, {"tipo": "ingreso", "descripcion": f'ingreso a la lista: {dx["diagnostico_cie10"]} '
+                                                                                  f'{dx["diagnostico_texto"]} (prioridad inicial {body["prioridad_inicial"]})'},
+                                  None, canal="app", usuario=body.get("usuario"), evaluacion=evaluacion)
     data = lista(corte)
     fila = next((p for p in data["pacientes"] if p["id_paciente"] == pid), None)
-    return 200, {"id_paciente": pid, "paciente": fila, "criterio": clasif, "combinaciones": combs}
+    out = {"id_paciente": pid, "paciente": fila, "criterio": clasif, "combinaciones": combs}
+    if dictamen:
+        out["dictamen"] = dictamen
+    return 200, out
 
 
 def _aplicar_combinaciones(pid, perfil, texto, fecha, body):

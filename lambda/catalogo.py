@@ -29,6 +29,17 @@ AJUSTE_MANUAL = {  # mover a un paciente en la lista exige un motivo previo y ex
 }
 MIN_EXPLICACION = 20
 
+# Veredicto del especialista sobre una decisión del sistema (ESPECIFICACION_MVP §6.1): vocabulario cerrado
+VEREDICTOS = {"adecuada": "La decisión del sistema fue adecuada", "incorrecta": "La decisión del sistema fue incorrecta"}
+MOTIVOS_VEREDICTO = {  # código: (qué significa, qué aprende el sistema)
+    "criterio_faltante": ("Falta un criterio: debió quedar más arriba", "precedente + criterio local propuesto (lo aprueba jefatura)"),
+    "criterio_no_aplica": ("La regla usada no corresponde a este caso: no debió subir", "precedente + la regla entra a 'reglas a validar'; no baja a nadie"),
+    "evento_no_relacionado": ("El evento no es por la enfermedad por la que espera", "sugiere marcar el evento como no relacionado"),
+    "lectura_incorrecta": ("La IA leyó mal el informe o el historial", "sugiere anular el evento"),
+    "informacion_no_registrada": ("Hay información clínica que no está en el registro", "solo este paciente"),
+    "otro": ("Otro (explicado, mínimo 20 caracteres)", "solo queda el precedente"),
+}
+
 
 ESTADOS_GESTION = {
     "pendiente_revision": ("Decisión del especialista", "Ver si corresponde cambiar la prioridad"),
@@ -77,4 +88,6 @@ def catalogo():
             "resultados_contacto": [{"valor": k, "texto": v} for k, v in RESULTADOS_CONTACTO.items()],
             "decisiones": [{"valor": k, "texto": v} for k, v in DECISIONES.items()],
             "motivos_pendiente": [{"valor": k, "texto": v} for k, v in MOTIVOS_PENDIENTE.items()],
-            "motivos_ajuste": [{"valor": k, "texto": v} for k, v in AJUSTE_MANUAL.items()], "min_explicacion": MIN_EXPLICACION}
+            "motivos_ajuste": [{"valor": k, "texto": v} for k, v in AJUSTE_MANUAL.items()], "min_explicacion": MIN_EXPLICACION,
+            "veredictos": [{"valor": k, "texto": v} for k, v in VEREDICTOS.items()],
+            "motivos_veredicto": [{"valor": k, "texto": t, "efecto": e} for k, (t, e) in MOTIVOS_VEREDICTO.items()]}

@@ -229,8 +229,13 @@ def decidir(perfil, resp, corte, kb):
         revision.append({"motivo": "fila_a_validar", "bloqueante": False, "detalle": dx.get("detalle", "")})
     if resp.senal_no_cubierta.strip():
         revision.append({"motivo": "senal_no_cubierta", "bloqueante": False, "detalle": resp.senal_no_cubierta.strip()[:300]})
-    return {"categoria": categoria, "descompensacion_grave": grave, "estado_clinico": estado, "razones": razones, "revision": revision,
-            "fecha_evento": fecha_ev if estado == "descompensado" else None}
+    out = {"categoria": categoria, "descompensacion_grave": grave, "estado_clinico": estado, "razones": razones, "revision": revision,
+           "fecha_evento": fecha_ev if estado == "descompensado" else None}
+    # Mismas capas que al final de puntaje.puntuar (criterios locales aprobados): si no, la regla local subiría al paciente
+    # con las reglas y no con la fórmula, y el control 'bajaria' saltaría cada vez
+    for capa in puntaje.CAPAS:
+        out = capa(out, perfil, corte)
+    return out
 
 
 def clave_orden_536(r):

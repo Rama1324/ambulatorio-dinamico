@@ -6,7 +6,7 @@ import puntaje
 import vecinos
 from catalogo import ESTADOS_GESTION, MOTIVOS_PENDIENTE
 from datos import (REGISTRO_AL, posterior, ajustes_orden, contactos, decisiones, evaluaciones_por_paciente, gestiones, hoy,
-                   perfiles_combinados)
+                   perfiles_combinados, rev)
 from evaluacion_ia import _aplicar_rubrica, algoritmo_activo
 
 
@@ -60,6 +60,9 @@ def _enriquecer(r, perfil, revision, pos_ant, corte=None, contacto=None, decisio
         "decision": None,
         "evaluacion": None,
     }
+    for k in ("criterios_locales", "criterios_propuestos"):  # capa de criterios locales (aprendizaje.py): solo si hay
+        if r.get(k):
+            out[k] = r[k]
     senales = r.get("senales", [])
     # Una revisión vale solo para lo que el equipo vio: desde la fecha de corte en que revisó y hasta que llegue
     # un evento nuevo. Un evento posterior invalida la confirmación o el ajuste y vuelve a pedir revisión.
@@ -134,7 +137,12 @@ def _gestion(p, g, corte):
     g = g if g and g.get("fecha_corte", "0000") <= corte.isoformat() else {}
     # el paciente pidió revisión humana y ningún especialista ha revisado desde entonces (Ley 21.719, art. 8 bis)
     pide_humano = g.get("motivo_pendiente") == "revision_humana" and not ((p.get("revision") or {}).get("fecha", "") >= g.get("fecha", ""))
-    if pide_humano:
+    # calza con un criterio local PROPUESTO que lo subiría: no cambia su prioridad, pero el especialista debe mirarlo
+    # (salvo que lo haya revisado después de la propuesta, o que la propuesta haya nacido de su propia revisión)
+    rv = p.get("revision") or {}
+    propuesto = any(not c.get("de_este_paciente") and (rv.get("automatica") or rv.get("fecha", "") < c.get("fecha", ""))
+                    for c in p.get("criterios_propuestos") or [])
+    if pide_humano or propuesto:
         estado = "pendiente_revision"
     elif c.get("resultado") == "citado":
         estado = "cita_reservada"
@@ -150,6 +158,8 @@ def _gestion(p, g, corte):
     accion = ESTADOS_GESTION[estado][1]
     if pide_humano:
         accion = "El paciente pidió revisión humana: el especialista revisa y confirma o cambia la prioridad"
+    elif propuesto:
+        accion = "Calza con un criterio local propuesto: el especialista revisa si corresponde subir la prioridad"
     elif estado == "pendiente_cita" and p.get("contactar_hoy"):
         accion = "Contactar hoy y citar con prioridad"
     elif estado == "pendiente_cita" and p["categoria"] != p["prioridad_inicial"]:
@@ -212,8 +222,12 @@ def lista(corte, especialidad=None, perfs=None, revs=None):
         p["posicion_sistema"] = i
     _aplicar_ajustes(pacientes, {r["id_paciente"]: r.get("senales", []) for r in activos}, corte)
     gest = gestiones()
+    import bitacora  # aquí y no arriba: bitacora usa la lista para la foto antes/después
+    dics = bitacora.resumenes(revs or {})
     for p in pacientes:
         p["gestion"] = _gestion(p, gest.get(p["id_paciente"]), corte)
+        p["rev"] = rev(p["id_paciente"])            # control de edición simultánea (rev_vista)
+        p["dictamen"] = dics.get(p["id_paciente"])  # resumen de la última decisión documentada
     por_esp = {}
     for i, p in enumerate(pacientes, 1):
         p["posicion"] = i

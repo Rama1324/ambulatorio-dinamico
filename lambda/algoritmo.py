@@ -73,7 +73,7 @@ def evaluar_paciente(perfil, corte, cliente, kb=None, corridas=CORRIDAS):
     return {
         "id_paciente": perfil["id_paciente"], "fecha_corte": corte.isoformat(), "firma": rubrica.firma(perfil, corte),
         "fecha": datetime.now(timezone.utc).isoformat(timespec="microseconds"),
-        "algoritmo": "rubrica", "version_rubrica": rubrica.VERSION_RUBRICA, "version_kb": kb["version"],
+        "algoritmo": "rubrica", "version_rubrica": rubrica.VERSION_RUBRICA, "version_kb": kb["version"], "huella_kb": huella_kb(kb),
         "hash_prompt": rubrica.hash_prompt(), "modelo": getattr(cliente, "model_id", "?"), "corridas": corridas,
         "lecturas": [{"respuestas": r.model_dump() if r else None, "meta": m, "citas_invalidas": cm} for r, m, cm in lecturas],
         **c,
@@ -83,11 +83,27 @@ def evaluar_paciente(perfil, corte, cliente, kb=None, corridas=CORRIDAS):
     }
 
 
+_HUELLA = {}
+
+
+def huella_kb(kb):
+    """sha256 del contenido de la rúbrica consolidada (el mismo que declara el manifiesto para rubrica_v1). La versión
+    sola no basta: hubo fuentes que cambiaron de contenido sin subir su versión."""
+    import base_conocimiento
+    if kb is decisor.cargar_kb():   # la de disco: se calcula una vez por proceso
+        if "disco" not in _HUELLA:
+            _HUELLA["disco"] = base_conocimiento.huella_objeto(kb)
+        return _HUELLA["disco"]
+    return base_conocimiento.huella_objeto(kb)
+
+
 def vigente(e, perfil, corte, kb, firma=None):
     """¿La evaluación guardada sirve para esta fecha de corte? Mismo historial (firma), misma rúbrica, misma base de
-    conocimiento y hecha a un corte anterior o igual (lo que vino después ya está en la firma)."""
+    conocimiento (versión Y huella del contenido: una evaluación sin huella no es vigente) y hecha a un corte anterior o
+    igual (lo que vino después ya está en la firma)."""
     return bool(e) and e["fecha_corte"] <= corte.isoformat() and e.get("version_rubrica") == rubrica.VERSION_RUBRICA and \
-        e.get("hash_prompt") == rubrica.hash_prompt() and e.get("version_kb") == kb["version"] and e["firma"] == (firma or rubrica.firma(perfil, corte))
+        e.get("hash_prompt") == rubrica.hash_prompt() and e.get("version_kb") == kb["version"] and \
+        bool(e.get("huella_kb")) and e["huella_kb"] == huella_kb(kb) and e["firma"] == (firma or rubrica.firma(perfil, corte))
 
 
 def reaplicar(e, perfil, corte, kb, reglas=None):

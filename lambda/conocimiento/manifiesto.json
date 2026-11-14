@@ -3,8 +3,8 @@
  "nota": "Generado por scripts/empaquetar_conocimiento.py: no editar a mano. sha256 = huella del contenido canónico de cada JSON (claves ordenadas, sin espacios) o del texto de cada .py con saltos de línea \\n; no depende del formato del archivo.",
  "paquete": {
   "etiqueta": "kb-2026.11.0",
-  "huella": "9aae9abd8dbc",
-  "generado": "2026-11-14T15:13:26+00:00"
+  "huella": "6c8d773f352c",
+  "generado": "2026-11-14T15:34:24+00:00"
  },
  "fuentes": [
   {
@@ -219,16 +219,16 @@
   }
  ],
  "motor": {
-  "huella": "a0363ce99386",
-  "sha256": "a0363ce9938665608d652ec3e8d2a49efc2cb3b3f45c0d11fb103e1bb2040514",
+  "huella": "614c8bb2289b",
+  "sha256": "614c8bb2289be495ead8f77dd692e497fe3e202d6f9ab02aaad387ba4da7ddc0",
   "archivos": [
    {
     "archivo": "lambda/puntaje.py",
-    "sha256": "ec789b047762b3c3394dd714da9c6647566a011d7f4f2190846c5fe3b76e40dd"
+    "sha256": "57695be8cdc9ebc95002080ad763476ea58d593babaf83e59fd610d93776c6f8"
    },
    {
     "archivo": "lambda/decisor.py",
-    "sha256": "8ff0f945831345974d1a603dc21bf0b777fa9931f9c31b52d45a1db8a7773ab0"
+    "sha256": "d4d2ba059c1362c4725c405a90251d1d90851679f4191ebb3f36d5a2aee7a983"
    },
    {
     "archivo": "lambda/controles.py",
@@ -236,7 +236,7 @@
    },
    {
     "archivo": "lambda/algoritmo.py",
-    "sha256": "4dacd58a1a6e398397423681ce15f0151d8fb9dab09b76a880990a9d0a9dec52"
+    "sha256": "6dba9bd98696a0a5098f14d82520340026159f8baaf5c3516e19a72bf0d2ba90"
    },
    {
     "archivo": "lambda/rubrica.py",
@@ -398,6 +398,16 @@
    {
     "funcion": "puntaje.aplicar_registro",
     "diagnosticos": [
+     "F32",
+     "F33"
+    ],
+    "efecto": "alerta",
+    "criterio": "NICE NG222: PHQ-9 ≥ 16 = \"more severe depression\" (no cambia la prioridad por sí solo)",
+    "riesgo": "Preguntar directamente por ideación suicida (NICE NG222); con plan o intención, derivar de inmediato."
+   },
+   {
+    "funcion": "puntaje.aplicar_registro",
+    "diagnosticos": [
      "J45",
      "J46"
     ],
@@ -448,23 +458,11 @@
     "requiere": "criterios_registro",
     "efecto": "media",
     "criterio": "HbA1c 8–10% con deterioro reciente"
-   },
-   {
-    "funcion": "puntaje.aplicar_registro",
-    "diagnosticos": [
-     "F32",
-     "F33"
-    ],
-    "requiere": "criterios_registro",
-    "efecto": "alerta",
-    "criterio": "NICE NG222: PHQ-9 ≥ 16 = \"more severe depression\" (no cambia la prioridad por sí solo)",
-    "riesgo": "Preguntar directamente por ideación suicida (NICE NG222); con plan o intención, derivar de inmediato."
    }
   ]
  },
  "avisos": [
   "versión repetida: 'evidencia_v1' identifica a pubmed_evidencia y guias_umbrales (cada fuente debería tener la suya)",
-  "el JSON no trae fecha (fecha, generado o consultado): diagnosticos_tabla_hlf, criterios_especialidad",
-  "regla del código que nunca se aplica: puntaje.aplicar_registro \"NICE NG222: PHQ-9 ≥ 16 = \"more severe depression\" (no cambia la prioridad por sí solo)\" es para F32, F33, pero la función termina antes para los diagnósticos que no están en criterios_registro.json"
+  "el JSON no trae fecha (fecha, generado o consultado): diagnosticos_tabla_hlf, criterios_especialidad"
  ]
 }
