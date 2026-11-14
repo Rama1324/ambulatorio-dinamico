@@ -1,0 +1,92 @@
+name: Desplegar un ambiente
+
+# Pasos comunes de un despliegue; lo llama desplegar.yml una vez por ambiente. Hace lo mismo que una persona con
+# scripts/desplegar.sh: verificar identidad, tests, paquete, stack, datos (solo prueba), comprobación y página.
+on:
+  workflow_call:
+    inputs:
+      ambiente:
+        description: Ambiente de samconfig.toml y environment de GitHub (prueba o prod)
+        required: true
+        type: string
+
+jobs:
+  desplegar:
+    name: Desplegar ${{ inputs.ambiente }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # El environment entrega las variables del ambiente y, en prod, detiene el trabajo hasta que alguien lo apruebe.
+    # El rol de AWS solo confía en trabajos que corren dentro de este environment.
+    environment: ${{ inputs.ambiente }}
+    concurrency:
+      group: desplegar-${{ inputs.ambiente }}   # un despliegue a la vez por ambiente; nunca se corta uno a medias
+      cancel-in-progress: false
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      AMBIENTE: ${{ inputs.ambiente }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements-dev.txt
+            lambda/requirements.txt
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: front/package-lock.json
+      - uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
+      - name: Dependencias de desarrollo
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Región del ambiente (samconfig.toml es la única fuente)
+        id: cfg
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import os, tomllib
+          with open("samconfig.toml", "rb") as f:
+              ambiente = tomllib.load(f)[os.environ["AMBIENTE"]]
+          print("region=" + ambiente["global"]["parameters"]["region"])
+          PY
+
+      - name: Credenciales de AWS (OIDC, sin llaves guardadas)
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}   # variable del environment: el rol de ese ambiente
+          aws-region: ${{ steps.cfg.outputs.region }}
+          role-session-name: desplegar-${{ inputs.ambiente }}-${{ github.run_id }}
+
+      # Los tests lo necesitan en los dos ambientes; además se carga en la tabla de "prueba". Nunca se carga en prod.
+      - name: Dataset sintético
+        env:
+          DATASET_S3_URI: ${{ vars.DATASET_S3_URI }}
+          DATASET_URL: ${{ secrets.DATASET_URL }}
+          DATASET_SHA256: ${{ vars.DATASET_SHA256 }}
+        run: |
+          mkdir -p data
+          if [ -n "$DATASET_S3_URI" ]; then
+            aws s3 cp "$DATASET_S3_URI" data/perfiles.json --only-show-errors
+          elif [ -n "$DATASET_URL" ]; then
+            curl --fail --silent --show-error --location --retry 3 "$DATASET_URL" --output data/perfiles.json
+          else
+            echo "::error title=Falta el dataset sintético::Configure la variable DATASET_S3_URI o el secreto DATASET_URL: sin tests no se despliega."
+            exit 1
+          fi
+          if [ -n "$DATASET_SHA256" ]; then
+            echo "$DATASET_SHA256  data/perfiles.json" | sha256sum --check --quiet
+          fi
+          python -c "import json; d = json.load(open('data/perfiles.json', encoding='utf-8')); assert isinstance(d, list) and d, 'no es la lista de perfiles'; print(len(d), 'perfiles')"
+
+      - name: Desplegar
+        env:
+          # opcional, variable del environment: parámetros que no van en el repositorio, por ejemplo
+          # "CorreoAlertas=ti@hospital.cl PresupuestoMensualUSD=150"
+          PARAMETROS_EXTRA: ${{ vars.PARAMETROS_EXTRA }}
+        run: bash scripts/desplegar.sh "$AMBIENTE" --si

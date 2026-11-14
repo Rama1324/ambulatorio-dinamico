@@ -10,7 +10,7 @@
   evaluacion_ia.py    algoritmo con rúbrica (ALGORITMO=rubrica) y barrido nocturno
 
 Modo local: LOCAL=1 y DATA_DIR=ruta a data/ (lee perfiles.json, guarda en memoria).
-Modo AWS:   BUCKET, PERFILES_KEY, TABLE (DynamoDB pk=id_paciente, sk=texto).
+Modo AWS:   TABLE (DynamoDB pk=id_paciente, sk; índice PorDia). El registro se carga con scripts/cargar_registro.py.
 """
 import base64
 import gzip

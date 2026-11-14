@@ -1,0 +1,81 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Ambulatorio Dinamico HLF - acceso del pipeline de GitHub Actions a esta cuenta SIN llaves guardadas (OIDC).
+  Crea el rol que asume el despliegue de un ambiente. Se despliega una vez por ambiente, a mano, antes de activar
+  el pipeline (ver DEPLOY.md, seccion CI/CD).
+
+# Como funciona: GitHub firma un token por cada ejecucion del pipeline. AWS lo valida y entrega credenciales que
+# duran una hora. No hay access keys guardadas en GitHub que se puedan filtrar.
+# El rol solo confia en ejecuciones de ESTE repositorio que corren dentro del environment indicado. Como el
+# environment "prod" exige la aprobacion de una persona en GitHub, nadie asume el rol de prod sin esa aprobacion.
+#
+# Estado: validada con cfn-lint, no desplegada. Sin tildes a proposito (igual que template.yaml).
+
+Parameters:
+  Repositorio:
+    Type: String
+    AllowedPattern: "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+    ConstraintDescription: "Use la forma organizacion/repositorio."
+    Description: Repositorio de GitHub que puede asumir el rol, en la forma organizacion/repositorio.
+
+  Ambiente:
+    Type: String
+    AllowedValues: [prueba, prod]
+    Description: Environment de GitHub (y ambiente de samconfig.toml) cuyos despliegues pueden asumir este rol.
+
+  CrearProveedor:
+    Type: String
+    Default: "si"
+    AllowedValues: ["si", "no"]
+    Description: >-
+      si = registra a GitHub como proveedor de identidad de la cuenta. no = ya esta registrado (solo puede existir
+      uno por cuenta; pasa al desplegar el segundo ambiente en la misma cuenta).
+
+  PoliticaPermisos:
+    Type: String
+    AllowedPattern: "^arn:aws[a-z-]*:iam::(aws|[0-9]{12}):policy/.+$"
+    Description: >-
+      ARN de la politica de permisos del rol. No tiene valor por defecto a proposito: hay que decidirlo. Para partir
+      en una cuenta dedicada a este sistema: arn:aws:iam::aws:policy/AdministratorAccess (el mismo punto de partida
+      de "sam pipeline bootstrap"). Antes de prod, cambiar por una politica acotada, acordada con el equipo de AWS.
+
+Conditions:
+  CreaProveedor: !Equals [!Ref CrearProveedor, "si"]
+
+Resources:
+  ProveedorGitHub:
+    Type: AWS::IAM::OIDCProvider
+    Condition: CreaProveedor
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+
+  RolDespliegue:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "ambulatorio-hlf-despliegue-${Ambiente}"
+      Description: !Sub "Ambulatorio HLF - despliegue de ${Ambiente} desde GitHub Actions (${Repositorio})"
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !If
+                - CreaProveedor
+                - !Ref ProveedorGitHub
+                - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com"
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                "token.actions.githubusercontent.com:aud": sts.amazonaws.com
+                # Exacto, sin comodines: solo los trabajos de ese repositorio que corren en ese environment.
+                "token.actions.githubusercontent.com:sub": !Sub "repo:${Repositorio}:environment:${Ambiente}"
+      ManagedPolicyArns:
+        - !Ref PoliticaPermisos
+
+Outputs:
+  RolArn:
+    Description: Valor de la variable AWS_ROLE_ARN del environment de GitHub de este ambiente
+    Value: !GetAtt RolDespliegue.Arn

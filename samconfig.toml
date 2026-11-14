@@ -1,0 +1,88 @@
+# Ambulatorio Dinamico HLF - valores de despliegue por ambiente (AWS SAM CLI).
+#
+# Unica fuente de verdad del nombre del stack, la region y el modo de IA de cada ambiente. Los scripts de despliegue
+# (scripts/desplegar.sh y scripts\deploy_aws.ps1) y el pipeline de GitHub leen de aqui: no definen nada por su cuenta.
+# Antes el modo de IA estaba escrito en tres lugares y con valores distintos.
+#
+#   Desplegar:              scripts/desplegar.sh prueba        |  scripts/desplegar.sh prod
+#   Cambiar algo una vez:   scripts/desplegar.sh prueba --parametros "ModelId=simulado CorreoAlertas=ti@hospital.cl"
+#   Que significa cada parametro: seccion Parameters de template.yaml.
+#
+# Reglas de este archivo
+#   - Sin tildes ni caracteres especiales: SAM CLI en Windows lo lee con la codificacion local.
+#   - En parameter_overrides, cada linea termina en "\" y cada valor va entre comillas.
+#   - Lo valida "python scripts/validar_plantilla.py" (parametros que existen, valores validos, reglas de la plantilla).
+#
+# Region: us-east-1 es el punto de partida. Hoy no es condicion que los datos esten en Chile; si llega a serlo, se
+# cambia "region" aqui (y BedrockRegion debe seguir siendo una region donde este disponible el modelo). Ver DEPLOY.md.
+version = 0.1
+
+[default.validate.parameters]
+lint = true
+
+# =====================================================================================================================
+# prueba: datos sinteticos, sin login. Es el ambiente de la demo y donde se prueba cada cambio antes de prod.
+# =====================================================================================================================
+[prueba.global.parameters]
+stack_name = "ambulatorio-hlf-prueba"
+region = "us-east-1"
+
+[prueba.deploy.parameters]
+resolve_s3 = true
+s3_prefix = "ambulatorio-hlf-prueba"
+capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND"
+confirm_changeset = false
+fail_on_empty_changeset = false
+tags = "proyecto=\"ambulatorio-dinamico-hlf\" ambiente=\"prueba\""
+# Modo de IA de prueba: la IA lee con rubrica (Bedrock) y el codigo decide; es el mismo camino que se quiere validar
+# antes de prod, permisos de Bedrock incluidos. Sin acceso a Bedrock todavia: --parametros "ModelId=simulado".
+parameter_overrides = """\
+    Ambiente="prueba" \
+    Autenticacion="ninguna" \
+    OrigenPermitido="*" \
+    LlavePropia="no" \
+    Algoritmo="rubrica" \
+    ModelId="us.anthropic.claude-sonnet-5-5" \
+    BedrockRegion="us-east-1" \
+    LecturasIA="3" \
+    BarridoActivo="DISABLED" \
+    FechaReferencia="hoy" \
+    RegistroAl="2026-10-13" \
+    RetencionLogsDias="90" \
+    """
+
+# =====================================================================================================================
+# prod: datos reales. Login obligatorio, origen web restringido al sitio, llave propia y proteccion contra borrado
+# (la plantilla rechaza prod sin login o con origen "*").
+# =====================================================================================================================
+[prod.global.parameters]
+stack_name = "ambulatorio-hlf-prod"
+region = "us-east-1"
+
+[prod.deploy.parameters]
+resolve_s3 = true
+s3_prefix = "ambulatorio-hlf-prod"
+capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND"
+confirm_changeset = true
+fail_on_empty_changeset = false
+tags = "proyecto=\"ambulatorio-dinamico-hlf\" ambiente=\"prod\""
+# Modo de IA de prod: reglas oficiales. Bedrock solo redacta explicaciones y apoya la lectura de informes. Pasar a
+# Algoritmo="rubrica" (la IA lee y el codigo decide) es una decision del equipo clinico del hospital: se cambia aqui,
+# en una linea, cuando la apruebe.
+# Antes del primer despliegue: RegistroAl = fecha en que se extrajo el registro real; CorreoAlertas y
+# PresupuestoMensualUSD se pasan con --parametros (o se agregan aqui).
+parameter_overrides = """\
+    Ambiente="prod" \
+    Autenticacion="cognito" \
+    MfaCognito="ON" \
+    OrigenPermitido="sitio" \
+    LlavePropia="si" \
+    Algoritmo="reglas" \
+    ModelId="us.anthropic.claude-sonnet-5-5" \
+    BedrockRegion="us-east-1" \
+    LecturasIA="3" \
+    BarridoActivo="DISABLED" \
+    FechaReferencia="hoy" \
+    RegistroAl="2026-10-13" \
+    RetencionLogsDias="731" \
+    """
