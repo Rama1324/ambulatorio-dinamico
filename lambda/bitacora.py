@@ -374,8 +374,10 @@ def rutear(method, partes, qs, body):
             limite = int(qs.get("limite") or 50)
         except ValueError:
             return 400, {"error": "limite debe ser un número"}
-        ds = buscar(qs.get("especialidad") or None, estado, limite, qs.get("desde") or None)
-        return 200, {"estado": estado, "total": len(ds), "decisiones": ds}
+        todas = buscar(qs.get("especialidad") or None, estado, 10 ** 9, qs.get("desde") or None)
+        if qs.get("id_lote"):  # las decisiones que dejó un lote de ingesta
+            todas = [d for d in todas if (d.get("disparador") or {}).get("id_lote") == qs["id_lote"]]
+        return 200, {"estado": estado, "total": len(todas), "decisiones": todas[:max(1, limite)]}
     if len(partes) == 2 and partes[0] == "decisiones":
         por_dic, ultima = _revisiones()
         d = next((d for d in (_leer(it) for it in datos.registros_tipo("dictamen#")) if d and d["id_dictamen"] == partes[1]), None)

@@ -103,7 +103,7 @@ export default function App() {
   const pendientes = data.pacientes.filter((p) => p.gestion?.estado === "pendiente_revision").length;
   const masDeUnAnio = data.pacientes.filter((p) => p.dias_espera > 365).length;
   // modo de decisión: /health trae el algoritmo; que la IA sea simulada se sabe por el modelo registrado en las evaluaciones
-  const modelo = data.pacientes.find((p) => p.rubrica?.modelo)?.rubrica?.modelo || modeloIA;
+  const modelo = info?.modelo_ia || data.pacientes.find((p) => p.rubrica?.modelo)?.rubrica?.modelo || modeloIA;
   const modoDecision = info?.algoritmo === "rubrica" ? (modelo === "simulado" ? ["IA simulada (demostración, sin Amazon Bedrock) + criterios con fuente", "text-ambar"]
     : modelo ? [`IA con Amazon Bedrock (${modelo}) + criterios con fuente`, ""] : ["IA que lee el historial + criterios con fuente (modelo aún no informado)", ""])
     : ["Solo reglas con fuente (sin IA)", ""];

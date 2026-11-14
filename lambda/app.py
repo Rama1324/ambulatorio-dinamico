@@ -117,7 +117,8 @@ def _rutear(method, partes, qs, body, cabeceras=None):
         return 200, {"ok": True, "pacientes": len(perfiles()), "fecha_hoy": hoy().isoformat(),
                      "modo": "tiempo_real" if datos.TIEMPO_REAL else "simulacion", "datos": "sinteticos",
                      "datos_hasta": datos.datos_hasta(), "registro_al": datos.REGISTRO_AL,
-                     "auth": seguridad.modo(), "algoritmo": algoritmo_activo(), "almacen": "memoria" if datos.LOCAL else "dynamodb",
+                     "auth": seguridad.modo(), "algoritmo": algoritmo_activo(),
+                     "modelo_ia": (os.environ.get("MODEL_ID") or None) if algoritmo_activo() == "rubrica" else None, "almacen": "memoria" if datos.LOCAL else "dynamodb",
                      "conocimiento": _paquete_conocimiento()}
     r = _rutear_modulos(method, partes, qs, body, cabeceras or {})
     if r is not None:

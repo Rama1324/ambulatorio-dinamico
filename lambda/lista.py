@@ -257,6 +257,8 @@ def detalle(pid, corte):
         "paciente": fila,
         "excluido": next((e for e in data["excluidos"] if e["id_paciente"] == pid), None),
         "eventos_clinicos": [e for e in p.get("eventos_clinicos", []) if e["fecha_evento"] <= corte.isoformat()],
+        # eventos anulados por una enmienda: no cuentan para la prioridad, pero se muestran (con quién, cuándo y por qué)
+        "eventos_anulados": [e for e in p.get("eventos_anulados", []) if e["fecha_evento"] <= corte.isoformat()],
         "mediciones": [m for m in p.get("mediciones", []) if m["fecha_medicion"] <= corte.isoformat()],
         "citaciones": [c for c in p.get("citaciones", []) if c["fecha_cita"] <= corte.isoformat()],
         "lista_espera": p["lista_espera"],

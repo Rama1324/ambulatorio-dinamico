@@ -115,16 +115,19 @@ El archivo `data/demo/ESPERADO.md` dice qué debe pasar con cada uno.
 
 ### 3.4 Qué hacer y qué debería ver
 
-Arriba a la derecha, escriba **su nombre y cargo** y elija el **rol** que corresponda a cada paso.
+Arriba a la derecha, escriba **su nombre y cargo** y elija el **rol** que corresponda a cada paso. Para registrar
+eventos de prueba ("Simular evento") se marca **"Explorar fechas anteriores"**: así la herramienta deja claro que es una
+demostración. La revisión de la prioridad en la ficha se ve con esa opción desmarcada; la pantalla "Decisiones" funciona
+siempre.
 
 | N° | Acción | Qué debería ver |
 |---|---|---|
 | 1 | En **"Lista de espera"**, elija Cardiología. | La lista ordenada, con N°, nombre, diagnóstico, prioridad y días de espera. |
-| 2 | Busque **"Amapola 027"** (PAC-HLF-00027, hipertensión, prioridad baja) y ábralo. Pestaña **Registrar** → simule una **urgencia "triage ESI 2"**. | Sigue en prioridad **baja**: la tabla del hospital no define qué hacer con la hipertensión descompensada. El sistema lo dice y lo deja **para revisión del especialista**. |
+| 2 | Arriba, marque **"Explorar fechas anteriores"** (deje la fecha en la última). Busque **"Amapola 027"** (PAC-HLF-00027, hipertensión, prioridad baja) y ábralo. Pestaña **Registrar** → **Simular evento** → elija una **urgencia grave** (triage ESI 2) y confírmela. Luego desmarque "Explorar fechas anteriores". | Sigue en prioridad **baja**: la tabla del hospital no define qué hacer con la hipertensión descompensada. El sistema lo dice y lo deja **para revisión del especialista**. |
 | 3 | Vaya a **"Decisiones"** (rol: especialista). | Aparece la decisión: qué la gatilló, la explicación, "en qué se basó" (antecedentes usados, fuentes y su versión). |
 | 4 | Marque **"La decisión es incorrecta"** → prioridad **alta** → motivo **"Falta un criterio"** → explique (ej. "Hipertensión con urgencia grave requiere prioridad alta"). Guarde. | El paciente pasa a alta. El sistema informa que **propuso un criterio local** para "hipertensión + urgencia grave" y que **no cambia a nadie** hasta que una jefatura lo apruebe. |
-| 5 | Vaya a **"Aprendizaje"** (rol: jefatura). Apruebe el criterio propuesto con un motivo. | El criterio pasa a **vigente**, con quién lo aprobó y desde cuándo. Los pacientes que calzan suben y cada uno queda con su decisión documentada. |
-| 6 | Vuelva a la lista, abra otro paciente con **hipertensión y prioridad baja** (ej. **"Hortensia 181"**, PAC-HLF-00181) y simule la misma urgencia. | **Sube solo a alta**, y el fundamento cita el criterio local: quién lo aprobó y en cuántas revisiones se basa. |
+| 5 | Vaya a **"Aprendizaje"** (rol: jefatura). Apruebe el criterio propuesto con un motivo. | El criterio pasa a **vigente**, con quién lo aprobó, desde cuándo y a cuántos pacientes aplica hoy. Cada paciente al que le cambia algo queda con su decisión documentada. La concordancia con los especialistas se actualiza (con pocos casos, marcada "solo orientativo"). |
+| 6 | Con "Explorar fechas anteriores" marcado, abra otro paciente con **hipertensión y prioridad baja** (ej. **"Hortensia 181"**, PAC-HLF-00181) y simule la misma urgencia. | **Sube solo a alta**, y el fundamento cita el criterio local: quién lo aprobó y en cuántas revisiones se basa. |
 | 7 | Vaya a **"Recepción de datos"** (rol: gestión). Cargue `data/demo/eventos_urgencia.csv`: primero **Revisar**, luego **Cargar**. | Antes de cargar, qué le pasará a cada paciente. Después, el **lote recibido**: 38 filas, 28 registradas, 3 repetidas, 2 rechazadas (con el motivo) y 5 de personas fuera de la lista. 6 pacientes suben de prioridad. |
 | 8 | Cargue el mismo archivo otra vez. | Nada se duplica: todo aparece como **repetido**. |
 | 9 | Abra un paciente con alerta (pestaña **"Empeoraron"**) → pestaña **Decisiones** de su ficha. | La historia de decisiones del paciente, cada una con su revisión. |

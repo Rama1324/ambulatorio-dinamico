@@ -87,7 +87,9 @@ export function Ficha({ p, total, detalle, fecha, demo, esp, onCambio, onAviso, 
     ...detalle.eventos_clinicos.map((e) => ({ ev: e, enmiendas: enmiendasDe(decisiones, e.id_evento), f: e.fecha_evento, t: `${TIPO_EVENTO[e.tipo_evento] || e.tipo_evento}: ${e.subtipo}`, d: [e.motivo ? `motivo: ${e.motivo}${e.relacionado === false ? " (sin relación con su enfermedad)" : ""}` : null, e.detalle?.startsWith("Informe") ? e.detalle : null, e.fecha_en_documento === false ? "el documento no decía la fecha: se registró con la del día en que se leyó" : null].filter(Boolean).join(" · ") || null, rojo: e.severidad === "grave", nuevo: e.id_evento?.startsWith("EV-DEMO") })),
     ...detalle.mediciones.map((m) => ({ f: m.fecha_medicion, t: `${m.tipo_medicion.replace("_", " ")}: ${m.valor} ${m.unidad}`, d: m.fuera_de_rango ? "fuera de rango" : null, ambar: m.fuera_de_rango })),
     ...(detalle.citaciones || []).map((c) => ({ f: c.fecha_cita, t: `Citación ${c.id_box}: ${c.estado_cita.replace("_", " ")}`, ambar: c.estado_cita === "no_asistio" })),
-    ...anulados(decisiones, detalle.eventos_clinicos).map((x) => ({ f: x.fecha, t: x.texto, anulado: x })),
+    ...(detalle.eventos_anulados ? detalle.eventos_anulados.map((e) => ({ f: e.fecha_evento, t: `${TIPO_EVENTO[e.tipo_evento] || e.tipo_evento}: ${e.subtipo}`,
+      anulado: { id_evento: e.id_evento, usuario: e.anulado?.usuario, registrada: e.anulado?.fecha, motivo: e.anulado?.motivo } }))
+      : anulados(decisiones, detalle.eventos_clinicos).map((x) => ({ f: x.fecha, t: x.texto, anulado: x }))),
     { f: p.fecha_ingreso_lista, t: "Ingreso de la interconsulta", d: `prioridad inicial ${p.prioridad_inicial}` },
   ].sort((a, b) => b.f.localeCompare(a.f)) : [];
 
@@ -253,7 +255,7 @@ export function Ficha({ p, total, detalle, fecha, demo, esp, onCambio, onAviso, 
             <li key={i} className={`grid grid-cols-[96px_1fr] gap-2 py-1.5 border-b border-outline-variant/50 ${x.nuevo ? "bg-ambar-container/50" : ""}`}>
               <span className="text-on-surface-variant text-[13px] leading-tight">{fmt(x.f)}<br /><span className="text-[11px]">{hace(x.f, fecha)}</span></span>
               {x.anulado ? <span className="text-on-surface-variant"><span className="line-through">{x.t}</span>
-                <span className="block text-[12px]">Anulado por {x.anulado.usuario || "—"} el {fmtHora(x.anulado.registrada)}{x.anulado.id_evento ? ` · ${x.anulado.id_evento}` : ""}</span></span>
+                <span className="block text-[12px]">Anulado por {x.anulado.usuario || "—"} el {fmtHora(x.anulado.registrada)}{x.anulado.id_evento ? ` · ${x.anulado.id_evento}` : ""}{x.anulado.motivo ? ` · motivo: ${x.anulado.motivo}` : ""}</span></span>
                 : <span><span className={x.rojo ? "text-error font-semibold" : x.ambar ? "text-ambar" : ""}>{x.t}{x.d && <span className="text-on-surface-variant font-normal"> · {x.d}</span>}</span>
                   {x.enmiendas?.map((m, k) => <span key={k} className="block text-[12px] text-primary">Corregido por {m.usuario || "—"} el {fmtHora(m.fecha)}: {m.texto}</span>)}
                   {x.ev?.id_evento && !demo && puede("especialista") && <Enmienda p={p} ev={x.ev} fecha={fecha} onAviso={onAviso} onCambio={onCambio} />}</span>}
