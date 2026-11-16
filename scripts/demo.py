@@ -59,8 +59,10 @@ def preparar_datos():
         return
     origen = os.path.join(EJEMPLO, "perfiles.json")
     if not os.path.exists(origen):
-        fallar("No encuentro el registro sintético. Copie perfiles.json (y los CSV) del hospital a la carpeta data/.\n"
-               f"    Busqué en: {destino}\n    y en:      {origen}")
+        fallar('Falta el dataset sintético del hospital (perfiles.json): viene en "docs/Datasets de ejemplo".\n'
+               '    Si lo borró, recupérelo con  git checkout -- "docs/Datasets de ejemplo"  o cópielo a data/.\n'
+               f"    Busqué en: {destino}\n    y en:      {origen}\n"
+               '    Más detalle: README.md, sección "Datos de prueba".')
     os.makedirs(DATOS, exist_ok=True)
     for nombre in os.listdir(EJEMPLO):
         if nombre.endswith((".json", ".csv")):
