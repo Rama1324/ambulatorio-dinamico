@@ -27,7 +27,7 @@ aprobado por jefatura → aplicado y citado). Nunca baja una prioridad sola.
 | [`DEPLOY.md`](DEPLOY.md) · [`docs/operacion/RUNBOOK.md`](docs/operacion/RUNBOOK.md) | Despliegue en AWS y operación |
 | [`contrato.md`](contrato.md) | Contrato de la API |
 
-**Probarlo en un comando** (sin AWS, IA simulada; antes copie el dataset a `data/`, ver "Datos de prueba"): `python scripts/demo.py` → http://localhost:5174
+**Probarlo en un comando** (sin AWS, IA simulada): `python scripts/demo.py` → http://localhost:5174
 
 ## Estructura
 ```
@@ -59,9 +59,9 @@ ambulatorio-dinamico/
 ```
 
 ## Datos de prueba
-La demo usa el **dataset sintético que entregó el hospital** (500 pacientes, `perfiles.json`). No está en el repositorio:
-se comparte aparte. Antes de `python scripts/demo.py`, copie `perfiles.json` (y los CSV, si los tiene) a la carpeta
-`data/` o a `docs/Datasets de ejemplo/`. Las guías y escenarios citan pacientes concretos de ese registro.
+La demo usa el **dataset sintético que entregó el hospital** (500 pacientes, sin personas reales), incluido en
+`docs/Datasets de ejemplo/` junto a su diccionario de datos. `python scripts/demo.py` lo copia a `data/` la primera vez.
+Las guías y escenarios citan pacientes concretos de ese registro.
 
 ## Probar en local
 ```bash
