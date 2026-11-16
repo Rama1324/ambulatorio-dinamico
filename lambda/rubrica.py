@@ -15,6 +15,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, ValidationError
 
+import cliente_ia
+
 VERSION_RUBRICA = "rubrica_v1.1"  # v1.1: evento = descompensación de cualquier severidad (como la tabla)
 
 SND = Literal["si", "no", "desconocido"]
@@ -130,17 +132,28 @@ def preguntas(dx_kb):
 
 
 def armar_prompt(perfil, corte, dx_kb):
+    """(sistema, texto, historial). El texto es el historial del paciente seguido de la rúbrica del diagnóstico."""
+    estable, variable, hist = partes_prompt(perfil, corte, dx_kb)
+    return SISTEMA, variable + SEPARADOR + estable, hist
+
+
+SEPARADOR = "\n\n"
+
+
+def partes_prompt(perfil, corte, dx_kb):
+    """(estable, variable, historial): la rúbrica del diagnóstico (igual para todos los pacientes con ese diagnóstico) y el
+    historial del paciente. Con BEDROCK_CACHE=1 se envían en ese orden con un cachePoint entre ambos (mismo contenido)."""
     hist = historial(perfil, corte)
-    texto = (f"Diagnóstico en lista: {hist['diagnostico']} {hist['diagnostico_texto']}\n"
+    estable = "RÚBRICA (responde cada pregunta):\n" + "\n".join(f"- {k}: {q}" for k, q in preguntas(dx_kb))
+    variable = (f"Diagnóstico en lista: {hist['diagnostico']} {hist['diagnostico_texto']}\n"
              f"Ingreso a la lista: {hist['fecha_ingreso_lista']} · Fecha de corte: {hist['fecha_corte']}\n"
              f"Edad: {hist['edad']} · Sexo: {hist['sexo']} · Comorbilidades: {', '.join(hist['comorbilidades']) or 'ninguna registrada'}\n\n"
              "EVENTOS (fecha | tipo | valor=subtipo | severidad):\n" +
              ("\n".join(f"{e['fecha']} | {e['tipo']} | {e['valor']} | {e['severidad']}" for e in hist["eventos"]) or "(ninguno)") +
              "\n\nMEDICIONES (fecha | tipo | valor | unidad | fuera_de_rango):\n" +
              ("\n".join(f"{m['fecha']} | {m['tipo']} | {m['valor']} | {m['unidad']} | {m['fuera_de_rango']}" for m in hist["mediciones"])
-              or "(ninguna)") +
-             "\n\nRÚBRICA (responde cada pregunta):\n" + "\n".join(f"- {k}: {q}" for k, q in preguntas(dx_kb)))
-    return SISTEMA, texto, hist
+              or "(ninguna)"))
+    return estable, variable, hist
 
 
 def _esquema_plano(modelo):
@@ -187,29 +200,97 @@ class ErrorLectura(Exception):
     pass
 
 
-class ClienteBedrock:
-    """Cliente real. El modelo y la región vienen de variables de entorno."""
+INSTRUCCION_AUTO = "Responde SOLO llamando a la herramienta {nombre}, sin texto fuera de ella."
 
-    def __init__(self, model_id=None, region=None, timeout_s=20, reintentos=2):
-        import boto3
+
+class ClienteBedrock:
+    """Cliente real. El modelo y la región vienen de variables de entorno.
+
+    Herramienta forzada (toolChoice tool). Los modelos que la rechazan (error de validación que menciona tool choice) se
+    llaman con toolChoice auto + la instrucción explícita de responder solo con la herramienta, y el cliente lo recuerda.
+    Si la respuesta no trae la herramienta pedida es ErrorLectura: nunca se interpreta texto libre."""
+    acepta_partes = True  # leer(..., partes=(estable, variable)) para la caché de prompts
+
+    def __init__(self, model_id=None, region=None, timeout_s=20, reintentos=2, cliente=None):
         from botocore.config import Config
         self.model_id = model_id or os.environ.get("MODEL_ID", "us.anthropic.claude-sonnet-5")
-        self.c = boto3.client("bedrock-runtime", region_name=region or os.environ.get("BEDROCK_REGION") or None,
-                              config=Config(read_timeout=timeout_s, connect_timeout=5,
-                                            retries={"max_attempts": reintentos, "mode": "standard"}))
+        self.forzar = True  # pasa a False la primera vez que el modelo rechaza el toolChoice forzado
+        if cliente is None:
+            import boto3
+            cliente = boto3.client("bedrock-runtime", region_name=region or os.environ.get("BEDROCK_REGION") or None,
+                                   config=Config(read_timeout=timeout_s, connect_timeout=5,
+                                                 retries={"max_attempts": reintentos, "mode": "standard"}))
+        self.c = cliente
 
-    def leer(self, sistema, texto, herramienta, max_tokens=900):
+    def _converse(self, sistema, contenido, herramienta, nombre, max_tokens):
+        base = {"modelId": self.model_id, "system": sistema, "inferenceConfig": {"maxTokens": max_tokens}, **cliente_ia.guardrail()}
+        if self.forzar:
+            try:
+                return self.c.converse(messages=[{"role": "user", "content": contenido}],
+                                       toolConfig={"tools": [herramienta], "toolChoice": {"tool": {"name": nombre}}}, **base), "tool"
+            except Exception as e:
+                if not cliente_ia.rechaza(e, cliente_ia.RECHAZA_TOOL_CHOICE):
+                    raise
+                self.forzar = False
+                print(json.dumps({"aviso": "ia", "modelo": self.model_id, "detalle": "el modelo rechaza toolChoice forzado: se usa auto"}))
+        # la instrucción va al final (después del cachePoint, si lo hay): no cambia el prefijo que se guarda en caché
+        return self.c.converse(messages=[{"role": "user", "content": contenido + [{"text": INSTRUCCION_AUTO.format(nombre=nombre)}]}],
+                               toolConfig={"tools": [herramienta], "toolChoice": {"auto": {}}}, **base), "auto"
+
+    def leer(self, sistema, texto, herramienta, max_tokens=900, partes=None):
         t0 = time.perf_counter()
         nombre = herramienta["toolSpec"]["name"]
-        r = self.c.converse(modelId=self.model_id, system=[{"text": sistema}],
-                            messages=[{"role": "user", "content": [{"text": texto}]}],
-                            toolConfig={"tools": [herramienta], "toolChoice": {"tool": {"name": nombre}}},
-                            inferenceConfig={"maxTokens": max_tokens})
-        bloque = next((b["toolUse"] for b in r["output"]["message"]["content"] if "toolUse" in b), None)
+        tarea = cliente_ia.TAREA_DE_HERRAMIENTA.get(nombre, nombre)
+        cache = cliente_ia.cache_activa()
+        if cache and partes:  # lo estable (sistema + herramienta + rúbrica del diagnóstico) primero; el paciente al final
+            sis, contenido = [{"text": sistema}], [{"text": partes[0]}, cliente_ia.PUNTO_CACHE, {"text": partes[1]}]
+        else:
+            sis, contenido = [{"text": sistema}] + ([cliente_ia.PUNTO_CACHE] if cache else []), [{"text": texto}]
+        try:
+            r, modo = self._converse(sis, contenido, herramienta, nombre, max_tokens)
+        except Exception as e:
+            cliente_ia.metrica(tarea, self.model_id, time.perf_counter() - t0, error=e)
+            raise
+        tokens = cliente_ia.uso(r)
+        bloque = next((b["toolUse"] for b in r["output"]["message"]["content"] if "toolUse" in b and b["toolUse"].get("name") == nombre), None)
         if not bloque:
+            cliente_ia.metrica(tarea, self.model_id, time.perf_counter() - t0, tokens, error="sin_herramienta")
             raise ErrorLectura(f"el modelo no usó la herramienta (stopReason={r.get('stopReason')})")
-        return bloque["input"], {"modelo": self.model_id, "latencia_s": round(time.perf_counter() - t0, 2),
-                                 "tokens_entrada": r["usage"]["inputTokens"], "tokens_salida": r["usage"]["outputTokens"]}
+        lat = time.perf_counter() - t0
+        cliente_ia.metrica(tarea, self.model_id, lat, tokens)
+        return bloque["input"], {"modelo": self.model_id, "latencia_s": round(lat, 2), "tool_choice": modo, **tokens}
+
+
+class ClienteSimulado:
+    """MODEL_ID=simulado: lector determinista, sin red, con la misma interfaz que ClienteBedrock. Sirve para demostrar el
+    flujo completo sin AWS; todo lo que lee queda rotulado modelo "simulado". Nunca inventa hallazgos:
+    - rúbrica del historial → respuesta_determinista (el mismo criterio que las reglas: puntaje.descompensa);
+    - documentos → lo que encuentra el lector por reglas (informe.candidatos_por_reglas), con su frase textual;
+    - criterios por enfermedad → "no_determinable" y sin urgencia; combinaciones de riesgo → ninguna."""
+    simulado = True
+    model_id = cliente_ia.SIMULADO
+
+    def _uso(self, tarea):
+        cliente_ia.metrica(tarea, self.model_id)
+        return {"modelo": self.model_id, "latencia_s": 0.0, "tokens_entrada": 0, "tokens_salida": 0}
+
+    def leer_rubrica(self, hist, dx_kb):
+        return respuesta_determinista(hist, dx_kb), self._uso("rubrica")
+
+    def leer(self, sistema, texto, herramienta, max_tokens=900):
+        nombre = herramienta["toolSpec"]["name"]
+        tarea = cliente_ia.TAREA_DE_HERRAMIENTA.get(nombre, nombre)
+        if tarea == "documento":
+            import lector_documento
+            r = {"hallazgos": lector_documento.hallazgos_por_reglas(texto.split("DOCUMENTO:\n", 1)[-1])}
+        elif tarea == "criterios":
+            r = {"criterio": "no_determinable", "cita": "", "urgencia": "ninguna", "cita_urgencia": ""}
+        elif tarea == "combinaciones":
+            r = {"combinaciones": [], "otras": []}
+        else:  # la rúbrica necesita el historial estructurado: leer_rubrica (texto libre no se interpreta)
+            cliente_ia.metrica(tarea, self.model_id, error="tarea_no_simulada")
+            raise ErrorLectura(f"el modo simulado no responde la herramienta {nombre} por texto")
+        return r, self._uso(tarea)
 
 
 class ClienteFalso:
@@ -258,10 +339,16 @@ def respuesta_determinista(hist, dx_kb, tolerancia=0.05):
 
 def leer_rubrica(perfil, corte, dx_kb, cliente):
     """Una lectura. Devuelve (RespuestaRubrica | None, meta). Nunca lanza: los errores quedan en meta['error']."""
-    sistema, texto, hist = armar_prompt(perfil, corte, dx_kb)
+    estable, variable, hist = partes_prompt(perfil, corte, dx_kb)
+    sistema, texto = SISTEMA, variable + SEPARADOR + estable
     meta = {"version_rubrica": VERSION_RUBRICA, "hash_prompt": hash_prompt(), "modelo": getattr(cliente, "model_id", "?")}
     try:
-        crudo, uso = cliente.leer(sistema, texto, HERRAMIENTA)
+        if getattr(cliente, "simulado", False):
+            crudo, uso = cliente.leer_rubrica(hist, dx_kb)
+        elif getattr(cliente, "acepta_partes", False):
+            crudo, uso = cliente.leer(sistema, texto, HERRAMIENTA, partes=(estable, variable))
+        else:  # clientes de tests con la firma mínima leer(sistema, texto, herramienta, max_tokens)
+            crudo, uso = cliente.leer(sistema, texto, HERRAMIENTA)
         meta.update(uso)
         crudo, corregido = _desenvolver(crudo)
         if corregido:

@@ -1,0 +1,7 @@
+# Para desarrollar, probar y desplegar:  python -m pip install -r requirements-dev.txt
+# NO va dentro de la Lambda: ahí solo entra lambda/requirements.txt (pydantic; boto3 ya viene en el runtime).
+-r lambda/requirements.txt
+pytest>=8,<10
+boto3>=1.34
+moto[dynamodb,s3,sqs]>=5,<6
+cfn-lint>=1.20,<2    # trae PyYAML, que usa scripts/validar_plantilla.py

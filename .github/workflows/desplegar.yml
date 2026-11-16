@@ -1,0 +1,30 @@
+name: Desplegar
+
+# Al juntar un cambio en main se despliega "prueba". "prod" queda esperando la aprobación de una persona: la exige la
+# regla de protección del environment "prod" en GitHub, no este archivo. A mano ("Run workflow") se puede desplegar
+# cualquier rama o etiqueta: así se vuelve atrás a una versión anterior (primero pasa por prueba).
+#
+# Sin llaves guardadas: cada trabajo asume un rol de AWS con OIDC. Todavía NO está activo: falta crear los roles en AWS
+# y los environments en GitHub (DEPLOY.md, sección "CI/CD").
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  id-token: write   # para pedir a GitHub el token OIDC con que se asume el rol de AWS
+  contents: read
+
+jobs:
+  prueba:
+    uses: ./.github/workflows/desplegar-ambiente.yml
+    with:
+      ambiente: prueba
+    secrets: inherit
+
+  prod:
+    needs: prueba   # solo si prueba se desplegó y pasó sus comprobaciones
+    uses: ./.github/workflows/desplegar-ambiente.yml
+    with:
+      ambiente: prod
+    secrets: inherit

@@ -1,54 +1,425 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
-Description: Ambulatorio Dinamico HLF - priorizacion clinica evolutiva (AWS Breaking Barriers Chile 2026)
+Description: >-
+  Ambulatorio Dinamico HLF: lista de espera de consultas de especialidad que se reprioriza con cada evento clinico.
+  API HTTP + Lambda, tabla DynamoDB, bucket S3 con zona de carga, cola SQS, login con Cognito (opcional),
+  alarmas y sitio web en Amplify.
 
+# =====================================================================================================================
+# Como leer esta plantilla
+#   1. Parametros y reglas     que se puede cambiar por ambiente y que combinaciones estan prohibidas
+#   2. Cifrado                 llave KMS propia (opcional)
+#   3. Datos                   tabla DynamoDB, bucket S3 (zona de carga) y colas SQS
+#   4. Permisos                un rol por funcion, con lo minimo que usa el codigo
+#   5. Funciones               API, trabajador de la cola, ingesta de archivos y barrido nocturno
+#   6. API                     HTTP API con CORS, limite de solicitudes, registro de accesos y login opcional
+#   7. Login                   Cognito: usuarios, grupos (roles), cliente web y cliente para sistemas del hospital
+#   8. Sitio web               aplicacion de Amplify Hosting donde se publica la pagina
+#   9. Observabilidad          logs con retencion, alarmas, avisos por correo y alerta de gasto
+#
+# Estado: validada con cfn-lint. NO se ha desplegado (la cuenta AWS del hackaton ya no existe). Ver DEPLOY.md,
+# seccion "Que quedo sin verificar".
+# Despliegue: scripts/desplegar.sh <prueba|prod>  (o scripts\deploy_aws.ps1 en Windows). Valores por ambiente: samconfig.toml.
+#
+# Convenciones
+#   - Este archivo va sin tildes ni caracteres especiales a proposito: varias herramientas de Windows leen los
+#     archivos de texto con la codificacion local y fallan con UTF-8.
+#   - Solo el bucket y el grupo de logs de accesos llevan nombre fijo (se explica en cada uno). El resto de los
+#     nombres los genera CloudFormation, para poder reemplazar recursos sin choques.
+#   - Lo que guarda datos (tabla, bucket, llave, usuarios, logs) NO se borra aunque se elimine el stack
+#     (DeletionPolicy RetainExceptOnCreate: solo se limpia si falla la primera creacion).
+# =====================================================================================================================
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label: {default: "1. Ambiente y proteccion de los datos"}
+        Parameters: [Ambiente, LlavePropia, TablaRestaurada]
+      - Label: {default: "2. Acceso: login, origen web y limite de solicitudes"}
+        Parameters: [Autenticacion, OrigenPermitido, SitioAmplify, UrlsRetorno, MfaCognito, PrefijoDominioLogin,
+                     LimiteSolicitudesSegundo, LimiteRafaga]
+      - Label: {default: "3. Inteligencia artificial (Amazon Bedrock)"}
+        Parameters: [Algoritmo, ModelId, ModelIdRedaccion, BedrockRegion, LecturasIA, GuardrailId, GuardrailVersion,
+                     BarridoActivo, ConcurrenciaTrabajador, LoteTrabajador, SegmentosScan]
+      - Label: {default: "4. Fechas del registro"}
+        Parameters: [FechaReferencia, RegistroAl]
+      - Label: {default: "5. Operacion: logs, avisos y gasto"}
+        Parameters: [RetencionLogsDias, CorreoAlertas, PresupuestoMensualUSD]
+
+# ---------------------------------------------------------------------------------------------------------------------
+# 1. PARAMETROS
+# ---------------------------------------------------------------------------------------------------------------------
 Parameters:
-  ModelId:
+  Ambiente:
+    Type: String
+    Default: prueba
+    AllowedValues: [prueba, prod]
+    Description: >-
+      prueba = datos sinteticos. prod = datos reales: exige login y un origen web definido (no se puede desplegar sin
+      ellos) y activa la proteccion contra borrado de la tabla y de los usuarios. Tambien forma el nombre del bucket.
+
+  LlavePropia:
+    Type: String
+    Default: "no"
+    AllowedValues: ["si", "no"]
+    Description: >-
+      si = crea una llave KMS del hospital (con rotacion anual) y cifra con ella la tabla, el bucket, las colas, los
+      logs y los avisos. no = cifrado con llaves administradas por AWS (igual queda todo cifrado en reposo).
+
+  TablaRestaurada:
     Type: String
     Default: ""
-    Description: ID del modelo (o inference profile) de Bedrock. Vacio = explicaciones por plantilla.
-  BedrockRegion:
+    AllowedPattern: "^$|^[A-Za-z0-9_.-]{3,255}$"
+    Description: >-
+      Normalmente vacio. Tras restaurar la tabla a un punto en el tiempo (PITR crea una tabla NUEVA), escriba aqui su
+      nombre y vuelva a desplegar: las funciones pasan a usar esa tabla. Ver docs/operacion/RUNBOOK.md.
+
+  Autenticacion:
+    Type: String
+    Default: ninguna
+    AllowedValues: [ninguna, cognito]
+    Description: >-
+      ninguna = API abierta (solo demo con datos sinteticos). cognito = toda ruta exige un token valido de Cognito,
+      salvo GET /health y las consultas previas del navegador (OPTIONS).
+
+  OrigenPermitido:
+    Type: String
+    Default: "*"
+    AllowedPattern: '^(\*|sitio|https?://[A-Za-z0-9.:-]+)$'
+    ConstraintDescription: "Use *, sitio o un origen como https://lista.hospital.cl (sin barra final ni ruta)."
+    Description: >-
+      Unico origen web que puede llamar a la API desde un navegador (CORS). "*" = cualquiera, solo para la demo.
+      "sitio" = el sitio de Amplify que crea este stack. O un origen propio, por ejemplo https://lista.hospital.cl
+
+  SitioAmplify:
+    Type: String
+    Default: "si"
+    AllowedValues: ["si", "no"]
+    Description: >-
+      si = crea la aplicacion de Amplify Hosting donde el script publica la pagina. no = la pagina se publica por
+      otro medio (por ejemplo una aplicacion de Amplify conectada a GitHub; ver DEPLOY.md).
+
+  UrlsRetorno:
     Type: String
     Default: ""
-    Description: Region de Bedrock si es distinta a la del stack. Vacio = misma region.
+    AllowedPattern: '^$|^https?://[^\s,]+(,https?://[^\s,]+)*$'
+    ConstraintDescription: "Direcciones completas separadas por coma, sin espacios."
+    Description: >-
+      Solo con Autenticacion=cognito. Direcciones a las que el login puede devolver al usuario, separadas por coma;
+      deben calzar exacto con las que usa la pagina. Vacio = el sitio de Amplify de este stack.
+
+  MfaCognito:
+    Type: String
+    Default: OPTIONAL
+    AllowedValues: ["OFF", OPTIONAL, "ON"]
+    Description: >-
+      Segundo factor con aplicacion autenticadora (TOTP). OFF = no se usa. OPTIONAL = cada persona decide.
+      ON = obligatorio para todos (recomendado con datos reales).
+
+  PrefijoDominioLogin:
+    Type: String
+    Default: ""
+    AllowedPattern: "^$|^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"
+    Description: >-
+      Solo con Autenticacion=cognito. Prefijo de la direccion de la pantalla de login
+      (https://PREFIJO.auth.REGION.amazoncognito.com). Vacio = ambulatorio-hlf-AMBIENTE-CUENTA.
+
+  LimiteSolicitudesSegundo:
+    Type: Number
+    Default: 50
+    MinValue: 1
+    MaxValue: 10000
+    Description: Solicitudes por segundo que acepta la API en regimen. Sobre eso responde 429 (protege el costo y el servicio).
+
+  LimiteRafaga:
+    Type: Number
+    Default: 100
+    MinValue: 1
+    MaxValue: 5000
+    Description: Solicitudes simultaneas que la API tolera en una rafaga corta.
 
   Algoritmo:
     Type: String
     Default: reglas
     AllowedValues: [reglas, rubrica]
-    Description: reglas = motor actual (puntaje.py). rubrica = LLM con rubrica + formula fija (requiere aprobacion del equipo).
+    Description: >-
+      reglas = solo el motor de reglas oficiales. rubrica = la IA lee con rubrica cerrada, el codigo verifica cada
+      cita y decide con criterios con fuente; si la IA falla rigen las reglas. Exige ModelId.
+
+  ModelId:
+    Type: String
+    Default: ""
+    AllowedPattern: "^[A-Za-z0-9.:/_-]*$"
+    Description: >-
+      Perfil de inferencia de Bedrock (por ejemplo us.anthropic.claude-sonnet-5-5 o us.anthropic.claude-haiku-5-5; los modelos Claude actuales solo se
+      invocan con perfil us. o global.). "simulado" = lector determinista sin Bedrock. Vacio = sin IA: las
+      explicaciones salen por plantilla.
+
+  ModelIdRedaccion:
+    Type: String
+    Default: ""
+    AllowedPattern: "^[A-Za-z0-9.:/_-]*$"
+    Description: Opcional. Perfil de inferencia de Bedrock solo para redactar explicaciones. Vacio = el mismo de ModelId.
+
+  BedrockRegion:
+    Type: String
+    Default: ""
+    AllowedPattern: "^$|^[a-z]{2}(-[a-z]+)+-[0-9]$"
+    Description: >-
+      Region de Bedrock y Textract si es distinta a la del stack. Vacio = la misma region del stack. Con un perfil
+      us. debe ser una region de EE.UU. (us-east-1, us-east-2 o us-west-2). Textract no existe en sa-east-1.
+
+  LecturasIA:
+    Type: Number
+    Default: 3
+    MinValue: 1
+    MaxValue: 3
+    Description: Lecturas independientes de la IA por paciente (1 a 3). Con 3 se exige acuerdo entre lecturas; cada una es una llamada a Bedrock.
+  BedrockCache:
+    Type: String
+    Default: "0"
+    AllowedValues: ["0", "1"]
+    Description: 1 = caché de prompts de Bedrock (cachePoint tras la parte estable del prompt). Apagado hasta medirlo con la cuenta.
+
+  GuardrailId:
+    Type: String
+    Default: ""
+    AllowedPattern: "^[a-z0-9]*$"
+    Description: Opcional. Identificador (no el ARN) de un guardrail de Bedrock que se aplica a cada llamada. Exige GuardrailVersion.
+
+  GuardrailVersion:
+    Type: String
+    Default: ""
+    AllowedPattern: "^$|^DRAFT$|^[0-9]{1,8}$"
+    Description: Version del guardrail (un numero, o DRAFT). Vacio si no se usa guardrail.
+
   BarridoActivo:
     Type: String
     Default: DISABLED
     AllowedValues: [ENABLED, DISABLED]
-    Description: Barrido nocturno del algoritmo (EventBridge Scheduler). Apagado hasta aprobar.
+    Description: >-
+      Reevaluacion nocturna con IA de quienes no tienen evaluacion vigente (04:00, hora de Chile). Apagada por
+      defecto: gasta Bedrock aunque nadie use la aplicacion. Exige Algoritmo=rubrica.
+
+  ConcurrenciaTrabajador:
+    Type: Number
+    Default: 2
+    MinValue: 2
+    MaxValue: 100
+    Description: >-
+      Maximo de copias del trabajador de la cola corriendo a la vez (minimo 2, lo fija Lambda). Con LoteTrabajador=1
+      es el numero de pacientes que se evaluan en paralelo; subalo solo si la cuota de Bedrock lo permite.
+
+  LoteTrabajador:
+    Type: Number
+    Default: 1
+    MinValue: 1
+    MaxValue: 10
+    Description: >-
+      Mensajes de la cola que recibe el trabajador por ejecucion. Con 1, la carga sobre Bedrock es exactamente
+      ConcurrenciaTrabajador x LecturasIA llamadas simultaneas.
+
+  SegmentosScan:
+    Type: Number
+    Default: 4
+    MinValue: 1
+    MaxValue: 16
+    Description: >-
+      Segmentos en paralelo con que cada contenedor de Lambda lee la tabla completa al arrancar (una sola vez; despues
+      solo trae lo nuevo por el indice PorDia). Mas segmentos = arranque mas rapido con tablas grandes.
+
+  FechaReferencia:
+    Type: String
+    Default: hoy
+    AllowedPattern: "^(hoy|[0-9]{4}-[0-9]{2}-[0-9]{2})$"
+    Description: Fecha de trabajo de la lista. hoy = fecha real de Chile. AAAA-MM-DD = simular esa fecha (el dataset sintetico llega al 2026-10-13).
+
+  RegistroAl:
+    Type: String
+    Default: "2026-10-13"
+    AllowedPattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    Description: Fecha (AAAA-MM-DD) en que se extrajo del hospital el registro base cargado. Desde ahi corre el plazo de 72 h de los eventos de ese registro.
+
+  RetencionLogsDias:
+    Type: Number
+    Default: 90
+    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653]
+    Description: >-
+      Dias que se conservan los logs de las funciones y el registro de accesos de la API (quien pidio que y cuando).
+      Con datos reales lo define el hospital segun su politica de auditoria.
+
+  CorreoAlertas:
+    Type: String
+    Default: ""
+    AllowedPattern: '^$|^[^@\s]+@[^@\s]+\.[^@\s]+$'
+    Description: Opcional. Correo que recibe las alarmas y la alerta de gasto (hay que confirmar la suscripcion que llega por correo).
+
+  PresupuestoMensualUSD:
+    Type: Number
+    Default: 0
+    MinValue: 0
+    Description: >-
+      Opcional. Gasto mensual esperado de TODA la cuenta, en dolares. Avisa a CorreoAlertas al llegar al 80 % y si
+      la proyeccion supera el 100 %. 0 = no crear la alerta de gasto.
+
+# Combinaciones prohibidas: CloudFormation rechaza el despliegue antes de tocar nada.
+Rules:
+  ProdExigeLoginYOrigenDefinido:
+    RuleCondition: !Equals [!Ref Ambiente, prod]
+    Assertions:
+      - Assert: !Equals [!Ref Autenticacion, cognito]
+        AssertDescription: "Ambiente=prod exige Autenticacion=cognito: no se publican datos reales sin login."
+      - Assert: !Not [!Equals [!Ref OrigenPermitido, "*"]]
+        AssertDescription: "Ambiente=prod exige OrigenPermitido distinto de *: use sitio o el dominio del hospital."
+  RubricaExigeModelo:
+    RuleCondition: !Equals [!Ref Algoritmo, rubrica]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref ModelId, ""]]
+        AssertDescription: "Algoritmo=rubrica exige ModelId (un modelo o perfil de inferencia de Bedrock, o simulado)."
+  BarridoExigeRubrica:
+    RuleCondition: !Equals [!Ref BarridoActivo, ENABLED]
+    Assertions:
+      - Assert: !Equals [!Ref Algoritmo, rubrica]
+        AssertDescription: "BarridoActivo=ENABLED solo tiene sentido con Algoritmo=rubrica."
+  GuardrailExigeVersion:
+    RuleCondition: !Not [!Equals [!Ref GuardrailId, ""]]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref GuardrailVersion, ""]]
+        AssertDescription: "GuardrailId exige GuardrailVersion."
+  OrigenSitioExigeSitio:
+    RuleCondition: !Equals [!Ref OrigenPermitido, sitio]
+    Assertions:
+      - Assert: !Equals [!Ref SitioAmplify, "si"]
+        AssertDescription: "OrigenPermitido=sitio exige SitioAmplify=si."
+  LoginSinSitioExigeUrlsRetorno:
+    RuleCondition: !And [!Equals [!Ref Autenticacion, cognito], !Equals [!Ref SitioAmplify, "no"]]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref UrlsRetorno, ""]]
+        AssertDescription: "Con Autenticacion=cognito y SitioAmplify=no hay que indicar UrlsRetorno."
 
 Conditions:
-  HasBedrockRegion: !Not [!Equals [!Ref BedrockRegion, ""]]
+  EsProd: !Equals [!Ref Ambiente, prod]
+  UsaLlavePropia: !Equals [!Ref LlavePropia, "si"]
+  UsaTablaRestaurada: !Not [!Equals [!Ref TablaRestaurada, ""]]
+  ConCognito: !Equals [!Ref Autenticacion, cognito]
+  ConSitio: !Equals [!Ref SitioAmplify, "si"]
+  # "sitio" solo vale si el stack crea el sitio (la regla OrigenSitioExigeSitio ya lo impide; aqui queda a prueba de errores)
+  OrigenEsSitio: !And [!Equals [!Ref OrigenPermitido, sitio], !Condition ConSitio]
+  SinUrlsRetorno: !Equals [!Ref UrlsRetorno, ""]
+  SinPrefijoDominio: !Equals [!Ref PrefijoDominioLogin, ""]
+  MfaApagado: !Equals [!Ref MfaCognito, "OFF"]
+  TieneBedrockRegion: !Not [!Equals [!Ref BedrockRegion, ""]]
+  ModeloReal: !Not [!Or [!Equals [!Ref ModelId, ""], !Equals [!Ref ModelId, simulado]]]
+  RedaccionReal: !Not [!Or [!Equals [!Ref ModelIdRedaccion, ""], !Equals [!Ref ModelIdRedaccion, simulado]]]
+  # Sin un modelo real configurado, ninguna funcion recibe permisos de Bedrock.
+  UsaBedrock: !Or [!Condition ModeloReal, !Condition RedaccionReal]
+  TieneGuardrail: !Not [!Equals [!Ref GuardrailId, ""]]
+  TieneCorreo: !Not [!Equals [!Ref CorreoAlertas, ""]]
+  ConPresupuesto: !And [!Not [!Equals [!Ref PresupuestoMensualUSD, "0"]], !Condition TieneCorreo]
 
+# Lo comun a las cuatro funciones se define UNA vez: mismo paquete de codigo, misma configuracion.
+# (Antes cada funcion tenia su copia y el modo de IA quedo distinto en cada una.)
 Globals:
   Function:
     Runtime: python3.12
-    Timeout: 30
-    MemorySize: 1024
     Architectures: [arm64]
+    MemorySize: 1024
+    Timeout: 30
+    Environment:
+      Variables:
+        TABLE: !If [UsaTablaRestaurada, !Ref TablaRestaurada, !Ref RegistrosTable]
+        BUCKET: !Sub "ambulatorio-hlf-${Ambiente}-${AWS::AccountId}-${AWS::Region}"  # (nombre-bucket)
+        COLA_EVALUACION_URL: !Ref ColaEvaluacion
+        MODEL_ID: !Ref ModelId
+        MODEL_ID_REDACCION: !Ref ModelIdRedaccion
+        BEDROCK_REGION: !If [TieneBedrockRegion, !Ref BedrockRegion, !Ref "AWS::Region"]
+        ALGORITMO: !Ref Algoritmo
+        FECHA_REFERENCIA: !Ref FechaReferencia
+        REGISTRO_AL: !Ref RegistroAl
+        AUTH: !Ref Autenticacion
+        ORIGEN_PERMITIDO: !If [OrigenEsSitio, !Sub "https://main.${AppWeb.DefaultDomain}", !Ref OrigenPermitido]
+        LECTURAS_IA: !Ref LecturasIA
+        BEDROCK_CACHE: !Ref BedrockCache
+        GUARDRAIL_ID: !Ref GuardrailId
+        GUARDRAIL_VERSION: !Ref GuardrailVersion
+        PREFIJO_ENTRADA: entrada/
+        TEMA_ALERTAS_ARN: !Ref TemaAlertas
+        # Lecturas en paralelo de la carga inicial de la tabla en cada contenedor (Scan por segmentos, una vez).
+        SEGMENTOS_SCAN: !Ref SegmentosScan
 
 Resources:
-  DataBucket:
-    Type: AWS::S3::Bucket
+  # -------------------------------------------------------------------------------------------------------------------
+  # 2. CIFRADO: llave propia del hospital (opcional, LlavePropia=si)
+  # Por que: con llave propia el hospital puede auditar cada uso (CloudTrail), rotarla y, en el peor caso,
+  # deshabilitarla para dejar los datos ilegibles. Sin ella todo sigue cifrado, pero con llaves que administra AWS.
+  # -------------------------------------------------------------------------------------------------------------------
+  LlaveDatos:
+    Type: AWS::KMS::Key
+    Condition: UsaLlavePropia
+    DeletionPolicy: RetainExceptOnCreate
+    UpdateReplacePolicy: Retain
     Properties:
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
+      Description: !Sub "Ambulatorio Dinamico HLF (${Ambiente}): cifra tabla, bucket, colas, logs y avisos"
+      EnableKeyRotation: true
+      PendingWindowInDays: 30
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          # La cuenta delega en IAM: quien puede usar la llave se decide en las politicas de cada rol (seccion 4).
+          - Sid: LaCuentaAdministraLaLlaveConIAM
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:root"
+            Action: "kms:*"
+            Resource: "*"
+          # CloudWatch Logs cifra los grupos de logs de este stack (politica que documenta AWS para logs con KMS).
+          - Sid: CloudWatchLogsCifraLosLogs
+            Effect: Allow
+            Principal:
+              Service: !Sub "logs.${AWS::Region}.amazonaws.com"
+            Action:
+              - kms:Encrypt*
+              - kms:Decrypt*
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:Describe*
+            Resource: "*"
+            Condition:
+              ArnLike:
+                "kms:EncryptionContext:aws:logs:arn": !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:*"
+          # Las alarmas publican en el tema de avisos, que queda cifrado con esta llave. Sin esto las alarmas
+          # cambian de estado pero el correo nunca llega. La condicion (recomendada por AWS) limita el permiso a las
+          # alarmas de esta cuenta: asi el servicio no puede ser usado por otra cuenta para ocupar esta llave.
+          # Hay que probarlo al desplegar con llave propia (forzar una alarma y ver que llegue el correo, DEPLOY.md).
+          - Sid: LasAlarmasPublicanEnElTemaCifrado
+            Effect: Allow
+            Principal:
+              Service: cloudwatch.amazonaws.com
+            Action:
+              - kms:Decrypt
+              - kms:GenerateDataKey*
+            Resource: "*"
+            Condition:
+              StringEquals:
+                "aws:SourceAccount": !Ref "AWS::AccountId"
+              ArnLike:
+                "aws:SourceArn": !Sub "arn:${AWS::Partition}:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:*"
 
+  LlaveDatosAlias:
+    Type: AWS::KMS::Alias
+    Condition: UsaLlavePropia
+    Properties:
+      AliasName: !Sub "alias/${AWS::StackName}-datos"
+      TargetKeyId: !Ref LlaveDatos
+
+  # -------------------------------------------------------------------------------------------------------------------
+  # 3. DATOS
+  # -------------------------------------------------------------------------------------------------------------------
+  # Una sola tabla, a demanda (sin capacidad que administrar). Unica fuente de verdad: items normalizados por paciente.
   RegistrosTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: RetainExceptOnCreate
+    UpdateReplacePolicy: Retain
     Properties:
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
@@ -56,94 +427,1248 @@ Resources:
           AttributeType: S
         - AttributeName: sk
           AttributeType: S
+        - AttributeName: dia
+          AttributeType: S
+        - AttributeName: ts
+          AttributeType: S
       KeySchema:
         - AttributeName: id_paciente
           KeyType: HASH
         - AttributeName: sk
           KeyType: RANGE
+      # PorDia: "que se escribio despues del instante X" sin recorrer la tabla. Cada contenedor de Lambda mantiene una
+      # copia en memoria y con este indice trae solo lo nuevo.
+      GlobalSecondaryIndexes:
+        - IndexName: PorDia
+          KeySchema:
+            - AttributeName: dia
+              KeyType: HASH
+            - AttributeName: ts
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      # TTL: DynamoDB borra solo los items que traen "expira" (claves de idempotencia). Los registros clinicos no lo llevan.
+      TimeToLiveSpecification:
+        AttributeName: expira
+        Enabled: true
+      # Recuperacion a cualquier segundo de los ultimos 35 dias (un borrado o una carga mala se pueden deshacer).
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      # En prod la tabla no se puede eliminar ni por consola ni por CloudFormation sin quitar antes esta proteccion.
+      DeletionProtectionEnabled: !If [EsProd, true, false]
+      SSESpecification: !If
+        - UsaLlavePropia
+        - SSEEnabled: true
+          SSEType: KMS
+          KMSMasterKeyId: !GetAtt LlaveDatos.Arn
+        - !Ref "AWS::NoValue"
 
-  Api:
-    Type: AWS::Serverless::HttpApi
+  # Bucket del sistema. Prefijos: entrada/ (zona de carga del hospital), procesados/ y errores/ (resultado de cada
+  # archivo) y conocimiento/. Lleva nombre fijo por dos razones: (a) el hospital configura una sola vez a donde deja
+  # sus archivos; (b) evita la dependencia circular bucket -> funcion -> permisos -> bucket del aviso de S3.
+  # Si se cambia el nombre hay que cambiarlo en todos los lugares marcados con (nombre-bucket).
+  DataBucket:
+    Type: AWS::S3::Bucket
+    DependsOn: PermisoS3InvocaIngesta  # S3 valida que puede invocar a la funcion al crear el aviso
+    DeletionPolicy: RetainExceptOnCreate
+    UpdateReplacePolicy: Retain
     Properties:
-      CorsConfiguration:
-        AllowOrigins: ["*"]
-        AllowMethods: [GET, POST, OPTIONS]
-        AllowHeaders: [content-type]
+      BucketName: !Sub "ambulatorio-hlf-${Ambiente}-${AWS::AccountId}-${AWS::Region}"  # (nombre-bucket)
+      VersioningConfiguration:
+        Status: Enabled  # nada se pisa ni se pierde: sobrescribir o borrar deja la version anterior
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced  # sin ACL: el acceso se decide solo con politicas
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: !If
+              - UsaLlavePropia
+              - SSEAlgorithm: "aws:kms"
+                KMSMasterKeyID: !GetAtt LlaveDatos.Arn
+              - SSEAlgorithm: AES256
+            BucketKeyEnabled: !If [UsaLlavePropia, true, !Ref "AWS::NoValue"]  # menos llamadas (y costo) a KMS
+      # La ficha clinica se conserva por ley al menos 15 anios (Ley 20.584): aqui NADA vence ni se borra. A los 90
+      # dias los archivos pasan a almacenamiento frio de lectura inmediata (mas barato, se siguen pudiendo leer).
+      LifecycleConfiguration:
+        Rules:
+          - Id: a-frio-sin-borrar
+            Status: Enabled
+            Transitions:
+              - StorageClass: GLACIER_IR
+                TransitionInDays: 90
+            NoncurrentVersionTransitions:
+              - StorageClass: GLACIER_IR
+                TransitionInDays: 30
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7  # solo descarta subidas que nunca terminaron (no son archivos)
+      # Zona de carga: cada archivo que llega a entrada/ dispara la ingesta.
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: "s3:ObjectCreated:*"
+            Function: !GetAtt IngestaArchivoFunction.Arn
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: entrada/
 
+  DataBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref DataBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: SoloConexionesCifradas
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt DataBucket.Arn
+              - !Sub "${DataBucket.Arn}/*"
+            Condition:
+              Bool:
+                "aws:SecureTransport": "false"
+          # En prod nadie (tampoco un administrador por descuido) puede eliminar versiones de archivos. Para un
+          # borrado legitimo (por ejemplo una orden de supresion) hay que retirar antes esta regla, y queda registro.
+          - !If
+            - EsProd
+            - Sid: NoBorrarVersionesEnProd
+              Effect: Deny
+              Principal: "*"
+              Action: "s3:DeleteObjectVersion"
+              Resource: !Sub "${DataBucket.Arn}/*"
+            - !Ref "AWS::NoValue"
+
+  # Cola de mensajes fallidos: evaluaciones que fallaron 5 veces y archivos de entrada/ que la ingesta no pudo procesar.
+  ColaFallidos:
+    Type: AWS::SQS::Queue
+    DeletionPolicy: Delete  # las colas llevan mensajes en transito, no registros: se van con el stack
+    UpdateReplacePolicy: Delete
+    Properties:
+      MessageRetentionPeriod: 1209600  # 14 dias (el maximo) para alcanzar a revisarlos
+      KmsMasterKeyId: !If [UsaLlavePropia, !GetAtt LlaveDatos.Arn, !Ref "AWS::NoValue"]
+      SqsManagedSseEnabled: !If [UsaLlavePropia, !Ref "AWS::NoValue", true]
+
+  # Cola de evaluacion: pacientes que hay que reevaluar despues de una carga grande (mas de 25) o de un archivo de entrada/.
+  ColaEvaluacion:
+    Type: AWS::SQS::Queue
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      # 6 veces el tiempo maximo del trabajador (300 s): lo que recomienda AWS para que un mensaje en proceso no
+      # reaparezca y se evalue dos veces.
+      VisibilityTimeout: 1800
+      MessageRetentionPeriod: 1209600
+      # 5 entregas antes de mandar un mensaje a fallidos: es el minimo que recomienda AWS con Lambda, porque una
+      # entrega que Lambda no alcanza a procesar (por ejemplo, por saturacion) tambien cuenta.
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt ColaFallidos.Arn
+        maxReceiveCount: 5
+      KmsMasterKeyId: !If [UsaLlavePropia, !GetAtt LlaveDatos.Arn, !Ref "AWS::NoValue"]
+      SqsManagedSseEnabled: !If [UsaLlavePropia, !Ref "AWS::NoValue", true]
+
+  # -------------------------------------------------------------------------------------------------------------------
+  # 4. PERMISOS: un rol por funcion. Lo comun va en politicas compartidas; lo propio, en cada rol.
+  # -------------------------------------------------------------------------------------------------------------------
+  # Comun a las cuatro funciones. La tabla va SIN DeleteItem ni BatchWriteItem: el codigo solo agrega
+  # (GetItem, PutItem, UpdateItem, Query, Scan), asi que ninguna funcion puede borrar registros.
+  PoliticaComun:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Ambulatorio HLF - tabla sin borrado, conocimiento en solo lectura y avisos
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: TablaSinBorrar
+            Effect: Allow
+            Action:
+              - dynamodb:GetItem
+              - dynamodb:PutItem
+              - dynamodb:UpdateItem
+              - dynamodb:Query
+              - dynamodb:Scan
+            Resource:
+              - !Sub
+                - "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Tabla}"
+                - Tabla: !If [UsaTablaRestaurada, !Ref TablaRestaurada, !Ref RegistrosTable]
+              - !Sub
+                - "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Tabla}/index/*"
+                - Tabla: !If [UsaTablaRestaurada, !Ref TablaRestaurada, !Ref RegistrosTable]
+          - Sid: LeerConocimiento
+            Effect: Allow
+            Action: s3:GetObject
+            Resource: !Sub "arn:${AWS::Partition}:s3:::ambulatorio-hlf-${Ambiente}-${AWS::AccountId}-${AWS::Region}/conocimiento/*"  # (nombre-bucket)
+          - Sid: PublicarAvisos
+            Effect: Allow
+            Action: sns:Publish
+            Resource: !Ref TemaAlertas
+
+  # Solo con llave propia: las funciones pueden usarla unicamente a traves de los servicios del stack (no pueden
+  # descifrar datos por su cuenta). Es el conjunto que entrega AWS CDK para leer y escribir recursos cifrados.
+  PoliticaLlave:
+    Type: AWS::IAM::ManagedPolicy
+    Condition: UsaLlavePropia
+    Properties:
+      Description: Ambulatorio HLF - uso de la llave propia solo a traves de DynamoDB, S3, SQS y SNS
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: UsarLaLlaveATravesDeLosServicios
+            Effect: Allow
+            Action:
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:Encrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+            Resource: !GetAtt LlaveDatos.Arn
+            Condition:
+              StringEquals:
+                "kms:ViaService":
+                  - !Sub "dynamodb.${AWS::Region}.amazonaws.com"
+                  - !Sub "s3.${AWS::Region}.amazonaws.com"
+                  - !Sub "sqs.${AWS::Region}.amazonaws.com"
+                  - !Sub "sns.${AWS::Region}.amazonaws.com"
+
+  # Solo si hay un modelo real configurado. Antes era Resource "*": cualquier modelo de cualquier proveedor.
+  # Los modelos Claude actuales solo se invocan a traves de un perfil de inferencia: "us." (reparte las llamadas
+  # entre us-east-1, us-east-2 y us-west-2) o "global.". Por eso hacen falta DOS permisos: sobre el perfil y sobre el
+  # modelo base en las regiones a las que enruta. Es el esquema que documenta AWS ("Prerequisites for inference
+  # profiles"): el modelo base solo se puede invocar si la llamada viene por un perfil de Anthropic de esta cuenta
+  # (bedrock:InferenceProfileArn). La region del modelo base queda con comodin porque AWS puede sumar regiones a un
+  # perfil y "global." usa un modelo "sin region". El codigo usa la API Converse, que se autoriza con bedrock:InvokeModel.
+  PoliticaBedrock:
+    Type: AWS::IAM::ManagedPolicy
+    Condition: UsaBedrock
+    Properties:
+      Description: Ambulatorio HLF - invocar solo modelos y perfiles de inferencia de Anthropic
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: PerfilesDeInferenciaDeAnthropic
+            Effect: Allow
+            Action: bedrock:InvokeModel
+            Resource: !Sub
+              - "arn:${AWS::Partition}:bedrock:${RegionIA}:${AWS::AccountId}:inference-profile/*.anthropic.*"
+              - RegionIA: !If [TieneBedrockRegion, !Ref BedrockRegion, !Ref "AWS::Region"]
+          - Sid: ModelosBaseSoloATravesDeEsosPerfiles
+            Effect: Allow
+            Action: bedrock:InvokeModel
+            Resource:
+              - !Sub "arn:${AWS::Partition}:bedrock:*::foundation-model/anthropic.*"  # en cada region del perfil
+              - !Sub "arn:${AWS::Partition}:bedrock:::foundation-model/anthropic.*"   # el modelo "sin region" de global.
+            Condition:
+              StringLike:
+                "bedrock:InferenceProfileArn": !Sub
+                  - "arn:${AWS::Partition}:bedrock:${RegionIA}:${AWS::AccountId}:inference-profile/*.anthropic.*"
+                  - RegionIA: !If [TieneBedrockRegion, !Ref BedrockRegion, !Ref "AWS::Region"]
+          - !If
+            - TieneGuardrail
+            - Sid: AplicarElGuardrail
+              Effect: Allow
+              Action: bedrock:ApplyGuardrail
+              Resource: !Sub
+                - "arn:${AWS::Partition}:bedrock:${RegionIA}:${AWS::AccountId}:guardrail/${GuardrailId}"
+                - RegionIA: !If [TieneBedrockRegion, !Ref BedrockRegion, !Ref "AWS::Region"]
+            - !Ref "AWS::NoValue"
+
+  # API: lee y escribe la tabla, encola evaluaciones, lee fotos con Textract y (si hay modelo) usa Bedrock.
+  ApiRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Ambulatorio HLF - funcion de la API
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Ref PoliticaComun
+        - !If [UsaLlavePropia, !Ref PoliticaLlave, !Ref "AWS::NoValue"]
+        - !If [UsaBedrock, !Ref PoliticaBedrock, !Ref "AWS::NoValue"]
+      Policies:
+        - PolicyName: api
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: EscribirSusLogs
+                Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt ApiLogGroup.Arn
+              - Sid: LeerResultadosDeCargas
+                Effect: Allow
+                Action: s3:GetObject
+                Resource:  # (nombre-bucket)
+                  - !Sub "arn:${AWS::Partition}:s3:::ambulatorio-hlf-${Ambiente}-${AWS::AccountId}-${AWS::Region}/procesados/*"
+                  - !Sub "arn:${AWS::Partition}:s3:::ambulatorio-hlf-${Ambiente}-${AWS::AccountId}-${AWS::Region}/errores/*"
+              - Sid: ListarSoloEsosPrefijos
+                Effect: Allow
+                Action: s3:ListBucket
+                Resource: !Sub "arn:${AWS::Partition}:s3:::ambulatorio-hlf-${Ambiente}-${AWS::AccountId}-${AWS::Region}"  # (nombre-bucket)
+                Condition:
+                  StringLike:
+                    "s3:prefix":
+                      - conocimiento/*
+                      - procesados/*
+                      - errores/*
+              - Sid: EncolarEvaluaciones
+                Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt ColaEvaluacion.Arn
+              # Textract no admite restringir DetectDocumentText por recurso (no opera sobre recursos propios de la
+              # cuenta: recibe la imagen en la misma llamada). El "*" es obligatorio; la accion si queda acotada.
+              - Sid: LeerFotosDeInformes
+                Effect: Allow
+                Action: textract:DetectDocumentText
+                Resource: "*"
+
+  # Trabajador: consume la cola y evalua. No encola, no toca S3 (salvo conocimiento) ni Textract.
+  TrabajadorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Ambulatorio HLF - trabajador de la cola de evaluacion
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Ref PoliticaComun
+        - !If [UsaLlavePropia, !Ref PoliticaLlave, !Ref "AWS::NoValue"]
+        - !If [UsaBedrock, !Ref PoliticaBedrock, !Ref "AWS::NoValue"]
+      Policies:
+        - PolicyName: trabajador
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: EscribirSusLogs
+                Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt TrabajadorLogGroup.Arn
+              - Sid: ConsumirLaCola
+                Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                  - sqs:ChangeMessageVisibility
+                Resource: !GetAtt ColaEvaluacion.Arn
+
+  # Ingesta de archivos: lee de entrada/, deja el resultado en procesados/ o errores/ y encola las evaluaciones.
+  # Sin Bedrock ni Textract: la evaluacion de este canal la hace el trabajador.
+  IngestaArchivoRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Ambulatorio HLF - ingesta de archivos de la zona de carga
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Ref PoliticaComun
+        - !If [UsaLlavePropia, !Ref PoliticaLlave, !Ref "AWS::NoValue"]
+      Policies:
+        - PolicyName: ingesta-archivo
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: EscribirSusLogs
+                Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt IngestaArchivoLogGroup.Arn
+              # DeleteObject (para "mover" el archivo fuera de entrada/) no destruye nada: con versionado solo deja un
+              # marcador y la version queda guardada. No se entrega DeleteObjectVersion.
+              - Sid: TomarArchivosDeEntrada
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectTagging
+                  - s3:DeleteObject
+                Resource: !Sub "arn:${AWS::Partition}:s3:::ambulatorio-hlf-${Ambiente}-${AWS::AccountId}-${AWS::Region}/entrada/*"  # (nombre-bucket)
+              - Sid: DejarElResultado
+                Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:PutObjectTagging
+                Resource:  # (nombre-bucket)
+                  - !Sub "arn:${AWS::Partition}:s3:::ambulatorio-hlf-${Ambiente}-${AWS::AccountId}-${AWS::Region}/procesados/*"
+                  - !Sub "arn:${AWS::Partition}:s3:::ambulatorio-hlf-${Ambiente}-${AWS::AccountId}-${AWS::Region}/errores/*"
+              - Sid: ListarSoloEsosPrefijos
+                Effect: Allow
+                Action: s3:ListBucket
+                Resource: !Sub "arn:${AWS::Partition}:s3:::ambulatorio-hlf-${Ambiente}-${AWS::AccountId}-${AWS::Region}"  # (nombre-bucket)
+                Condition:
+                  StringLike:
+                    "s3:prefix":
+                      - entrada/*
+                      - procesados/*
+                      - errores/*
+              - Sid: EncolarEvaluacionesYAvisarFallos
+                Effect: Allow
+                Action: sqs:SendMessage
+                Resource:
+                  - !GetAtt ColaEvaluacion.Arn
+                  - !GetAtt ColaFallidos.Arn  # destino de las ejecuciones que fallan (ver IngestaArchivoReintentos)
+
+  # Barrido nocturno: reevalua con IA; puede encolar para que el trabajador reparta la carga.
+  BarridoRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Ambulatorio HLF - barrido nocturno
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Ref PoliticaComun
+        - !If [UsaLlavePropia, !Ref PoliticaLlave, !Ref "AWS::NoValue"]
+        - !If [UsaBedrock, !Ref PoliticaBedrock, !Ref "AWS::NoValue"]
+      Policies:
+        - PolicyName: barrido
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: EscribirSusLogs
+                Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt BarridoLogGroup.Arn
+              - Sid: EncolarEvaluaciones
+                Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt ColaEvaluacion.Arn
+
+  # Para el hospital: se adjunta al usuario o rol con que su sistema (o TI) deja archivos en la zona de carga.
+  # Solo permite escribir en entrada/: no puede leer ni borrar nada.
+  PoliticaCargaEntrada:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Ambulatorio HLF - dejar archivos en la zona de carga (solo escribir en entrada/)
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DejarArchivosEnLaZonaDeCarga
+            Effect: Allow
+            Action:
+              - s3:PutObject
+              - s3:AbortMultipartUpload
+            Resource: !Sub "${DataBucket.Arn}/entrada/*"
+          - !If
+            - UsaLlavePropia
+            - Sid: CifrarLoQueSube
+              Effect: Allow
+              Action:
+                - kms:GenerateDataKey
+                - kms:Decrypt  # lo exige S3 para subir archivos grandes por partes
+              Resource: !GetAtt LlaveDatos.Arn
+              Condition:
+                StringEquals:
+                  "kms:ViaService": !Sub "s3.${AWS::Region}.amazonaws.com"
+            - !Ref "AWS::NoValue"
+
+  # -------------------------------------------------------------------------------------------------------------------
+  # 5. FUNCIONES: el mismo paquete (carpeta lambda/) con cuatro puntos de entrada.
+  # -------------------------------------------------------------------------------------------------------------------
   ApiFunction:
     Type: AWS::Serverless::Function
     Properties:
+      Description: API de la lista de espera (app.handler)
       CodeUri: lambda/
       Handler: app.handler
-      Environment:
-        Variables:
-          BUCKET: !Ref DataBucket
-          PERFILES_KEY: perfiles.json
-          TABLE: !Ref RegistrosTable
-          MODEL_ID: !Ref ModelId
-          FECHA_REFERENCIA: hoy  # fecha real de Chile; AAAA-MM-DD para simular
-          BEDROCK_REGION: !If [HasBedrockRegion, !Ref BedrockRegion, !Ref AWS::Region]
-          ALGORITMO: !Ref Algoritmo
-      Policies:
-        - S3ReadPolicy:
-            BucketName: !Ref DataBucket
-        - DynamoDBCrudPolicy:
-            TableName: !Ref RegistrosTable
-        - Statement:
-            - Effect: Allow
-              Action:
-                - bedrock:InvokeModel
-                - bedrock:InvokeModelWithResponseStream
-                - textract:DetectDocumentText
-              Resource: "*"
-      Events:
-        Todo:
-          Type: HttpApi
-          Properties:
-            ApiId: !Ref Api
-            Path: /{proxy+}
-            Method: ANY
+      Timeout: 30  # API Gateway corta a los 30 s; no sirve esperar mas
+      Role: !GetAtt ApiRole.Arn
+      LoggingConfig:
+        LogGroup: !Ref ApiLogGroup
 
-  # Barrido del algoritmo decisor: reevalua a quienes no tienen evaluacion vigente (misma imagen de codigo).
+  TrabajadorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: Evalua con IA a los pacientes de la cola y registra el dictamen (ingesta.cola_handler)
+      CodeUri: lambda/
+      Handler: ingesta.cola_handler
+      Timeout: 300
+      Role: !GetAtt TrabajadorRole.Arn
+      LoggingConfig:
+        LogGroup: !Ref TrabajadorLogGroup
+
+  # La cola alimenta al trabajador. MaximumConcurrency es el freno para no saturar la cuota de Bedrock (a
+  # diferencia de la concurrencia reservada, no consume cuota de la cuenta ni manda mensajes sanos a fallidos).
+  # ReportBatchItemFailures: si falla un mensaje del lote, solo ese vuelve a la cola.
+  TrabajadorOrigenCola:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !GetAtt ColaEvaluacion.Arn
+      FunctionName: !Ref TrabajadorFunction
+      BatchSize: !Ref LoteTrabajador
+      FunctionResponseTypes:
+        - ReportBatchItemFailures
+      ScalingConfig:
+        MaximumConcurrency: !Ref ConcurrenciaTrabajador
+
+  IngestaArchivoFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: Procesa cada archivo que llega a entrada/ (ingesta.s3_handler)
+      CodeUri: lambda/
+      Handler: ingesta.s3_handler
+      Timeout: 900  # el maximo de Lambda: un archivo grande del hospital no debe quedar a medias
+      Role: !GetAtt IngestaArchivoRole.Arn
+      LoggingConfig:
+        LogGroup: !Ref IngestaArchivoLogGroup
+
+  PermisoS3InvocaIngesta:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref IngestaArchivoFunction
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref "AWS::AccountId"
+      SourceArn: !Sub "arn:${AWS::Partition}:s3:::ambulatorio-hlf-${Ambiente}-${AWS::AccountId}-${AWS::Region}"  # (nombre-bucket)
+
+  # S3 invoca sin esperar respuesta. Si la funcion falla (error inesperado o se le acaba el tiempo), Lambda
+  # reintenta 2 veces y despues deja el aviso, con la ruta del archivo, en la cola de fallidos: no se pierde el rastro.
+  # La ingesta es idempotente, asi que reintentar no duplica registros.
+  IngestaArchivoReintentos:
+    Type: AWS::Lambda::EventInvokeConfig
+    Properties:
+      FunctionName: !Ref IngestaArchivoFunction
+      Qualifier: $LATEST
+      MaximumRetryAttempts: 2
+      MaximumEventAgeInSeconds: 3600
+      DestinationConfig:
+        OnFailure:
+          Destination: !GetAtt ColaFallidos.Arn
+
   BarridoFunction:
     Type: AWS::Serverless::Function
     Properties:
+      Description: Reevaluacion nocturna de quienes no tienen evaluacion vigente (app.barrido_handler)
       CodeUri: lambda/
       Handler: app.barrido_handler
       Timeout: 900
-      Environment:
-        Variables:
-          BUCKET: !Ref DataBucket
-          PERFILES_KEY: perfiles.json
-          TABLE: !Ref RegistrosTable
-          MODEL_ID: !Ref ModelId
-          FECHA_REFERENCIA: hoy
-          BEDROCK_REGION: !If [HasBedrockRegion, !Ref BedrockRegion, !Ref AWS::Region]
-          ALGORITMO: rubrica
-      Policies:
-        - S3ReadPolicy:
-            BucketName: !Ref DataBucket
-        - DynamoDBCrudPolicy:
-            TableName: !Ref RegistrosTable
-        - Statement:
-            - Effect: Allow
-              Action: [bedrock:InvokeModel]
-              Resource: "*"
-      Events:
-        Nocturno:
-          Type: ScheduleV2
-          Properties:
-            ScheduleExpression: cron(0 4 * * ? *)
-            ScheduleExpressionTimezone: America/Santiago
-            State: !Ref BarridoActivo
-            Input: '{"limite": 400, "en_paralelo": 6}'
+      Role: !GetAtt BarridoRole.Arn
+      LoggingConfig:
+        LogGroup: !Ref BarridoLogGroup
 
+  # Un barrido que falla no se repite solo: repetirlo triplicaria el gasto en Bedrock. Queda la alarma de errores.
+  BarridoReintentos:
+    Type: AWS::Lambda::EventInvokeConfig
+    Properties:
+      FunctionName: !Ref BarridoFunction
+      Qualifier: $LATEST
+      MaximumRetryAttempts: 0
+
+  BarridoProgramadorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Ambulatorio HLF - EventBridge Scheduler invoca el barrido
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                "aws:SourceAccount": !Ref "AWS::AccountId"
+      Policies:
+        - PolicyName: invocar-barrido
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt BarridoFunction.Arn
+
+  BarridoNocturno:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Description: Barrido nocturno del Ambulatorio HLF (04:00, hora de Chile)
+      ScheduleExpression: "cron(0 4 * * ? *)"
+      ScheduleExpressionTimezone: America/Santiago
+      State: !Ref BarridoActivo
+      FlexibleTimeWindow:
+        Mode: "OFF"
+      Target:
+        Arn: !GetAtt BarridoFunction.Arn
+        RoleArn: !GetAtt BarridoProgramadorRole.Arn
+        Input: '{"limite": 400, "en_paralelo": 6}'
+        RetryPolicy:
+          MaximumRetryAttempts: 0
+
+  # -------------------------------------------------------------------------------------------------------------------
+  # 6. API: recursos nativos de API Gateway (no los atajos de SAM) para que el login opcional sea una condicion
+  # explicita y lo que se lee aqui sea exactamente lo que se crea.
+  # -------------------------------------------------------------------------------------------------------------------
+  Api:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Ref "AWS::StackName"
+      Description: !Sub "Ambulatorio Dinamico HLF (${Ambiente})"
+      ProtocolType: HTTP
+      # CORS lo resuelve API Gateway: responde las consultas previas del navegador y reemplaza las cabeceras CORS
+      # que devuelva el codigo. El origen permitido queda impuesto aqui, no depende de la aplicacion.
+      CorsConfiguration:
+        AllowOrigins:
+          - !If [OrigenEsSitio, !Sub "https://main.${AppWeb.DefaultDomain}", !Ref OrigenPermitido]
+        AllowMethods: [GET, POST, OPTIONS]
+        AllowHeaders: [content-type, authorization, idempotency-key, x-rol]
+        MaxAge: 600
+
+  ApiIntegracion:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref Api
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt ApiFunction.Arn
+      PayloadFormatVersion: "2.0"
+
+  ApiPermisoInvocar:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref ApiFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${Api}/*"
+
+  # Valida la firma, el emisor, el vencimiento y el cliente del token ANTES de invocar a la Lambda: una solicitud sin
+  # token valido no llega al codigo ni cuesta una ejecucion. Los roles (grupos) los revisa el codigo.
+  ApiAutorizador:
+    Type: AWS::ApiGatewayV2::Authorizer
+    Condition: ConCognito
+    Properties:
+      ApiId: !Ref Api
+      Name: cognito
+      AuthorizerType: JWT
+      IdentitySource:
+        - $request.header.Authorization
+      JwtConfiguration:
+        Issuer: !Sub "https://cognito-idp.${AWS::Region}.${AWS::URLSuffix}/${Usuarios}"
+        Audience:
+          - !Ref ClienteWeb
+          - !Ref ClienteIntegracion
+
+  # Todo lo demas: con login cuando Autenticacion=cognito.
+  ApiRutaGeneral:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref Api
+      RouteKey: "ANY /{proxy+}"
+      Target: !Sub "integrations/${ApiIntegracion}"
+      AuthorizationType: !If [ConCognito, JWT, NONE]
+      AuthorizerId: !If [ConCognito, !Ref ApiAutorizador, !Ref "AWS::NoValue"]
+
+  # Siempre abierta: la usan el script de despliegue y el monitoreo. No entrega datos de pacientes.
+  ApiRutaSalud:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref Api
+      RouteKey: "GET /health"
+      Target: !Sub "integrations/${ApiIntegracion}"
+      AuthorizationType: NONE
+
+  # El navegador manda OPTIONS sin token antes de cada llamada: no puede exigir login (recomendacion de AWS cuando
+  # hay una ruta general con autorizador).
+  ApiRutaOpciones:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref Api
+      RouteKey: "OPTIONS /{proxy+}"
+      Target: !Sub "integrations/${ApiIntegracion}"
+      AuthorizationType: NONE
+
+  ApiEtapa:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref Api
+      StageName: $default
+      AutoDeploy: true
+      DefaultRouteSettings:
+        ThrottlingRateLimit: !Ref LimiteSolicitudesSegundo
+        ThrottlingBurstLimit: !Ref LimiteRafaga
+      # Registro de accesos: una linea por solicitud con quien (usuario del token), que ruta (trae el id del
+      # paciente) y el resultado. Sin cuerpo ni datos clinicos.
+      AccessLogSettings:
+        DestinationArn: !GetAtt ApiAccesosLogGroup.Arn
+        Format: >-
+          {"requestId":"$context.requestId","hora":"$context.requestTime","ip":"$context.identity.sourceIp",
+          "metodo":"$context.httpMethod","ruta":"$context.path","rutaApi":"$context.routeKey",
+          "estado":"$context.status","ms":"$context.responseLatency","msIntegracion":"$context.integrationLatency",
+          "bytes":"$context.responseLength","usuario":"$context.authorizer.claims.username",
+          "sub":"$context.authorizer.claims.sub","cliente":"$context.authorizer.claims.client_id",
+          "errorLogin":"$context.authorizer.error","error":"$context.error.message",
+          "errorIntegracion":"$context.integrationErrorMessage"}
+
+  # -------------------------------------------------------------------------------------------------------------------
+  # 7. LOGIN (solo con Autenticacion=cognito)
+  # -------------------------------------------------------------------------------------------------------------------
+  Usuarios:
+    Type: AWS::Cognito::UserPool
+    Condition: ConCognito
+    DeletionPolicy: RetainExceptOnCreate
+    UpdateReplacePolicy: Retain
+    Properties:
+      UserPoolName: !Sub "${AWS::StackName}-usuarios"
+      DeletionProtection: !If [EsProd, ACTIVE, INACTIVE]
+      # Nadie se registra solo: TI da de alta a cada persona (ver RUNBOOK). Se entra con el correo institucional.
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: true
+      UsernameAttributes: [email]
+      AutoVerifiedAttributes: [email]
+      UsernameConfiguration:
+        CaseSensitive: false
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 12
+          RequireLowercase: true
+          RequireUppercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+          TemporaryPasswordValidityDays: 3
+      # Segundo factor con aplicacion autenticadora (sin SMS: no tiene costo por mensaje ni depende del celular).
+      MfaConfiguration: !Ref MfaCognito
+      EnabledMfas: !If [MfaApagado, !Ref "AWS::NoValue", [SOFTWARE_TOKEN_MFA]]
+
+  # Los roles de la aplicacion son grupos de Cognito: viajan dentro del token (cognito:groups) y el codigo los exige.
+  GrupoGestion:
+    Type: AWS::Cognito::UserPoolGroup
+    Condition: ConCognito
+    Properties:
+      UserPoolId: !Ref Usuarios
+      GroupName: gestion
+      Description: Gestion de la lista - contacto, gestion del caso, ingreso, eventos manuales, informes e importacion
+      Precedence: 30
+
+  GrupoEspecialista:
+    Type: AWS::Cognito::UserPoolGroup
+    Condition: ConCognito
+    Properties:
+      UserPoolId: !Ref Usuarios
+      GroupName: especialista
+      Description: Especialista - revision (veredicto), decision clinica, orden manual y enmienda de eventos
+      Precedence: 20
+
+  GrupoJefatura:
+    Type: AWS::Cognito::UserPoolGroup
+    Condition: ConCognito
+    Properties:
+      UserPoolId: !Ref Usuarios
+      GroupName: jefatura
+      Description: Jefatura - aprobar, rechazar o retirar criterios locales
+      Precedence: 10
+
+  # Direccion de la pantalla de login que aloja Cognito.
+  DominioLogin:
+    Type: AWS::Cognito::UserPoolDomain
+    Condition: ConCognito
+    Properties:
+      UserPoolId: !Ref Usuarios
+      Domain: !If
+        - SinPrefijoDominio
+        - !Sub "ambulatorio-hlf-${Ambiente}-${AWS::AccountId}"
+        - !Ref PrefijoDominioLogin
+
+  # Permiso (scope) que identifica a los sistemas del hospital: ambulatorio/ingesta.
+  ServidorRecursos:
+    Type: AWS::Cognito::UserPoolResourceServer
+    Condition: ConCognito
+    Properties:
+      UserPoolId: !Ref Usuarios
+      Identifier: ambulatorio
+      Name: Ambulatorio Dinamico HLF
+      Scopes:
+        - ScopeName: ingesta
+          ScopeDescription: Enviar eventos clinicos desde los sistemas del hospital
+
+  # La pagina: cliente publico (un navegador no puede guardar un secreto) con codigo de autorizacion + PKCE.
+  ClienteWeb:
+    Type: AWS::Cognito::UserPoolClient
+    Condition: ConCognito
+    Properties:
+      UserPoolId: !Ref Usuarios
+      ClientName: web
+      GenerateSecret: false
+      SupportedIdentityProviders: [COGNITO]
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthFlows: [code]
+      AllowedOAuthScopes: [openid, email, profile]
+      # Sin UrlsRetorno se usa el sitio de este stack, con y sin barra final (Cognito compara la direccion exacta).
+      # Sin UrlsRetorno y sin sitio no hay a donde volver: la regla LoginSinSitioExigeUrlsRetorno lo impide antes.
+      CallbackURLs: !If
+        - SinUrlsRetorno
+        - !If
+          - ConSitio
+          - - !Sub "https://main.${AppWeb.DefaultDomain}"
+            - !Sub "https://main.${AppWeb.DefaultDomain}/"
+          - !Ref "AWS::NoValue"
+        - !Split [",", !Ref UrlsRetorno]
+      LogoutURLs: !If
+        - SinUrlsRetorno
+        - !If
+          - ConSitio
+          - - !Sub "https://main.${AppWeb.DefaultDomain}"
+            - !Sub "https://main.${AppWeb.DefaultDomain}/"
+          - !Ref "AWS::NoValue"
+        - !Split [",", !Ref UrlsRetorno]
+      ExplicitAuthFlows: [ALLOW_USER_SRP_AUTH, ALLOW_REFRESH_TOKEN_AUTH]
+      PreventUserExistenceErrors: ENABLED  # no revela si un correo existe
+      EnableTokenRevocation: true
+      # Sesion de un turno: el token dura 1 hora y se renueva solo hasta por 12 horas; despues hay que entrar de nuevo
+      # (computadores compartidos del hospital).
+      AccessTokenValidity: 60
+      IdTokenValidity: 60
+      RefreshTokenValidity: 12
+      TokenValidityUnits:
+        AccessToken: minutes
+        IdToken: minutes
+        RefreshToken: hours
+
+  # Los sistemas del hospital: cliente con secreto que pide su token directo (client credentials), solo con el
+  # permiso ambulatorio/ingesta. El secreto NO sale por las salidas del stack (ver RUNBOOK para obtenerlo y rotarlo).
+  ClienteIntegracion:
+    Type: AWS::Cognito::UserPoolClient
+    Condition: ConCognito
+    DependsOn: ServidorRecursos  # el permiso tiene que existir antes de asignarlo al cliente
+    Properties:
+      UserPoolId: !Ref Usuarios
+      ClientName: integracion
+      GenerateSecret: true
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthFlows: [client_credentials]
+      AllowedOAuthScopes: [ambulatorio/ingesta]
+      ExplicitAuthFlows: [ALLOW_REFRESH_TOKEN_AUTH]
+      EnableTokenRevocation: true
+      AccessTokenValidity: 60
+      TokenValidityUnits:
+        AccessToken: minutes
+
+  # -------------------------------------------------------------------------------------------------------------------
+  # 8. SITIO WEB (solo con SitioAmplify=si): la aplicacion de Amplify Hosting queda dentro del stack para que el
+  # origen permitido de la API y el retorno del login apunten a ella sin copiar direcciones a mano.
+  # El script de despliegue sube ahi la pagina ya compilada (zip).
+  # -------------------------------------------------------------------------------------------------------------------
+  AppWeb:
+    Type: AWS::Amplify::App
+    Condition: ConSitio
+    Properties:
+      Name: !Sub "${AWS::StackName}-web"
+      Description: !Sub "Ambulatorio Dinamico HLF (${Ambiente}) - pagina web"
+      Platform: WEB
+
+  AppWebRama:
+    Type: AWS::Amplify::Branch
+    Condition: ConSitio
+    Properties:
+      AppId: !GetAtt AppWeb.AppId
+      BranchName: main
+      Stage: !If [EsProd, PRODUCTION, DEVELOPMENT]
+      EnableAutoBuild: false  # no hay repositorio conectado: la pagina llega compilada
+
+  # -------------------------------------------------------------------------------------------------------------------
+  # 9. OBSERVABILIDAD
+  # -------------------------------------------------------------------------------------------------------------------
+  # Cada funcion escribe en su propio grupo, con retencion definida (por defecto los logs de Lambda no vencen nunca)
+  # y cifrado con la llave propia si existe. Los crea la plantilla, asi las funciones no necesitan permiso para
+  # crear grupos de logs.
+  ApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: RetainExceptOnCreate
+    UpdateReplacePolicy: Retain
+    Properties:
+      RetentionInDays: !Ref RetencionLogsDias
+      KmsKeyId: !If [UsaLlavePropia, !GetAtt LlaveDatos.Arn, !Ref "AWS::NoValue"]
+
+  TrabajadorLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: RetainExceptOnCreate
+    UpdateReplacePolicy: Retain
+    Properties:
+      RetentionInDays: !Ref RetencionLogsDias
+      KmsKeyId: !If [UsaLlavePropia, !GetAtt LlaveDatos.Arn, !Ref "AWS::NoValue"]
+
+  IngestaArchivoLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: RetainExceptOnCreate
+    UpdateReplacePolicy: Retain
+    Properties:
+      RetentionInDays: !Ref RetencionLogsDias
+      KmsKeyId: !If [UsaLlavePropia, !GetAtt LlaveDatos.Arn, !Ref "AWS::NoValue"]
+
+  BarridoLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: RetainExceptOnCreate
+    UpdateReplacePolicy: Retain
+    Properties:
+      RetentionInDays: !Ref RetencionLogsDias
+      KmsKeyId: !If [UsaLlavePropia, !GetAtt LlaveDatos.Arn, !Ref "AWS::NoValue"]
+
+  # Registro de accesos de la API. Nombre fijo con el prefijo /aws/vendedlogs/: es el que AWS pide para que la
+  # politica con que API Gateway escribe logs no crezca hasta su limite de tamanio.
+  ApiAccesosLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: RetainExceptOnCreate
+    UpdateReplacePolicy: Retain
+    Properties:
+      LogGroupName: !Sub "/aws/vendedlogs/apigateway/${AWS::StackName}"
+      RetentionInDays: !Ref RetencionLogsDias
+      KmsKeyId: !If [UsaLlavePropia, !GetAtt LlaveDatos.Arn, !Ref "AWS::NoValue"]
+
+  # Avisos operativos. Por aqui NO deben viajar datos clinicos ni identificadores de pacientes: termina en un correo.
+  TemaAlertas:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: !Sub "Ambulatorio HLF ${Ambiente}"
+      KmsMasterKeyId: !If [UsaLlavePropia, !GetAtt LlaveDatos.Arn, !Ref "AWS::NoValue"]
+
+  TemaAlertasCorreo:
+    Type: AWS::SNS::Subscription
+    Condition: TieneCorreo
+    Properties:
+      TopicArn: !Ref TemaAlertas
+      Protocol: email
+      Endpoint: !Ref CorreoAlertas
+
+  # --- Alarmas. Todas avisan al tema al dispararse y al volver a la normalidad. La falta de datos no es alarma
+  # (de noche no hay solicitudes). Que hacer con cada una: docs/operacion/RUNBOOK.md.
+  AlarmaApiErrores:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: La funcion de la API termino con error (excepcion no controlada o se le acabo el tiempo).
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ApiFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref TemaAlertas]
+      OKActions: [!Ref TemaAlertas]
+
+  AlarmaApiSaturada:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Lambda rechazo ejecuciones de la API por falta de concurrencia (los usuarios ven errores).
+      Namespace: AWS/Lambda
+      MetricName: Throttles
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ApiFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref TemaAlertas]
+      OKActions: [!Ref TemaAlertas]
+
+  # p95 sobre 24 s (80 % del tope de 30 s): 1 de cada 20 solicitudes esta por cortarse. Con pocas solicitudes el
+  # percentil no es confiable, por eso se ignoran los periodos con pocas muestras.
+  AlarmaApiLenta:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: La API esta lenta - el 5 % de las solicitudes demora mas de 24 s y el tope es 30 s.
+      Namespace: AWS/Lambda
+      MetricName: Duration
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ApiFunction
+      ExtendedStatistic: p95
+      Period: 300
+      EvaluationPeriods: 3
+      DatapointsToAlarm: 2
+      Threshold: 24000
+      ComparisonOperator: GreaterThanThreshold
+      EvaluateLowSampleCountPercentile: ignore
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref TemaAlertas]
+      OKActions: [!Ref TemaAlertas]
+
+  # Cubre los errores que el codigo si controla (responde 500 sin que la Lambda "falle") y los de la propia API Gateway.
+  AlarmaApi5xx:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: La API respondio 5 o mas errores 5xx en 5 minutos.
+      Namespace: AWS/ApiGateway
+      MetricName: 5xx
+      Dimensions:
+        - Name: ApiId
+          Value: !Ref Api
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref TemaAlertas]
+      OKActions: [!Ref TemaAlertas]
+
+  AlarmaTrabajadorErrores:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: El trabajador de la cola termino con error (los mensajes se reintentan y al quinto intento van a fallidos).
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref TrabajadorFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref TemaAlertas]
+      OKActions: [!Ref TemaAlertas]
+
+  AlarmaTrabajadorSaturado:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Lambda rechazo ejecuciones del trabajador por falta de concurrencia en la cuenta.
+      Namespace: AWS/Lambda
+      MetricName: Throttles
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref TrabajadorFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref TemaAlertas]
+      OKActions: [!Ref TemaAlertas]
+
+  AlarmaIngestaErrores:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: La ingesta de un archivo de entrada/ termino con error (tras los reintentos queda en la cola de fallidos).
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref IngestaArchivoFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref TemaAlertas]
+      OKActions: [!Ref TemaAlertas]
+
+  AlarmaIngestaSaturada:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Lambda rechazo ejecuciones de la ingesta de archivos por falta de concurrencia en la cuenta.
+      Namespace: AWS/Lambda
+      MetricName: Throttles
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref IngestaArchivoFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref TemaAlertas]
+      OKActions: [!Ref TemaAlertas]
+
+  AlarmaBarridoErrores:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: El barrido nocturno termino con error (no se repite solo).
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref BarridoFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref TemaAlertas]
+      OKActions: [!Ref TemaAlertas]
+
+  AlarmaBarridoSaturado:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Lambda rechazo la ejecucion del barrido nocturno por falta de concurrencia en la cuenta.
+      Namespace: AWS/Lambda
+      MetricName: Throttles
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref BarridoFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref TemaAlertas]
+      OKActions: [!Ref TemaAlertas]
+
+  AlarmaMensajesFallidos:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Hay mensajes en la cola de fallidos - una evaluacion fallo 5 veces o un archivo de entrada/ no se pudo procesar.
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt ColaFallidos.QueueName
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref TemaAlertas]
+      OKActions: [!Ref TemaAlertas]
+
+  AlarmaColaAtrasada:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: La cola de evaluacion no avanza - el mensaje mas antiguo lleva mas de 1 hora esperando.
+      Namespace: AWS/SQS
+      MetricName: ApproximateAgeOfOldestMessage
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt ColaEvaluacion.QueueName
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 3600
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref TemaAlertas]
+      OKActions: [!Ref TemaAlertas]
+
+  # Alerta de gasto (opcional). Mira TODA la cuenta: lo recomendado es una cuenta por ambiente. Si la cuenta se
+  # comparte con otros sistemas, filtrar por la etiqueta "proyecto" (hay que activarla antes en Facturacion).
+  PresupuestoMensual:
+    Type: AWS::Budgets::Budget
+    Condition: ConPresupuesto
+    Properties:
+      Budget:
+        BudgetName: !Sub "${AWS::StackName}-mensual"
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: !Ref PresupuestoMensualUSD
+          Unit: USD
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 80
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref CorreoAlertas
+        - Notification:
+            NotificationType: FORECASTED
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref CorreoAlertas
+
+# ---------------------------------------------------------------------------------------------------------------------
+# SALIDAS: las leen los scripts (desplegar, cargar_registro, limpiar_demo). No cambiar los nombres sin avisar.
+# ---------------------------------------------------------------------------------------------------------------------
 Outputs:
   ApiUrl:
-    Description: URL de la API (poner en VITE_API_URL del front)
-    Value: !Sub "https://${Api}.execute-api.${AWS::Region}.amazonaws.com"
+    Description: Direccion de la API (VITE_API_URL de la pagina)
+    Value: !GetAtt Api.ApiEndpoint
   BucketName:
-    Description: Bucket donde subir perfiles.json
+    Description: Bucket del sistema. La zona de carga del hospital es s3://BUCKET/entrada/
     Value: !Ref DataBucket
   TableName:
-    Value: !Ref RegistrosTable
+    Description: Tabla DynamoDB en uso (la restaurada, si se indico TablaRestaurada)
+    Value: !If [UsaTablaRestaurada, !Ref TablaRestaurada, !Ref RegistrosTable]
+  ColaEvaluacionUrl:
+    Description: Cola de evaluacion
+    Value: !Ref ColaEvaluacion
+  ColaFallidosUrl:
+    Description: Cola de mensajes fallidos (evaluaciones y archivos que no se pudieron procesar)
+    Value: !Ref ColaFallidos
+  TemaAlertasArn:
+    Description: Tema SNS de las alarmas y avisos
+    Value: !Ref TemaAlertas
+  PoliticaCargaArn:
+    Description: Politica para el usuario o rol del hospital que deja archivos en entrada/
+    Value: !Ref PoliticaCargaEntrada
+  Autenticacion:
+    Description: ninguna o cognito (el script de despliegue la usa para verificar y compilar la pagina)
+    Value: !Ref Autenticacion
+  SitioAppId:
+    Condition: ConSitio
+    Description: Aplicacion de Amplify donde se publica la pagina
+    Value: !GetAtt AppWeb.AppId
+  SitioUrl:
+    Condition: ConSitio
+    Description: Direccion de la pagina
+    Value: !Sub "https://main.${AppWeb.DefaultDomain}"
+  LlaveDatosArn:
+    Condition: UsaLlavePropia
+    Description: Llave KMS propia que cifra los datos
+    Value: !GetAtt LlaveDatos.Arn
+  UsuariosId:
+    Condition: ConCognito
+    Description: Grupo de usuarios de Cognito (alta y baja de personas - ver RUNBOOK)
+    Value: !Ref Usuarios
+  ClienteWebId:
+    Condition: ConCognito
+    Description: Cliente de Cognito de la pagina (publico, con PKCE)
+    Value: !Ref ClienteWeb
+  ClienteIntegracionId:
+    Condition: ConCognito
+    Description: Cliente de Cognito para los sistemas del hospital (su secreto se consulta aparte - ver RUNBOOK)
+    Value: !Ref ClienteIntegracion
+  LoginUrl:
+    Condition: ConCognito
+    Description: Direccion base de la pantalla de login y del emisor de tokens (/oauth2/authorize, /oauth2/token, /logout)
+    Value: !Sub
+      - "https://${Prefijo}.auth.${AWS::Region}.amazoncognito.com"
+      - Prefijo: !Ref DominioLogin
+  EmisorTokens:
+    Condition: ConCognito
+    Description: Emisor (iss) que valida la API en cada token
+    Value: !Sub "https://cognito-idp.${AWS::Region}.${AWS::URLSuffix}/${Usuarios}"

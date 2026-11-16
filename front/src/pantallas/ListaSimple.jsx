@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { descargarExcel } from "../excel";
 import { Filtro, Icono, Prioridad } from "../componentes/comunes";
 import { ESPECIALIDADES, ETIQUETA, plural } from "../constantes";
@@ -13,7 +13,8 @@ export function ListaSimple({ data, fecha, esp, setEsp, actualizando, onVer }) {
   const [prioridad, setPrioridad] = useState("todas");
   const [pagina, setPagina] = useState(0);
   useEffect(() => setPagina(0), [busca, prioridad, esp]);
-  const filas = data.pacientes.filter((p) => (prioridad === "todas" || p.categoria === prioridad) && coincide(p, busca));
+  // búsqueda, filtro y exportación sobre el total; la tabla dibuja solo una página (miles de filas no traban el navegador)
+  const filas = useMemo(() => data.pacientes.filter((p) => (prioridad === "todas" || p.categoria === prioridad) && coincide(p, busca)), [data, prioridad, busca]);
   const pag = filas.slice(pagina * POR_PAGINA_SIMPLE, (pagina + 1) * POR_PAGINA_SIMPLE);
   const paginas = Math.max(1, Math.ceil(filas.length / POR_PAGINA_SIMPLE));
   const SEXO = { F: "Femenino", M: "Masculino" };

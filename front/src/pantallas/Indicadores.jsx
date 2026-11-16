@@ -192,7 +192,9 @@ export function Indicadores({ fecha, data, esp, setEsp, onVer }) {
       ["Actualización tras un evento", "Al instante (milisegundos)", "Inmediata", "La lista se recalcula al registrar un evento, un informe o un paciente nuevo"],
       ["Tiempo hasta la revisión del especialista", re.evaluados ? `${num(re.mediana_horas)} h (mediana)` : "Sin datos", "—", "Horas desde que el evento llega hasta que el especialista revisa la prioridad (informativo)"],
       ["Concordancia con el especialista", kap == null ? "Sin datos" : `kappa ${num(kap, 2)} · ${cc.acuerdo_pct}% de acuerdo · n = ${cc.revisiones}`, "kappa ≥ 0,70", "Prioridad propuesta vs. decisión del especialista"],
-      ["Cobertura con criterio común", `${k.cobertura.pct}% (${k.cobertura.evaluados} de ${k.cobertura.en_espera})`, "100%", k.cobertura.criterio]] },
+      ["Cobertura con criterio común", `${k.cobertura.pct}% (${k.cobertura.evaluados} de ${k.cobertura.en_espera})`, "100%", k.cobertura.criterio],
+      ...(k.decisiones ? [["Decisiones del sistema", `${k.decisiones.total} registradas · ${k.decisiones.pendientes} pendientes · ${k.decisiones.adecuadas} adecuadas · ${k.decisiones.incorrectas} incorrectas`, "—", "Veredicto del especialista sobre cada decisión"],
+        ["Desde que llega un evento hasta que el sistema decide", re.mediana_segundos_evento_a_dictamen == null ? "Sin datos" : `${num(re.mediana_segundos_evento_a_dictamen, 2)} s (mediana)`, "—", "Segundos entre la llegada del evento y la decisión registrada"]] : [])] },
     { nombre: "Por especialidad", filas: [["Especialidad", "En espera", "Alta", "Media", "Baja", "Más de 1 año", "Más de 500 días", "Mediana (días)", "Máxima (días)",
       "Descompensaciones graves", "Sin revisar", "Decisión del especialista", "Sin responsable", "Egresos", "Atendidos", "Fallecidos"],
       ...[...k.por_especialidad, k.total_hospital].map((r) => [r.especialidad, r.en_espera, r.alta, r.media, r.baja, r.mas_de_1_anio, r.mas_de_500_dias,
@@ -244,6 +246,17 @@ export function Indicadores({ fecha, data, esp, setEsp, onVer }) {
             detalle={<>{k.cobertura.evaluados} de {k.cobertura.en_espera} solicitudes están ordenadas con el mismo criterio: {k.cobertura.criterio}. No significa que todas hayan sido reevaluadas por un especialista.</>} />
         </div>
       </Seccion>
+
+      {k.decisiones && <Seccion titulo="Decisiones del sistema y revisión del especialista" sub="Cada vez que llega información de un paciente, el sistema decide y deja escrito por qué; el especialista la revisa.">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+          <Tarjeta titulo="Decisiones registradas" valor={k.decisiones.total} sub="por eventos, informes, cargas o criterios locales" />
+          <Tarjeta titulo="Pendientes de revisión" valor={k.decisiones.pendientes} tono={k.decisiones.pendientes ? "ambar" : null} sub="esperan el veredicto del especialista" />
+          <Tarjeta titulo="Adecuadas" valor={k.decisiones.adecuadas} tono="verde" sub="según el especialista" />
+          <Tarjeta titulo="Incorrectas" valor={k.decisiones.incorrectas} tono={k.decisiones.incorrectas ? "rojo" : null} sub="el sistema aprende de cada una (ver «Aprendizaje»)" />
+          <Tarjeta titulo="Desde que llega un evento hasta que el sistema decide" valor={re.mediana_segundos_evento_a_dictamen == null ? "—" : `${num(re.mediana_segundos_evento_a_dictamen, 2)} s`}
+            sub={`mediana${re.eventos_con_dictamen != null ? ` · ${re.eventos_con_dictamen} eventos con decisión` : ""}`} />
+        </div>
+      </Seccion>}
 
       <Seccion titulo="Situación de la lista hoy" sub={`${alcance === "todo el hospital" ? "Todo el hospital" : alcance}. Cambios comparados con el ${fmt(ini.fecha)}.`}>
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">

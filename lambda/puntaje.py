@@ -73,7 +73,12 @@ def valor_valido(m):
 # Codificación ordinal de la prioridad (convención de software, no pesos clínicos ni probabilidades)
 PUNTAJE_PRIORIDAD = {"alta": 3, "media": 2, "baja": 1}
 # Razones que provienen de una regla con fuente (la prioridad quedó sustentada por una regla, cambie o no)
-FACTORES_REGLA = {"tabla_oficial", "riesgo_vital", "criterio_registro", "criterio_clinico", "combinacion", "urgencia", "oncologico"}
+FACTORES_REGLA = {"tabla_oficial", "riesgo_vital", "criterio_registro", "criterio_clinico", "combinacion", "urgencia", "oncologico",
+                  "criterio_local"}
+# Capas que se aplican al final de puntuar (y de decisor.decidir) sobre los pacientes en lista: funciones
+# (resultado, perfil, corte) -> resultado. Vacía por defecto: este módulo no depende del almacén. aprendizaje.py registra
+# la de los criterios locales aprobados por jefatura (ESPECIFICACION_MVP §6.3). Una capa solo puede subir.
+CAPAS = []
 
 # Mediciones que reflejan semanas o meses (no un momento): las únicas que pueden aparecer como razón de prioridad
 MEDICIONES_ESTABLES = ("HbA1c", "PHQ9")
@@ -326,6 +331,15 @@ def aplicar_registro(perfil, corte, categoria, razones):
     le = perfil["lista_espera"]
     cie = cie_base(le["diagnostico_cie10"])
     enf = criterios_registro().get(cie)
+    # Alerta del PHQ-9 (no cambia la prioridad). Va antes del `if not enf: return`: F32/F33 no están en
+    # criterios_registro.json y, puesta al final, la función retornaba antes y la alerta nunca se emitía.
+    if cie in ("F32", "F33"):
+        phq = sorted([m for m in perfil.get("mediciones", []) if m["tipo_medicion"] == "PHQ9" and d(m["fecha_medicion"]) <= corte
+                      and valor_valido(m)], key=lambda m: m["fecha_medicion"])
+        if phq and phq[-1]["valor"] >= 16:
+            razones.append({"factor": "alerta_clinica", "valor": f'PHQ-9 = {phq[-1]["valor"]:g} ({phq[-1]["fecha_medicion"]}): depresión más grave',
+                            "fuente": "NICE NG222: PHQ-9 ≥ 16 = \"more severe depression\" (no cambia la prioridad por sí solo)",
+                            "riesgo": "Preguntar directamente por ideación suicida (NICE NG222); con plan o intención, derivar de inmediato."})
     if not enf:
         return categoria
     ingreso = d(le["fecha_ingreso_lista"])  # lo anterior a la SIC ya lo vio el especialista al priorizar
@@ -365,13 +379,6 @@ def aplicar_registro(perfil, corte, categoria, razones):
         razones.append({"factor": "piso", "valor": f'{enf["enfermedad"]}: no tiene prioridad baja → prioridad {piso}',
                         "fuente": f'{enf["niveles"]["baja"]["justificacion"]} · {enf["fuente_url"]}', "riesgo": enf.get("riesgo")})
         categoria = piso
-    if cie in ("F32", "F33"):
-        phq = sorted([m for m in perfil.get("mediciones", []) if m["tipo_medicion"] == "PHQ9" and d(m["fecha_medicion"]) <= corte
-                      and valor_valido(m)], key=lambda m: m["fecha_medicion"])
-        if phq and phq[-1]["valor"] >= 16:
-            razones.append({"factor": "alerta_clinica", "valor": f'PHQ-9 = {phq[-1]["valor"]:g} ({phq[-1]["fecha_medicion"]}): depresión más grave',
-                            "fuente": "NICE NG222: PHQ-9 ≥ 16 = \"more severe depression\" (no cambia la prioridad por sí solo)",
-                            "riesgo": "Preguntar directamente por ideación suicida (NICE NG222); con plan o intención, derivar de inmediato."})
     return categoria
 
 
@@ -422,7 +429,43 @@ def inasistencias_consecutivas(citas):
     return mejor
 
 
+def linea_clinica(perfil, corte):
+    """Eventos posteriores a la SIC (fecha ≤ corte, en orden), última descompensación, última estabilización y estado
+    clínico. Es la misma lectura que usa puntuar: la comparten la capa de criterios locales y la bitácora (patrón)."""
+    ingreso = d(perfil["lista_espera"]["fecha_ingreso_lista"])
+    eventos = sorted([e for e in perfil.get("eventos_clinicos", []) if ingreso <= d(e["fecha_evento"]) <= corte],
+                     key=lambda e: e["fecha_evento"])
+    ult_desc = next((e for e in reversed(eventos) if descompensa(e)), None)
+    ult_estab = next((e for e in reversed(eventos) if estabiliza(e)), None)
+    estado = "sin_cambios"
+    if ult_desc:
+        estado = "estabilizado" if ult_estab and ult_estab["fecha_evento"] > ult_desc["fecha_evento"] else "descompensado"
+    elif ult_estab:
+        estado = "estabilizado"
+    return eventos, ult_desc, ult_estab, estado
+
+
+def evento_determinante(perfil, corte):
+    """La descompensación vigente que determina el estado clínico (None si no hay o si se estabilizó después):
+    {id_evento, tipo_evento, subtipo, severidad, fecha_evento}. Con ella se arma el patrón de aprendizaje (§6.2)."""
+    _, ult_desc, _, estado = linea_clinica(perfil, corte)
+    return _determinante(ult_desc) if estado == "descompensado" else None
+
+
+def _determinante(ev):
+    return {k: ev.get(k) for k in ("id_evento", "tipo_evento", "subtipo", "severidad", "fecha_evento")} if ev else None
+
+
 def puntuar(perfil, corte):
+    """Puntaje de reglas + las capas registradas (criterios locales), solo para quienes están en la lista."""
+    r = _puntuar(perfil, corte)
+    if r and not r.get("excluido"):
+        for capa in CAPAS:
+            r = capa(r, perfil, corte)
+    return r
+
+
+def _puntuar(perfil, corte):
     pac, le = perfil["paciente"], perfil["lista_espera"]
     if pac.get("fallecido") and pac.get("fecha_defuncion") and d(pac["fecha_defuncion"]) <= corte:
         return {"id_paciente": perfil["id_paciente"], "excluido": True, "motivo": "fallecido", "fecha": pac["fecha_defuncion"], "razones": []}
@@ -441,15 +484,7 @@ def puntuar(perfil, corte):
                 "fuente": "Priorización de la SIC (CUD / Thalamus)"}]
 
     # --- Capa 1: estado clínico posterior a la SIC --------------------------------
-    eventos = sorted([e for e in perfil.get("eventos_clinicos", []) if ingreso <= d(e["fecha_evento"]) <= corte],
-                     key=lambda e: e["fecha_evento"])
-    ult_desc = next((e for e in reversed(eventos) if descompensa(e)), None)
-    ult_estab = next((e for e in reversed(eventos) if estabiliza(e)), None)
-    estado = "sin_cambios"
-    if ult_desc:
-        estado = "estabilizado" if ult_estab and ult_estab["fecha_evento"] > ult_desc["fecha_evento"] else "descompensado"
-    elif ult_estab:
-        estado = "estabilizado"
+    eventos, ult_desc, ult_estab, estado = linea_clinica(perfil, corte)
 
     categoria = inicial
     oficial = tabla_hlf().get(cie)  # diagnóstico elegido de la tabla oficial: su prioridad es el piso (nunca baja)
@@ -631,6 +666,7 @@ def puntuar(perfil, corte):
             "fecha_descompensacion": ult_desc["fecha_evento"] if estado == "descompensado" else None,
             "dias_desde_descompensacion": (corte - d(ult_desc["fecha_evento"])).days if estado == "descompensado" else None,
             "registro_descompensacion": ult_desc.get("registrado") if estado == "descompensado" else None,
+            "evento_determinante": _determinante(ult_desc) if estado == "descompensado" else None,
             "riesgo_inasistencia": consecutivas >= 2, "no_shows": no_show, "razones": razones}
 
 

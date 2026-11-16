@@ -1,67 +1,73 @@
-﻿# Publica todo en AWS: API (Lambda + API Gateway + DynamoDB + S3) con CloudFormation y la página en Amplify.
-# Uso, desde la raíz del repo (perfil AWS "hack" con credenciales vigentes):
-#   powershell -ExecutionPolicy Bypass -File scripts\deploy_aws.ps1            # backend + datos + página
-#   powershell -ExecutionPolicy Bypass -File scripts\deploy_aws.ps1 -SoloFront
-#   -Algoritmo reglas   publica sin IA (solo reglas); por defecto rubrica (IA lee + reglas deciden)
-param([switch]$SoloFront, [string]$Perfil = "hack", [string]$Region = "us-east-1",
-      [string]$Modelo = "us.anthropic.claude-sonnet-5", [string]$Stack = "ambulatorio-hlf", [string]$AppAmplify = "",
-      [ValidateSet("reglas", "rubrica")][string]$Algoritmo = "rubrica")
-$ErrorActionPreference = "Stop"
-$aws = "C:\Program Files\Amazon\AWSCLIV2\aws.exe"
+﻿# Despliega el Ambulatorio Dinamico HLF en AWS desde PowerShell (Windows PowerShell 5.1 o PowerShell 7).
+#
+#   powershell -ExecutionPolicy Bypass -File scripts\deploy_aws.ps1                      # prueba: backend + datos + pagina
+#   powershell -ExecutionPolicy Bypass -File scripts\deploy_aws.ps1 -Ambiente prod       # pide confirmacion
+#   powershell -ExecutionPolicy Bypass -File scripts\deploy_aws.ps1 -SoloFront           # solo la pagina
+#   powershell -ExecutionPolicy Bypass -File scripts\deploy_aws.ps1 -Parametros "ModelId=simulado CorreoAlertas=ti@hospital.cl"
+#
+# Este archivo solo busca un Python 3.11 o superior y le pasa los argumentos a scripts\desplegar.py, que es donde
+# esta la logica (la misma que usa scripts/desplegar.sh). No tiene rutas ni perfiles fijos: usa aws, sam y npm del PATH
+# y avisa si falta alguno. El modo de IA, el stack y la region salen de samconfig.toml.
+# Sin tildes a proposito: Windows PowerShell 5.1 lee mal los archivos UTF-8 sin BOM.
+param(
+    [ValidateSet("prueba", "prod")][string]$Ambiente = "prueba",
+    [switch]$SoloFront,       # solo compila y publica la pagina
+    [switch]$SoloBackend,     # no publica la pagina
+    [switch]$SinTests,        # solo para volver atras a una version ya probada
+    [switch]$SinDatos,        # no carga el registro sintetico
+    [switch]$RecargarDatos,   # carga el registro sintetico aunque la tabla ya tenga pacientes
+    [switch]$Si,              # no pedir confirmacion (pipeline con aprobacion previa)
+    [string]$Parametros = "", # "Clave=Valor Clave2=Valor2": pisan los de samconfig.toml en este despliegue
+    [string]$Region = "",     # por defecto, la de samconfig.toml
+    [string]$Perfil = "",     # perfil de AWS CLI; por defecto, las credenciales activas
+    [string]$AppAmplify = ""  # aplicacion de Amplify donde publicar; por defecto, la que crea el stack
+)
 $raiz = Split-Path -Parent $PSScriptRoot
-$cuenta = & $aws sts get-caller-identity --profile $Perfil --query Account --output text
-if (-not $cuenta) { throw "Credenciales del perfil '$Perfil' vencidas: renuévalas en el portal del evento." }
-$art = "ambulatorio-hlf-artefactos-$cuenta"
 
-if (-not $SoloFront) {
-    # 1) Paquete limpio de la Lambda: código + Pydantic para Linux ARM (Lambda arm64, Python 3.12)
-    # carpeta nueva en cada publicación (Windows a veces bloquea borrar la anterior)
-    $b = Join-Path $env:TEMP ("hlf_build_" + (Get-Date -Format "yyyyMMdd_HHmmss"))
-    New-Item -ItemType Directory -Force "$b\lambda_pkg" | Out-Null
-    Get-ChildItem "$raiz\lambda\*.py" | Where-Object Name -ne "local_server.py" | Copy-Item -Destination "$b\lambda_pkg\"
-    Copy-Item "$raiz\lambda\conocimiento" -Destination "$b\lambda_pkg\conocimiento" -Recurse   # criterios, combinaciones y rúbrica (JSON)
-    python -m pip install -q -r "$raiz\lambda\requirements.txt" --platform manylinux2014_aarch64 --python-version 3.12 `
-        --implementation cp --only-binary=:all: --target "$b\lambda_pkg"
-    [IO.File]::WriteAllText("$b\template.yaml", (Get-Content "$raiz\template.yaml" -Raw).Replace("CodeUri: lambda/", "CodeUri: lambda_pkg/"),
-        [Text.UTF8Encoding]::new($false))
-    & $aws s3 mb "s3://$art" --profile $Perfil --region $Region 2>$null | Out-Null
-    & $aws cloudformation package --template-file "$b\template.yaml" --s3-bucket $art --output-template-file "$b\empaquetado.yaml" --profile $Perfil --region $Region | Out-Null
-    & $aws cloudformation deploy --template-file "$b\empaquetado.yaml" --stack-name $Stack --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND `
-        --parameter-overrides ModelId=$Modelo BedrockRegion=$Region Algoritmo=$Algoritmo --profile $Perfil --region $Region
-}
-$api = & $aws cloudformation describe-stacks --stack-name $Stack --profile $Perfil --region $Region --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text
-$bucket = & $aws cloudformation describe-stacks --stack-name $Stack --profile $Perfil --region $Region --query "Stacks[0].Outputs[?OutputKey=='BucketName'].OutputValue" --output text
-if (-not $SoloFront) {
-    # 2) Datos (no van a git): perfiles.json al bucket privado
-    & $aws s3 cp "$raiz\data\perfiles.json" "s3://$bucket/perfiles.json" --profile $Perfil --region $Region | Out-Null
-    $salud = curl.exe -s "$api/health"
-    if ($salud -notmatch '"ok": true') { throw "La API no responde bien: $salud" }
-    # /health no lee los criterios: la lista sí (reintenta: la Lambda tarda unos segundos en cambiar de versión)
-    for ($i = 0; $i -lt 6; $i++) { $lista = curl.exe -s "$api/pacientes"; if ($lista -match '"pacientes"') { break }; Start-Sleep 10 }
-    if ($lista -notmatch '"pacientes"') { throw "La lista no carga: $($lista.Substring(0, [Math]::Min(300, $lista.Length)))" }
-    Write-Host "API OK: $api" -ForegroundColor Green
+# Existe y es 3.11+. En Windows "python3" puede ser el acceso directo a la Tienda, que no es un Python: por eso se prueba.
+function Test-Python([string]$comando) {
+    if (-not (Get-Command $comando -ErrorAction SilentlyContinue)) { return $false }
+    try { & $comando -c "import sys; sys.exit(sys.version_info < (3, 11))" 2>$null | Out-Null } catch { return $false }
+    return $LASTEXITCODE -eq 0
 }
 
-# 3) Página: build apuntando a la API de AWS y publicación en Amplify (sin Git)
-$env:VITE_API_URL = $api
-$dist = Join-Path $env:TEMP "hlf_dist"; if (Test-Path $dist) { Remove-Item $dist -Recurse -Force }
-Push-Location "$raiz\front"; npx vite build --outDir $dist | Out-Null; $okBuild = $LASTEXITCODE -eq 0; Pop-Location
-# nunca publicar un sitio vacío: si el build falla o no deja index.html, se corta aquí
-if (-not $okBuild -or -not (Test-Path (Join-Path $dist "index.html"))) { throw "El build del front falló: no se publica la página" }
-$zip = Join-Path $env:TEMP "hlf_dist.zip"
-python -X utf8 -c "import zipfile,os,sys; s,z=sys.argv[1],zipfile.ZipFile(sys.argv[2],'w',zipfile.ZIP_DEFLATED); [z.write(os.path.join(r,f),os.path.relpath(os.path.join(r,f),s).replace(os.sep,'/')) for r,_,fs in os.walk(s) for f in fs]; z.close()" $dist $zip
-if (-not $AppAmplify) {
-    $AppAmplify = & $aws amplify list-apps --profile $Perfil --region $Region --query "apps[?name=='ambulatorio-dinamico-hlf'].appId | [0]" --output text
+# Tiene instalado requirements-dev.txt. Cuando hay varios Python en el computador se prefiere ese.
+function Test-Dependencias([string]$comando) {
+    try { & $comando -c "import importlib.util as u, sys; sys.exit(not all(u.find_spec(m) for m in ('yaml', 'cfnlint', 'pytest')))" 2>$null | Out-Null } catch { return $false }
+    return $LASTEXITCODE -eq 0
 }
-if (-not $AppAmplify -or $AppAmplify -eq "None") {
-    $AppAmplify = & $aws amplify create-app --name ambulatorio-dinamico-hlf --platform WEB --profile $Perfil --region $Region --query "app.appId" --output text
-    & $aws amplify create-branch --app-id $AppAmplify --branch-name main --stage PRODUCTION --profile $Perfil --region $Region | Out-Null
+
+$python = $null
+if ($env:PYTHON) {
+    if (-not (Test-Python $env:PYTHON)) { Write-Host "ERROR: PYTHON=$($env:PYTHON) no existe o es anterior a Python 3.11." -ForegroundColor Red; exit 1 }
+    $python = $env:PYTHON
+} else {
+    $primero = $null
+    foreach ($candidato in "python", "python3", "py") {
+        if (-not (Test-Python $candidato)) { continue }
+        if (-not $primero) { $primero = $candidato }
+        if (Test-Dependencias $candidato) { $python = $candidato; break }
+    }
+    if (-not $python) { $python = $primero }  # ninguno tiene las dependencias: desplegar.py dira cual falta y como instalarla
 }
-$dep = & $aws amplify create-deployment --app-id $AppAmplify --branch-name main --profile $Perfil --region $Region --output json | ConvertFrom-Json
-curl.exe -s -o NUL -X PUT -H "Content-Type: application/zip" --data-binary "@$zip" $dep.zipUploadUrl
-& $aws amplify start-deployment --app-id $AppAmplify --branch-name main --job-id $dep.jobId --profile $Perfil --region $Region | Out-Null
-for ($i = 0; $i -lt 30; $i++) {
-    $s = & $aws amplify get-job --app-id $AppAmplify --branch-name main --job-id $dep.jobId --profile $Perfil --region $Region --query "job.summary.status" --output text
-    if ($s -in "SUCCEED", "FAILED", "CANCELLED") { break }; Start-Sleep 5
+if (-not $python) {
+    Write-Host "ERROR: no encuentro Python 3.11 o superior en el PATH." -ForegroundColor Red
+    Write-Host "  Instale Python 3.12 (el mismo de la Lambda) desde https://www.python.org/downloads/ y abra una terminal nueva."
+    Write-Host "  Si esta instalado en otra ruta: `$env:PYTHON = 'C:\ruta\python.exe'"
+    exit 1
 }
-Write-Host "Página ($s): https://main.$AppAmplify.amplifyapp.com" -ForegroundColor Green
+
+$argumentos = @((Join-Path $raiz "scripts\desplegar.py"), $Ambiente)
+if ($SoloFront) { $argumentos += "--solo-front" }
+if ($SoloBackend) { $argumentos += "--solo-backend" }
+if ($SinTests) { $argumentos += "--sin-tests" }
+if ($SinDatos) { $argumentos += "--sin-datos" }
+if ($RecargarDatos) { $argumentos += "--recargar-datos" }
+if ($Si) { $argumentos += "--si" }
+if ($Parametros) { $argumentos += @("--parametros", $Parametros) }
+if ($Region) { $argumentos += @("--region", $Region) }
+if ($Perfil) { $argumentos += @("--perfil", $Perfil) }
+if ($AppAmplify) { $argumentos += @("--app-amplify", $AppAmplify) }
+
+& $python @argumentos
+exit $LASTEXITCODE

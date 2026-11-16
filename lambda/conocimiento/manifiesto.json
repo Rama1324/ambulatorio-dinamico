@@ -1,0 +1,468 @@
+{
+ "esquema": 1,
+ "nota": "Generado por scripts/empaquetar_conocimiento.py: no editar a mano. sha256 = huella del contenido canónico de cada JSON (claves ordenadas, sin espacios) o del texto de cada .py con saltos de línea \\n; no depende del formato del archivo.",
+ "paquete": {
+  "etiqueta": "kb-2026.11.0",
+  "huella": "72464894da99",
+  "generado": "2026-11-14T15:37:46+00:00"
+ },
+ "fuentes": [
+  {
+   "id": "ssmso_hlf_2025",
+   "titulo": "Tabla de priorización SSMSO 2025, sección HLF: fila que se usa si un diagnóstico del registro se descompensa",
+   "tipo": "tabla_oficial",
+   "archivo": "lambda/conocimiento/ssmso_hlf_2025.json",
+   "version": "ssmso_hlf_2025_v1",
+   "sha256": "3afe5c833b221ec506980bb8b08313710ad4ceb9aaeaa9e8211c8b2ac5efe56a",
+   "fecha": "2026-10-15",
+   "origen": {
+    "documento": "SSMSO (2025). Priorización diagnósticos especialidades médicas y odontológicas No GES, código PA–DPGCH, versión 1.0, junio 2025. §11.1 Hospital Dra. Eloísa Díaz Inzunza, págs. 84–111",
+    "url": "https://redsalud.ssmso.cl/wp-content/uploads/2025/07/PRIORIZACION-SSMSO-02.07.2025-I-ETAPA.pdf",
+    "metodo": "PDF oficial descargado y convertido a texto; cada fila se verificó a mano en el texto de su página. En el texto extraído la etiqueta ALTA/MEDIANA/BAJA queda después del primer diagnóstico de su grupo; los grupos se reconstruyeron con esa regla y se revisaron uno por uno."
+   },
+   "origen_url": "https://redsalud.ssmso.cl/wp-content/uploads/2025/07/PRIORIZACION-SSMSO-02.07.2025-I-ETAPA.pdf",
+   "estado": "verificado en la fuente",
+   "estado_detalle": "9 diagnósticos con fila de descompensación (4 con equivalencia a validar por médico), 3 con fila candidata a validar por médico y 5 sin fila",
+   "entradas": 17,
+   "usado_por": [
+    "scripts/consolidar_rubrica.py"
+   ],
+   "nota": "las mismas filas están como constante en puntaje.FILA_DESCOMPENSADO; un test exige que coincidan"
+  },
+  {
+   "id": "diagnosticos_tabla_hlf",
+   "titulo": "Tabla de priorización SSMSO 2025, sección HLF: diagnósticos y síntomas de las 7 especialidades (códigos HLF-…)",
+   "tipo": "tabla_oficial",
+   "archivo": "lambda/conocimiento/diagnosticos_tabla_hlf.json",
+   "version": "tabla_hlf_2025_v1",
+   "sha256": "a6ae265d4f24206259880b54227758db4d01594719568908f284379f16e72eba",
+   "fecha": null,
+   "origen": {
+    "documento": "SSMSO (2025). Priorización diagnósticos especialidades médicas y odontológicas No GES, §11.1 Hospital Dra. Eloísa Díaz Inzunza",
+    "url": "https://redsalud.ssmso.cl/wp-content/uploads/2025/07/PRIORIZACION-SSMSO-02.07.2025-I-ETAPA.pdf",
+    "metodo": "Filas de las secciones de adulto de las 7 especialidades del registro (Diabetología se suma a Endocrinología). La prioridad se leyó con dos métodos independientes: el orden del texto del PDF y el color de la celda (verde alta, azul mediana, amarilla baja). Coincidieron en 162 de 176 filas; las 14 diferencias (etiqueta en una celda compartida con otra especialidad) se revisaron en la imagen de la página. 'ALTA- URGENCIA' (DM2 con cetoacidosis) se marca urgencia."
+   },
+   "origen_url": "https://redsalud.ssmso.cl/wp-content/uploads/2025/07/PRIORIZACION-SSMSO-02.07.2025-I-ETAPA.pdf",
+   "estado": "verificado en la fuente",
+   "estado_detalle": "159 texto y color de la celda coinciden · 13 verificado en la imagen de la página · 2 fila unida (estaba partida en 2 líneas); verificada en la imagen de la página. Equivalencias del equipo, a validar por el especialista: 32 filas con cie10_base y 19 con fila_si_empeora",
+   "entradas": 174,
+   "usado_por": [
+    "lambda/puntaje.py"
+   ]
+  },
+  {
+   "id": "ord536",
+   "titulo": "MINSAL Ord. C N°536 (21-03-2025): orden de la lista de espera No GES",
+   "tipo": "norma",
+   "archivo": "lambda/conocimiento/ord536.json",
+   "version": "ord536_v1",
+   "sha256": "83b214b94d1e272fe37c7622ba9062298b0eff28bc59af3099d08aec9a93fb70",
+   "fecha": "2026-10-15",
+   "origen": {
+    "documento": "MINSAL Ord. C N°536 (21-03-2025), criterios de orden de la lista de espera, recogido en el Manual de Gestión de la Demanda SSMSO 2025 (RE 2679), pág. 13"
+   },
+   "origen_url": null,
+   "estado": "fuente secundaria",
+   "estado_detalle": "Pendiente: Obtener el texto original del Ord. 536 para citar el numeral exacto.",
+   "entradas": 4,
+   "usado_por": [
+    "scripts/consolidar_rubrica.py"
+   ]
+  },
+  {
+   "id": "ges_especialista",
+   "titulo": "Garantías GES de oportunidad para la atención por especialista (Ley 19.966)",
+   "tipo": "garantia_ges",
+   "archivo": "lambda/conocimiento/ges_especialista.json",
+   "version": "ges_especialista_v1",
+   "sha256": "3b143134b1cde596e0803d3787721caba2f2aeef10d2ab8031c26b6311530dc2",
+   "fecha": "2026-10-16",
+   "origen": {
+    "documento": "Garantías GES de oportunidad para la atención por médico especialista (Ley 19.966).",
+    "url": "https://auge.minsal.cl/problemasdesalud/lista"
+   },
+   "origen_url": "https://auge.minsal.cl/problemasdesalud/lista",
+   "estado": "verificado en la fuente",
+   "estado_detalle": "8 de 8 problemas con la cita textual y la URL de su página oficial; 5 garantías excluidas con su motivo (no fijan un plazo de consulta con especialista)",
+   "entradas": 8,
+   "usado_por": [
+    "lambda/puntaje.py"
+   ]
+  },
+  {
+   "id": "criterios_registro",
+   "titulo": "Criterios oficiales por diagnóstico del registro (Queensland CPC y NICE)",
+   "tipo": "criterios_clinicos",
+   "archivo": "lambda/conocimiento/criterios_registro.json",
+   "version": "criterios_registro_v1",
+   "sha256": "afa85c7d0739e2f3b669aa7b20717aad06369b5da0f232965eb4163b41d415ca",
+   "fecha": "2026-10-15",
+   "origen": {
+    "documento": "Queensland Health, Clinical Prioritisation Criteria (CPC)",
+    "url": "https://www.health.qld.gov.au/cpc"
+   },
+   "origen_url": "https://www.health.qld.gov.au/cpc",
+   "estado": "verificado en la fuente",
+   "estado_detalle": "16 de 16 enfermedades con la URL de su página oficial (Queensland CPC; NICE en salud mental). Guía extranjera: la equivalencia con alta/media/baja del SSMSO es una propuesta del equipo; solo sube la prioridad",
+   "entradas": 16,
+   "usado_por": [
+    "lambda/criterios.py",
+    "lambda/puntaje.py"
+   ]
+  },
+  {
+   "id": "criterios_especialidad",
+   "titulo": "Criterios clínicos por enfermedad y especialidad (dataset aportado al equipo)",
+   "tipo": "criterios_clinicos",
+   "archivo": "lambda/conocimiento/criterios_especialidad.json",
+   "version": "1.0",
+   "sha256": "ecaf737cbec6b07044254ad8f2d9b5bedf53a0d13061429da74f88680df8d59e",
+   "fecha": null,
+   "origen": {
+    "documento": "Categorización clínica por especialidad, enfermedad y nivel de prioridad según los documentos aportados."
+   },
+   "origen_url": null,
+   "estado": "origen no confirmado: solo sube",
+   "estado_detalle": "46 enfermedades de 5 especialidades y 16 excepciones de urgencia. Dataset aportado al equipo, sin validación clínica externa: se usa solo para subir, nunca para bajar de lo que dice la tabla oficial (docs/CRITERIO_PRIORIZACION.md §3)",
+   "entradas": 46,
+   "usado_por": [
+    "lambda/criterios.py"
+   ]
+  },
+  {
+   "id": "combinaciones_riesgo",
+   "titulo": "Combinaciones de riesgo: condición de base del paciente + evento o hallazgo",
+   "tipo": "combinaciones",
+   "archivo": "lambda/conocimiento/combinaciones_riesgo.json",
+   "version": "combinaciones_v2",
+   "sha256": "d87174bf8691798c4cdcccb028d69e7f8b8e07b988ae465301557162c0868428",
+   "fecha": "2026-10-15",
+   "origen": {
+    "documento": "cada combinación cita su documento, su cita textual y su URL o página (campo fuente)"
+   },
+   "origen_url": null,
+   "estado": "verificado en parte",
+   "estado_detalle": "35 de 44 verificadas en el documento oficial (25 urgencia · 10 alta); 9 sin verificar: solo generan una alerta visible, no mueven a nadie",
+   "entradas": 44,
+   "usado_por": [
+    "lambda/combinaciones.py"
+   ]
+  },
+  {
+   "id": "pubmed_evidencia",
+   "titulo": "Ventanas de riesgo tras un evento (PubMed)",
+   "tipo": "evidencia",
+   "archivo": "lambda/conocimiento/pubmed_evidencia.json",
+   "version": "evidencia_v1",
+   "sha256": "bec5d7e4117327e8195e05b234b52cec6348e8957258aa4d4776e189b6d607c4",
+   "fecha": "2026-10-15",
+   "origen": {
+    "documento": "cada ventana cita su PMID (campo fuente)",
+    "generado_por": "scripts/buscar_pubmed.py"
+   },
+   "origen_url": null,
+   "estado": "verificado en parte",
+   "estado_detalle": "12 de 24 ventanas con fuente (12 con el PMID confirmado en NCBI); 12 a validar por médico: sin fuente, el evento no vence",
+   "entradas": 24,
+   "usado_por": [
+    "scripts/buscar_pubmed.py",
+    "scripts/consolidar_rubrica.py"
+   ]
+  },
+  {
+   "id": "guias_umbrales",
+   "titulo": "Umbrales de las mediciones clave (guías MINSAL e internacionales)",
+   "tipo": "evidencia",
+   "archivo": "lambda/conocimiento/guias_umbrales.json",
+   "version": "evidencia_v1",
+   "sha256": "a0ab0f932ce4cf3c359427636e84ce1ee408123a565052ac82083f5ac033e9c9",
+   "fecha": "2026-10-15",
+   "origen": {
+    "documento": "cada umbral cita su guía o su PMID (campo fuente)",
+    "generado_por": "scripts/buscar_pubmed.py"
+   },
+   "origen_url": null,
+   "estado": "verificado en parte",
+   "estado_detalle": "23 de 24 umbrales con fuente (10 guia_internacional · 7 guia_minsal · 6 pubmed); 1 a validar por médico",
+   "entradas": 24,
+   "usado_por": [
+    "scripts/buscar_pubmed.py",
+    "scripts/consolidar_rubrica.py"
+   ]
+  },
+  {
+   "id": "rubrica_v1",
+   "titulo": "Rúbrica consolidada que lee la fórmula: tabla, Ord. 536, ventanas y umbrales",
+   "tipo": "rubrica",
+   "archivo": "lambda/conocimiento/rubrica_v1.json",
+   "version": "rubrica_v1.2",
+   "sha256": "1ba410a63bf71ed505734c7348560d9e567916b7b7dde17f824919e9fa261067",
+   "fecha": "2026-10-15",
+   "origen": {
+    "documento": "consolidado de ssmso_hlf_2025, ord536, pubmed_evidencia, guias_umbrales",
+    "generado_por": "scripts/consolidar_rubrica.py"
+   },
+   "origen_url": null,
+   "estado": "consolidado de otras fuentes",
+   "estado_detalle": "17 pendientes para médicos; 13 ventanas de vigencia (10 con fuente) y 8 mediciones clave",
+   "entradas": 17,
+   "usado_por": [
+    "lambda/decisor.py",
+    "scripts/consolidar_rubrica.py"
+   ],
+   "derivada_de": [
+    "ssmso_hlf_2025",
+    "ord536",
+    "pubmed_evidencia",
+    "guias_umbrales"
+   ]
+  }
+ ],
+ "motor": {
+  "huella": "0af1fc502dfa",
+  "sha256": "0af1fc502dfa0293c5ebf35eac42d2094219a80a9c7b4944e5b671a088330ab3",
+  "archivos": [
+   {
+    "archivo": "lambda/puntaje.py",
+    "sha256": "57695be8cdc9ebc95002080ad763476ea58d593babaf83e59fd610d93776c6f8"
+   },
+   {
+    "archivo": "lambda/decisor.py",
+    "sha256": "1118a4121b714265ba2d2bf7c1ebc15a44ccf2977bf8dc3079dccbb2550f7852"
+   },
+   {
+    "archivo": "lambda/controles.py",
+    "sha256": "aa258be1f08ebed75ef5ae586ed52419618f8316a61677e7f2bfcb378cb1842d"
+   },
+   {
+    "archivo": "lambda/algoritmo.py",
+    "sha256": "6dba9bd98696a0a5098f14d82520340026159f8baaf5c3516e19a72bf0d2ba90"
+   },
+   {
+    "archivo": "lambda/rubrica.py",
+    "sha256": "f7d11afd883a9fec213d6c03dda22807d3bb3a12475d76521d47b06f289c9759"
+   },
+   {
+    "archivo": "lambda/criterios.py",
+    "sha256": "ea83c9d723c66eee5ad21d945d88376d3592b6ed73cff21a2be3433c9863e64a"
+   },
+   {
+    "archivo": "lambda/combinaciones.py",
+    "sha256": "ad29dad647e63ab30420f87290db3896e225db8ab76e85352b83319f293a94a0"
+   },
+   {
+    "archivo": "lambda/lector_documento.py",
+    "sha256": "752a8c7ac9346892e6ac7e5c335476d0ab62c9acfbf723a38f24332af2047818"
+   }
+  ],
+  "constantes": [
+   {
+    "nombre": "puntaje.FILA_DESCOMPENSADO",
+    "archivo": "lambda/puntaje.py",
+    "sha256": "009528e54882",
+    "entradas": 9,
+    "fuente": "Fila oficial de la tabla del HLF que describe el diagnóstico descompensado / no controlado. cie10: (fila tal como aparece en el documento, prioridad oficial, página). Solo se incluyen filas cuyo texto expresa descompensación o falta de control. Los diagnósticos sin esa fila (I10 HTA, K21 ERGE, F41, G43, E66, M17, M54, M75) mantienen su prioridad y quedan marcados para revisión."
+   },
+   {
+    "nombre": "puntaje.EQUIVALENCIA_A_VALIDAR",
+    "archivo": "lambda/puntaje.py",
+    "sha256": "04b58ed1744b",
+    "entradas": 4,
+    "fuente": "Equivalencias CIE-10 → fila de la tabla que son interpretación del equipo y deben validarse con el especialista."
+   },
+   {
+    "nombre": "puntaje.FILA_ONCOLOGICA",
+    "archivo": "lambda/puntaje.py",
+    "sha256": "3be22db6e34f",
+    "entradas": 2,
+    "fuente": "Cáncer activo o sospechoso. En la sección del HLF de la tabla SSMSO 2025 TODA fila de cáncer activo o sospechoso es ALTA (verificado en imagen: págs. 88, 94, 95 y 111); \"antecedente de neoplasia en remisión\" es BAJA (pág. 102) y no sube. Especialidades con fila propia → esa fila; las demás usan el patrón de la tabla (equivalencia a validar)."
+   },
+   {
+    "nombre": "puntaje.PATRON_ONCOLOGICO",
+    "archivo": "lambda/puntaje.py",
+    "sha256": "7e0b984c71ae",
+    "valor": [
+     "toda fila de cáncer activo o sospechoso de la tabla del HLF es prioridad alta (págs. 88, 94, 95, 111)",
+     "alta",
+     "88, 94, 95, 111"
+    ],
+    "fuente": "Cáncer activo o sospechoso. En la sección del HLF de la tabla SSMSO 2025 TODA fila de cáncer activo o sospechoso es ALTA (verificado en imagen: págs. 88, 94, 95 y 111); \"antecedente de neoplasia en remisión\" es BAJA (pág. 102) y no sube. Especialidades con fila propia → esa fila; las demás usan el patrón de la tabla (equivalencia a validar)."
+   },
+   {
+    "nombre": "puntaje.RANGO_VALIDO",
+    "archivo": "lambda/puntaje.py",
+    "sha256": "ed006c06a943",
+    "entradas": 8,
+    "fuente": "Valores físicamente posibles por tipo de medición: fuera de estos rangos el dato es inválido y no entra a ninguna regla"
+   },
+   {
+    "nombre": "puntaje.MEDICIONES_ESTABLES",
+    "archivo": "lambda/puntaje.py",
+    "sha256": "fe929684118a",
+    "valor": [
+     "HbA1c",
+     "PHQ9"
+    ],
+    "fuente": "Mediciones que reflejan semanas o meses (no un momento): las únicas que pueden aparecer como razón de prioridad"
+   },
+   {
+    "nombre": "puntaje.GES_POR_VENCER_DIAS",
+    "archivo": "lambda/puntaje.py",
+    "sha256": "8527a891e224",
+    "valor": 14,
+    "fuente": "aviso: quedan 14 días o menos para que venza la garantía"
+   },
+   {
+    "nombre": "puntaje.DIAS_ANTIGUEDAD",
+    "archivo": "lambda/puntaje.py",
+    "sha256": "4e47eb5525df",
+    "valor": 365,
+    "fuente": "MINSAL Ord. 536/2025: \"antigüedad en la lista de espera mayor a un año\""
+   },
+   {
+    "nombre": "puntaje.LACE_FUENTE",
+    "archivo": "lambda/puntaje.py",
+    "sha256": "fc05461f7160",
+    "valor": "Índice LACE (van Walraven et al., CMAJ 2010)",
+    "fuente": "Índice LACE — van Walraven C, et al. CMAJ 2010;182(6):551-7, Tabla 3 (riesgo de muerte o reingreso no planificado). L: días de estada (el dataset no los trae → 0) · A: ingreso de urgencia = 3 · C: Charlson → 0,1,2,3, ≥4 = 5 · E: consultas en urgencia en los 6 meses previos → 0,1,2,3, ≥4 = 4."
+   },
+   {
+    "nombre": "puntaje.LACE_VENTANA_DIAS",
+    "archivo": "lambda/puntaje.py",
+    "sha256": "bfa7634640c5",
+    "valor": 182,
+    "fuente": "\"previous 6 months\" del índice LACE"
+   },
+   {
+    "nombre": "puntaje.CHARLSON_LACE",
+    "archivo": "lambda/puntaje.py",
+    "sha256": "6b5538b3df40",
+    "entradas": 5,
+    "fuente": "Pesos de Charlson usados por el índice LACE (nota de la Tabla 3); CIE-10 según Quan et al., Med Care 2005."
+   },
+   {
+    "nombre": "puntaje.CONDICIONES_CHARLSON",
+    "archivo": "lambda/puntaje.py",
+    "sha256": "1fd41925fde2",
+    "entradas": 13,
+    "fuente": "Condiciones de Charlson con su peso en el índice LACE (nota de la Tabla 3, van Walraven 2010), para registrar comorbilidades."
+   },
+   {
+    "nombre": "puntaje.LETALIDAD_DX",
+    "archivo": "lambda/puntaje.py",
+    "sha256": "32af2e268412",
+    "entradas": 10,
+    "fuente": "Evidencia del informe de investigación (15-10-2026): reglas oficiales del registro, piso, letalidad, plazo. Letalidad de una descompensación por diagnóstico (1 = más letal). Ordinal y aproximado; cifras verificadas en PubMed."
+   },
+   {
+    "nombre": "puntaje.PLAZO_CATEGORIA",
+    "archivo": "lambda/puntaje.py",
+    "sha256": "e8b813ea2e7d",
+    "entradas": 3,
+    "fuente": "Plazo de referencia por prioridad (Queensland CPC: Cat 1 ≤30, Cat 2 ≤90, Cat 3 ≤365 días). La norma chilena no fija plazos No GES: es una referencia, no una regla que mueva a nadie."
+   },
+   {
+    "nombre": "puntaje.RIESGO_ESPERA",
+    "archivo": "lambda/puntaje.py",
+    "sha256": "71eb54535917",
+    "fuente": "Plazo de referencia por prioridad (Queensland CPC: Cat 1 ≤30, Cat 2 ≤90, Cat 3 ≤365 días). La norma chilena no fija plazos No GES: es una referencia, no una regla que mueva a nadie."
+   },
+   {
+    "nombre": "puntaje.GRUPOS_PROTECCION",
+    "archivo": "lambda/puntaje.py",
+    "sha256": "c69d239b50f3",
+    "valor": [
+     "NNA bajo protección del Estado",
+     "PRAIS",
+     "Rettig",
+     "Valech"
+    ],
+    "fuente": "MINSAL Ord. 536/2025, criterio 2"
+   },
+   {
+    "nombre": "puntaje.ACG_NIVELES",
+    "archivo": "lambda/puntaje.py",
+    "sha256": "7f24113ca48c",
+    "entradas": 4,
+    "fuente": "SSMSO (PDF HLF §4)"
+   },
+   {
+    "nombre": "criterios.CIE10",
+    "archivo": "lambda/criterios.py",
+    "sha256": "6cb89eceefd8",
+    "entradas": 46,
+    "fuente": "CIE-10 (3 caracteres, como los normaliza el importador) → enfermedad del JSON. El primero de cada lista va al catálogo."
+   }
+  ],
+  "reglas_en_codigo": [
+   {
+    "funcion": "puntaje.aplicar_registro",
+    "diagnosticos": [
+     "F32",
+     "F33"
+    ],
+    "efecto": "alerta",
+    "criterio": "NICE NG222: PHQ-9 ≥ 16 = \"more severe depression\" (no cambia la prioridad por sí solo)",
+    "riesgo": "Preguntar directamente por ideación suicida (NICE NG222); con plan o intención, derivar de inmediato."
+   },
+   {
+    "funcion": "puntaje.aplicar_registro",
+    "diagnosticos": [
+     "J45",
+     "J46"
+    ],
+    "requiere": "criterios_registro",
+    "efecto": "alta",
+    "criterio": "crisis de asma con UCI en los últimos 12 meses"
+   },
+   {
+    "funcion": "puntaje.aplicar_registro",
+    "diagnosticos": [
+     "J45",
+     "J46"
+    ],
+    "requiere": "criterios_registro",
+    "efecto": "media",
+    "criterio": "hospitalización por asma en los últimos 6 meses"
+   },
+   {
+    "funcion": "puntaje.aplicar_registro",
+    "diagnosticos": [
+     "J44",
+     "J43"
+    ],
+    "requiere": "criterios_registro",
+    "efecto": "media",
+    "criterio": "más de 3 exacerbaciones o consultas en urgencia en 12 meses"
+   },
+   {
+    "funcion": "puntaje.aplicar_registro",
+    "diagnosticos": [
+     "E11",
+     "E10",
+     "E13",
+     "E14"
+    ],
+    "requiere": "criterios_registro",
+    "efecto": "alta",
+    "criterio": "HbA1c > 10% con deterioro reciente"
+   },
+   {
+    "funcion": "puntaje.aplicar_registro",
+    "diagnosticos": [
+     "E11",
+     "E10",
+     "E13",
+     "E14"
+    ],
+    "requiere": "criterios_registro",
+    "efecto": "media",
+    "criterio": "HbA1c 8–10% con deterioro reciente"
+   }
+  ]
+ },
+ "avisos": [
+  "versión repetida: 'evidencia_v1' identifica a pubmed_evidencia y guias_umbrales (cada fuente debería tener la suya)",
+  "el JSON no trae fecha (fecha, generado o consultado): diagnosticos_tabla_hlf, criterios_especialidad"
+ ]
+}

@@ -3,13 +3,17 @@ import json
 import re
 import uuid
 
+import bitacora
 import importar
 import privacidad
 import puntaje
 from catalogo import catalogo
-from datos import ahora, fecha_de, fecha_valida, guardar, guardar_evento, perfiles_combinados
+from datos import (ahora, cambios_perfil, fecha_de, fecha_valida, guardar, guardar_evento, guardar_lote, guardar_perfil,
+                   items_de_perfil, perfiles_combinados)
 from evaluacion_ia import algoritmo_activo, cliente_llm, evaluar_y_guardar
 from lista import lista
+
+CANAL_ARCHIVO = "archivo"  # lo que llega por un Excel o CSV cargado en la app
 
 
 def normalizar_rut(valor):
@@ -67,19 +71,27 @@ def post_paciente(body):
                          "origen_derivacion": body.get("origen_derivacion") or "CESFAM/APS", "estado": "en_espera"},
         "eventos_clinicos": [], "mediciones": [], "citaciones": [],
     }
-    guardar({"id_paciente": pid, "sk": "paciente#", "perfil": json.dumps(perfil, ensure_ascii=False)})
+    guardar_perfil(pid, perfil)
     motivo = (body.get("motivo_interconsulta") or "").strip()
     motivo = privacidad.ocultar(motivo, [nombre], [rut])  # a la IA no va el nombre ni el RUT
     clasif = _aplicar_criterios(pid, dx["diagnostico_cie10"], motivo, ingreso, body)
     combs = _aplicar_combinaciones(pid, perfil, motivo, ingreso, body)
+    evaluacion = None
     if algoritmo_activo() == "rubrica":  # el modelo evalúa al paciente al ingresar, cruzando lo registrado (no solo la SIC)
         try:
-            evaluar_y_guardar(pid, corte)
+            evaluacion = evaluar_y_guardar(pid, corte)
         except Exception as e:  # si la IA falla, quedan las reglas: el ingreso no se pierde
             print(f"evaluación al ingresar {pid}: {type(e).__name__}: {e}")
+    # dictamen del ingreso (antes no estaba en la lista): qué prioridad quedó y con qué fundamento
+    dictamen = bitacora.registrar(pid, corte, {"tipo": "ingreso", "descripcion": f'ingreso a la lista: {dx["diagnostico_cie10"]} '
+                                                                                  f'{dx["diagnostico_texto"]} (prioridad inicial {body["prioridad_inicial"]})'},
+                                  None, canal="app", usuario=body.get("usuario"), evaluacion=evaluacion)
     data = lista(corte)
     fila = next((p for p in data["pacientes"] if p["id_paciente"] == pid), None)
-    return 200, {"id_paciente": pid, "paciente": fila, "criterio": clasif, "combinaciones": combs}
+    out = {"id_paciente": pid, "paciente": fila, "criterio": clasif, "combinaciones": combs}
+    if dictamen:
+        out["dictamen"] = dictamen
+    return 200, out
 
 
 def _aplicar_combinaciones(pid, perfil, texto, fecha, body):
@@ -125,9 +137,14 @@ def post_importar(body):
     out = {"informe": informe, "resumen": resumen, "avisos": avisos, "cargado": False,
            "impacto": _impacto(existentes, perfs, perfiles_combinados()[1], fecha_de(body))}
     if body.get("confirmar"):
-        for pid, p in perfs.items():
-            guardar({"id_paciente": pid, "sk": "paciente#", "perfil": json.dumps(p, ensure_ascii=False, default=str)})
-        out["cargado"] = True
+        # Se guarda por la tubería única de ingesta (ingesta.py): solo lo nuevo, ítem por ítem, con su traza (canal,
+        # momento en que llegó, lote), registro del lote, evaluación y dictamen de cada paciente con información nueva.
+        import ingesta
+        r = ingesta.registrar(datos, canal=CANAL_ARCHIVO, usuario=body.get("usuario", "equipo clínico"),
+                              archivo=", ".join(a.get("nombre", "") for a in archivos), corte=fecha_de(body),
+                              rechazados=ingesta.rechazos_de_informe(informe))
+        out.update(cargado=True, id_lote=r["id_lote"], dictamenes=r["dictamenes"],
+                   ingesta={k: r[k] for k in ("registrados", "duplicados", "fuera_de_lista", "evaluacion", "errores")})
     return 200, out
 
 

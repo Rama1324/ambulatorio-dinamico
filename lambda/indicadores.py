@@ -44,6 +44,35 @@ def _resumen_especialidad(nombre, pacs, excluidos):
             "atendidos": sum(e["motivo"] == "atendido" for e in excluidos)}
 
 
+def _decisiones(regs, revs):
+    """Dictámenes de la bitácora: total, pendientes de revisión, veredictos, y segundos desde que un evento llega al sistema
+    hasta que queda su dictamen (KPI: reevaluación tras un evento clínico)."""
+    import bitacora
+    eventos = {json.loads(r["evento"]).get("id_evento"): json.loads(r["evento"]) for r in regs if r["sk"].startswith("evento#")}
+    ultima = {}
+    por_dic = {r["id_dictamen"]: r for r in revs if r.get("id_dictamen")}
+    for r in regs:   # última revisión no automática por paciente (cierra los dictámenes anteriores)
+        if r["sk"].startswith("revision#"):
+            x = json.loads(r["revision"])
+            if not x.get("automatica"):
+                ultima[r["id_paciente"]] = x
+    total = pendientes = 0
+    segundos = []
+    for r in regs:
+        if not r["sk"].startswith("dictamen#"):
+            continue
+        d = json.loads(r["dictamen"])
+        total += 1
+        pendientes += bitacora.necesita_revision(d, por_dic.get(d["id_dictamen"]), ultima.get(r["id_paciente"]))
+        ev = eventos.get((d.get("disparador") or {}).get("id_evento"))
+        if (d.get("disparador") or {}).get("tipo") == "evento" and ev and ev.get("registrado"):
+            segundos.append((datetime.fromisoformat(d["fecha"]) - datetime.fromisoformat(ev["registrado"])).total_seconds())
+    con_veredicto = [r for r in revs if r.get("veredicto")]
+    return {"total": total, "pendientes": pendientes, "adecuadas": sum(r["veredicto"] == "adecuada" for r in con_veredicto),
+            "incorrectas": sum(r["veredicto"] == "incorrecta" for r in con_veredicto),
+            "_mediana_s": None if not segundos else round(_mediana(segundos), 3), "_n_eventos": len(segundos)}
+
+
 def kpis(corte, especialidad=None):
     """Indicadores de resultado (todo el hospital o una especialidad): actualización inmediata tras un evento,
     concordancia con el especialista (kappa con su n), cobertura, espera, trabajo pendiente, contactabilidad,
@@ -53,8 +82,11 @@ def kpis(corte, especialidad=None):
     perfs = perfiles_combinados()[0]
     pids = {pid for pid, x in perfs.items() if not especialidad or x["lista_espera"].get("especialidad") == especialidad}
     regs = [r for r in registros() if r["id_paciente"] in pids]
-    revs = [json.loads(r["revision"]) for r in regs if r["sk"].startswith("revision#")]
+    # las revisiones automáticas (al retirar un criterio local) no son el juicio de un especialista: no cuentan
+    revs = [x for x in (json.loads(r["revision"]) for r in regs if r["sk"].startswith("revision#")) if not x.get("automatica")]
     pares = [(r["categoria_sistema"], r.get("categoria_ajustada") or r["categoria_sistema"]) for r in revs if r.get("categoria_sistema")]
+    decisiones = _decisiones(regs, revs)
+    seg_dictamen, eventos_con_dictamen = decisiones.pop("_mediana_s"), decisiones.pop("_n_eventos")
     # Tiempo desde que se registra un evento grave hasta la primera evaluación clínica (decisión o revisión) del paciente
     cierres = {}
     for r in regs:
@@ -85,6 +117,7 @@ def kpis(corte, especialidad=None):
             "recalculo": "automático al registrar cada evento (milisegundos)",
             "eventos_graves_registrados": len(horas) + sin_evaluar, "evaluados": len(horas),
             "sin_evaluar": sin_evaluar, "mediana_horas": None if not horas else round(_mediana(horas), 1),
+            "mediana_segundos_evento_a_dictamen": seg_dictamen, "eventos_con_dictamen": eventos_con_dictamen,
             "descompensados_en_lista": len(vitales), "evaluacion_pendiente": estados.count("pendiente"),
             "evaluacion_hecha": estados.count("evaluada")},
         "contactabilidad": {"intentos": len(contactos_todos), "efectivos": efectivos,
@@ -93,6 +126,7 @@ def kpis(corte, especialidad=None):
         "concordancia": {"revisiones": len(pares), "acuerdos": acuerdos,
                          "acuerdo_pct": round(100 * acuerdos / len(pares)) if pares else None, "kappa": _kappa(pares),
                          "meta": 0.70, "n_recomendado": N_KAPPA_RECOMENDADO, "suficiente": len(pares) >= N_KAPPA_RECOMENDADO},
+        "decisiones": decisiones,
         "especialidad": especialidad,
         "por_especialidad": sorted((_resumen_especialidad(e, [p for p in todo["pacientes"] if p["especialidad"] == e],
                                                           [x for x in todo["excluidos"] if x["especialidad"] == e])

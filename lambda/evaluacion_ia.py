@@ -3,6 +3,7 @@ Aquí se guardan las evaluaciones, se elige la vigente para cada fecha y se corr
 import json
 import os
 
+import cliente_ia
 import puntaje
 from datos import evaluaciones_por_paciente, guardar, hoy, perfiles_combinados
 
@@ -18,6 +19,8 @@ def cliente_llm(barrido=False):
     if _llm["cliente"] is not None:  # los tests inyectan un ClienteFalso
         return _llm["cliente"]
     import rubrica
+    if cliente_ia.simulado():  # MODEL_ID=simulado: lector determinista sin red, rotulado "simulado"
+        return _llm.setdefault("simulado", rubrica.ClienteSimulado())
     clave = "barrido" if barrido else "api"
     if clave not in _llm:
         _llm[clave] = rubrica.ClienteBedrock(timeout_s=20, reintentos=3) if barrido else rubrica.ClienteBedrock(timeout_s=12, reintentos=1)
@@ -31,11 +34,23 @@ def evaluacion_vigente(evs, perfil, corte, kb):
     return next((e for e in evs if algoritmo.vigente(e, perfil, corte, kb, f)), None)
 
 
+def estabilidad(lecturas):
+    """Qué control de estabilidad tuvo la evaluación (LECTURAS_IA). Con 3 y con 2 lecturas, si no coinciden manda el
+    control 'inestable' (rigen las reglas); con 1 no hay con qué comparar: la lectura se verifica (citas, fórmula, no baja
+    sola) pero no se sabe si es estable, y así queda escrito en el registro de la evaluación."""
+    if lecturas >= 2:
+        return {"lecturas": lecturas, "control": True, "nota": f"{lecturas} lecturas: si no coinciden, rigen las reglas"}
+    return {"lecturas": 1, "control": False,
+            "nota": "1 lectura (LECTURAS_IA=1): sin control de estabilidad; las citas se verifican igual y el resultado no baja a nadie"}
+
+
 def evaluar_y_guardar(pid, corte, perfs=None, barrido=False):
     import algoritmo
     perfs = perfs or perfiles_combinados()[0]
-    reg = algoritmo.evaluar_paciente(perfs[pid], corte, cliente_llm(barrido))
+    n = cliente_ia.lecturas_ia(algoritmo.CORRIDAS)
+    reg = algoritmo.evaluar_paciente(perfs[pid], corte, cliente_llm(barrido), corridas=n)
     if reg:
+        reg["estabilidad"] = estabilidad(n)
         guardar({"id_paciente": pid, "sk": f"evaluacion#{reg['fecha']}", "evaluacion": json.dumps(reg, ensure_ascii=False, default=str)})
     return reg
 

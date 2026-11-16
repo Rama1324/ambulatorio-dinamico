@@ -1,6 +1,6 @@
 # Contrato — Ambulatorio Dinámico HLF
 
-Fuente de datos: `perfiles.json` (500 pacientes, ya consolidado) en S3. **Nunca en el repo.**
+Fuente de datos: DynamoDB (ítems por paciente). El registro sintético `perfiles.json` (500 pacientes) se carga con `scripts/cargar_registro.py`; en local se lee de `data/`. **Nunca en el repo.**
 Fecha de referencia del dataset: 2026-10-13. Todo cálculo usa una `fecha_corte`: solo registros con fecha ≤ corte.
 Sin `fecha_corte`, la API usa `FECHA_REFERENCIA` (variable de entorno): `hoy` = fecha real de Chile (versión publicada) o
 `AAAA-MM-DD` para simular (por defecto 2026-10-13). `/health` informa `fecha_hoy` y `modo` (`tiempo_real | simulacion`).
@@ -101,6 +101,62 @@ Para confirmar, el front envía ese `evento` a `POST /eventos`.
 Body: `id_paciente`, `tipo_evento`, `subtipo`, `severidad`, `detalle` y opcionales `fecha_corte` (default 2026-10-13), `fecha_evento` (default = fecha_corte)
 y `especialidad` (si viene, los puestos y el total son los de la lista de esa especialidad). Ya no devuelve la lista entera: el front la vuelve a pedir.
 `tipo_evento`: cambio_farmaco · control_aps · examen_alterado · hospitalizacion · visita_urgencia
+
+Agrega (ingesta continua): `id_lote` y, si la bitácora lo registró, `dictamen`; con `ALGORITMO=rubrica`, `evaluacion`. El evento
+guardado lleva `registrado`, `canal` ("app"), `origen` e `id_lote`. `POST /importar` con `confirmar` agrega `id_lote`,
+`dictamenes` (resumen) e `ingesta` (`registrados, duplicados, fuera_de_lista, evaluacion, errores`).
+
+## Ingesta continua (lambda/ingesta.py)
+Todos los canales pasan por `ingesta.registrar`: valida, resuelve el paciente (`id_paciente` o RUT), deduplica, guarda con
+traza (`registrado, canal, origen, id_lote` en el evento), deja el lote en `_ingesta` y registra los dictámenes.
+
+| Método | Ruta | Qué hace |
+|---|---|---|
+| POST | `/ingesta/eventos` | Sistemas del hospital: `{origen, eventos[], mediciones[]?, citaciones[]?, fecha_corte?, evaluar?: "cola"}`. Mismos nombres de campo y sinónimos que los archivos; booleanos JSON aceptados. Máximo **2.000 filas** por solicitud. Cabecera opcional `Idempotency-Key` (≤ 200 caracteres, vale 24 h): la misma clave devuelve la misma respuesta sin procesar; con otro cuerpo → 409. **200** procesado · **202** evaluación en cola · **400** cuerpo sin la forma esperada (las filas inválidas no son 400: van en `rechazados`) |
+| GET | `/ingesta/lotes?limite=20` | Últimos lotes (máx. 200), más reciente primero, sin el detalle de filas |
+| GET | `/ingesta/lotes/{id_lote}` | Un lote completo: conteos por tabla, rechazados (máx. 200), pacientes afectados, cierre (estado, dictámenes, errores) y lo evaluado por la cola |
+
+Respuesta de `POST /ingesta/eventos` (y de `ingesta.registrar`):
+```json
+{ "id_lote": "LOT-20261114T152702-8F5B", "canal": "api", "origen": "his-hlf", "recibidos": 9, "registrados": 9,
+  "duplicados": 0, "fuera_de_lista": 0, "rechazados": [{"tabla": "eventos", "indice": 1, "motivo": "..."}],
+  "pacientes_afectados": 7, "por_tabla": {"eventos": {"recibidos", "registrados", "duplicados", "rechazados", "fuera_de_lista"}, "...": {}},
+  "dictamenes": [{"id_dictamen", "id_paciente", "motor", "cambio", "categoria_antes", "categoria", "posicion_antes", "posicion"}],
+  "evaluacion": "sincrona | en_cola", "en_cola": 0, "errores": [], "estado": "procesado | en_cola | con_errores", "procesado_en_ms": 1 }
+```
+- Quien no está en la lista (o, para `api` y `s3`, ya egresó) se cuenta en `fuera_de_lista` y no se guarda nada suyo.
+- La severidad sale del subtipo; la del remitente se ignora. Sin `id_evento` del origen, el id es determinista por contenido.
+- Zona de carga: un objeto en `s3://<bucket>/entrada/<sistema>/archivo.csv|xlsx` (`ingesta.s3_handler`) deja
+  `procesados/<sistema>/archivo.csv.resultado.json` o `errores/…error.json`; con `TEMA_ALERTAS_ARN`, aviso SNS solo con archivo y conteos.
+- Cola: más de 25 pacientes afectados (o `evaluar: "cola"`) con `COLA_EVALUACION_URL` definida → un mensaje SQS por paciente
+  (`ingesta.cola_handler`, fallas parciales). Sin cola se evalúa en línea.
+
+## Decisiones, revisión y aprendizaje (lambda/bitacora.py, lambda/aprendizaje.py)
+Detalle de campos: `docs/diseno/ESPECIFICACION_MVP.md` §5 y §6.
+
+| Método | Ruta | Qué hace |
+|---|---|---|
+| GET | `/decisiones?estado=pendiente\|revisada\|todas&especialidad=&limite=&desde=` | Cola de decisiones del sistema (dictámenes): `{estado, total, decisiones[]}`. Pendientes: primero alertas nuevas y patrones con más desacuerdo |
+| GET | `/decisiones/{id_dictamen}` | Un dictamen con su revisión |
+| GET | `/pacientes/{id}/decisiones` | Dictámenes del paciente, el más reciente primero |
+| POST | `/pacientes/{id}/revision` | Además de `accion`: `veredicto` (adecuada\|incorrecta), `motivo_codigo` (ver `GET /catalogo` → `motivos_veredicto`; obligatorio si incorrecta), `id_dictamen`, `rev_vista` (409 si está atrasado). Responde `aprendizaje{precedente, criterio_local, sugerencia, mensaje}` |
+| POST | `/pacientes/{id}/eventos/{id_evento}/enmienda` | `{accion: anular\|no_relacionado\|relacionado, motivo (20+), usuario}`. No borra: agrega `enmienda#` y un dictamen |
+| GET | `/criterios-locales` | Criterios locales con su historial |
+| POST | `/criterios-locales/{id}/resolver` | `{accion: aprobar\|rechazar\|retirar, motivo (20+), usuario}` (rol jefatura). Aprobar crea un dictamen por paciente que cambia; retirar no baja a nadie |
+| GET | `/aprendizaje?especialidad=` | Concordancia (global, por diagnóstico, patrón y regla, con n), criterios locales, precedentes recientes, reglas a validar, versión de la capa local |
+
+Cada fila de `GET /pacientes` agrega `rev`, `dictamen` (resumen del último), `criterios_locales` y `criterios_propuestos`.
+`POST /eventos`, `POST /importar`, `POST /ingesta/eventos` y `POST /pacientes/{id}/informe` devuelven los dictámenes que crearon.
+
+## Conocimiento, identidad y salud
+| Método | Ruta | Qué hace |
+|---|---|---|
+| GET | `/conocimiento` | Paquete vigente (`etiqueta`, `huella`, `integro`), fuentes con versión y huella, motor, capa local, avisos |
+| GET | `/conocimiento/diagnostico/{cie10}` | Todo lo que el sistema sabe y aplica para ese diagnóstico, cada bloque con su fuente y versión |
+| GET | `/yo` | Identidad, roles y modo de autenticación (`ninguna` o `cognito`) |
+
+`GET /pacientes` acepta además `limite`, `desde` (posición, desde 1) y `campos=resumen\|completo`. Las respuestas grandes
+van comprimidas con gzip si el cliente lo acepta. Con `AUTH=cognito` cada ruta exige un rol (`lambda/seguridad.py`, `REGLAS`).
 
 ## Pacientes de demo (del dataset)
 | ID | Historia | Qué muestra |

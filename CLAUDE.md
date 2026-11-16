@@ -42,15 +42,22 @@ Pacientes de demo: 00002 (salta del puesto 312 al 18 tras urgencia + hospitaliza
 5. Una revisión clínica vale hasta el próximo evento.
 6. Citas: propuesta (no bloquea) → reservada → confirmada → atendida / no asistió; cancelada libera la hora; doble reserva = 409.
 
-## Estado actual — publicado en AWS
-- 47 tests (`python -m pytest -q tests`). Página: https://main.d2jvqnf67i4lks.amplifyapp.com
-- Front (pedidos del hospital, 15-10: el objetivo es la lista de espera, sin IA predictiva ni gestión de box): "Lista de espera" (página principal, simple como planilla: N°, nombre, RUT/ID, edad, especialidad, diagnóstico, prioridad, días de espera) y "Lista detallada" (estado de gestión, responsable, próxima acción, seguimiento, ajuste manual con motivo, ficha con Resumen/Gestión/Registrar/Fundamento/Historia), Alertas pendientes, Indicadores, Cargar datos, Criterios. Todo se exporta a Excel (.xlsx).
-- KPI 72 h = revisar la PRIORIDAD tras un evento grave, contado desde que el evento llega al sistema (confirmar con el hospital).
-- Limpiar la demo publicada antes del pitch: `python scripts/limpiar_demo.py --borrar`.
+## Estado actual — MVP (rama `mvp/priorizacion-ia-trazable`, noviembre 2026)
+- La cuenta AWS del hackatón ya no existe: nada está desplegado. Todo corre en local (`python scripts/demo.py`, IA
+  simulada) y la plantilla (`template.yaml`, `samconfig.toml`) valida con `cfn-lint` y `scripts/validar_plantilla.py`.
+- Datos: DynamoDB es la única fuente de verdad (ítems por paciente, `lambda/datos.py`); en local, almacén en memoria con
+  el mismo código. `perfiles.json` se carga con `scripts/cargar_registro.py` (ya no se lee de S3).
+- Flujo: ingesta única (`ingesta.py`) → reglas + IA que lee y cita → dictamen (`bitacora.py`) → veredicto del
+  especialista → criterios locales con aprobación de jefatura (`aprendizaje.py`). Conocimiento versionado con manifiesto
+  (`base_conocimiento.py`, `scripts/empaquetar_conocimiento.py`: regenerar al cambiar el motor o una fuente).
+- Seguridad: `AUTH=ninguna` (demo) o `cognito` (JWT validado por API Gateway); permisos por ruta en `seguridad.REGLAS`.
+- Documentación: `docs/informes/`, `docs/DECISIONES.md`, `DEPLOY.md`, `docs/operacion/RUNBOOK.md`.
+- Pruebas: `python -m pytest -q tests` (327), `cd front && npm run build`.
 
 ## Pendiente
-1. Guion de la demo de punta a punta, ensayo y video de respaldo.
-2. Validar con el HLF las filas de "descompensado" y recalibrar LACE con datos reales.
+1. Desplegar en una cuenta AWS y verificar lo listado en `docs/informes/INFORME_TECNICO.md` §10.
+2. Validar con el HLF: filas de "descompensado", quién aprueba criterios locales, C1–C5 vs ESI, 72 h.
+3. Medir el modelo de IA elegido (Haiku 5.5 vs Sonnet 5.5) con `scripts/evaluar_algoritmo.py`.
 
 ## Reglas para el asistente
 - No cambies la lógica de `lambda/puntaje.py` sin avisar: los tests dependen de ella. Toda regla nueva debe citar su fuente.

@@ -175,6 +175,10 @@ def decidir(perfil, resp, corte, kb):
                 else:
                     revision.append({"motivo": "descompensacion_sin_fila", "bloqueante": False,
                                      "detalle": dx.get("detalle") or "la tabla del HLF no define fila de descompensación para este diagnóstico"})
+                    # misma razón que en el modo de reglas (puntaje.puntuar): visible en el fundamento y la decisión va a revisión
+                    razones.append({"factor": "tabla_oficial", "valor": "la tabla del HLF no tiene fila para este diagnóstico descompensado: "
+                                                                       "se mantiene la prioridad y se sugiere revisión clínica",
+                                    "fuente": fuente_tabla, "sin_regla": True})
 
     # Cáncer activo o sospechoso registrado (verificado al leer el documento): lo decide el código con la tabla del HLF
     onco = puntaje.regla_oncologica(eventos, le["especialidad"])
@@ -229,8 +233,13 @@ def decidir(perfil, resp, corte, kb):
         revision.append({"motivo": "fila_a_validar", "bloqueante": False, "detalle": dx.get("detalle", "")})
     if resp.senal_no_cubierta.strip():
         revision.append({"motivo": "senal_no_cubierta", "bloqueante": False, "detalle": resp.senal_no_cubierta.strip()[:300]})
-    return {"categoria": categoria, "descompensacion_grave": grave, "estado_clinico": estado, "razones": razones, "revision": revision,
-            "fecha_evento": fecha_ev if estado == "descompensado" else None}
+    out = {"categoria": categoria, "descompensacion_grave": grave, "estado_clinico": estado, "razones": razones, "revision": revision,
+           "fecha_evento": fecha_ev if estado == "descompensado" else None}
+    # Mismas capas que al final de puntaje.puntuar (criterios locales aprobados): si no, la regla local subiría al paciente
+    # con las reglas y no con la fórmula, y el control 'bajaria' saltaría cada vez
+    for capa in puntaje.CAPAS:
+        out = capa(out, perfil, corte)
+    return out
 
 
 def clave_orden_536(r):
