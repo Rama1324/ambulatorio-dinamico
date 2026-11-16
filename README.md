@@ -27,40 +27,41 @@ aprobado por jefatura → aplicado y citado). Nunca baja una prioridad sola.
 | [`DEPLOY.md`](DEPLOY.md) · [`docs/operacion/RUNBOOK.md`](docs/operacion/RUNBOOK.md) | Despliegue en AWS y operación |
 | [`contrato.md`](contrato.md) | Contrato de la API |
 
-**Probarlo en un comando** (sin AWS, IA simulada): `python scripts/demo.py` → http://localhost:5174
+**Probarlo en un comando** (sin AWS, IA simulada; antes copie el dataset a `data/`, ver "Datos de prueba"): `python scripts/demo.py` → http://localhost:5174
 
 ## Estructura
 ```
 ambulatorio-dinamico/
-├── lambda/                API (una Lambda Python; única dependencia: pydantic)
-│   ├── app.py             enrutador HTTP (solo decide qué función atiende cada ruta)
-│   ├── datos.py           fecha de trabajo, registro del hospital (S3) y registros del equipo (DynamoDB)
-│   ├── catalogo.py        vocabularios cerrados (contacto, decisión, ajuste, gestión) y catálogo del front
-│   ├── lista.py           lista priorizada, ficha, historia y estadísticas
-│   ├── acciones.py        lo que registra el equipo: eventos, revisiones, contactos, decisiones, gestión, ajustes
-│   ├── ingreso.py         ingreso de pacientes y carga de Excel/CSV (con el impacto de la carga)
-│   ├── lectura_informe.py lectura de informes (texto o foto) con IA
-│   ├── indicadores.py     KPIs (kappa, cobertura, espera, contactabilidad)
-│   ├── evaluacion_ia.py   algoritmo con rúbrica (ALGORITMO=rubrica) y barrido nocturno
-│   ├── puntaje.py         motor de priorización (reglas oficiales)
-│   ├── criterios.py · combinaciones.py · lector_documento.py   la IA lee y cita; el código verifica y decide
-│   ├── informe.py · modelos.py · explicar.py · importar.py
+├── lambda/                API (Lambda Python 3.12; única dependencia: pydantic)
+│   ├── app.py             enrutador HTTP: identidad y permisos, CORS, gzip; delega en el rutear() de cada módulo
+│   ├── seguridad.py       identidad desde el JWT de Cognito, permisos por ruta y rol
+│   ├── datos.py           almacén: ítems por paciente en DynamoDB (almacen_dynamo.py) o en memoria en local
+│   ├── ingesta.py         una sola tubería de entrada: app, Excel/CSV, API para sistemas, zona de carga S3, cola SQS
+│   ├── bitacora.py        cada decisión documentada (dictamen) y la cola de revisión del especialista
+│   ├── aprendizaje.py     veredictos, precedentes, criterios locales con aprobación, enmiendas
+│   ├── base_conocimiento.py  fuentes médicas con versión y huella (manifiesto en conocimiento/)
+│   ├── puntaje.py         motor de priorización (reglas oficiales con fuente)
+│   ├── rubrica.py · decisor.py · controles.py · algoritmo.py · evaluacion_ia.py · cliente_ia.py   la IA lee y cita; el código decide
+│   ├── criterios.py · combinaciones.py · lector_documento.py · informe.py · lectura_informe.py      lectura de textos e informes
+│   ├── lista.py · indicadores.py · catalogo.py · acciones.py · ingreso.py · importar.py · explicar.py · privacidad.py
 │   └── local_server.py    corre la API en localhost:3001 sin AWS
 ├── front/src/             React + Vite + Tailwind
-│   ├── App.jsx            encabezado, navegación y estado compartido (fecha, especialidad, filtros)
-│   ├── pantallas/         ListaSimple · ListaDetallada · Alertas · Indicadores · CargarDatos · Criterios · NuevoPaciente
-│   ├── ficha/             Ficha del paciente: Acciones (contacto, gestión, ajuste, decisión, novedad) · Evolucion · Informe
-│   ├── componentes/       comunes.jsx (Caja, Icono, Prioridad, Indicador, Filtro)
-│   └── api.js · excel.js · constantes.js · util.js
-├── tests/                 131 pruebas (API de punta a punta, criterios, combinaciones, lector, evidencia)
-├── scripts/               deploy_aws.ps1 · iniciar_demo.ps1 · limpiar_demo.py · evaluar_*.py (evaluaciones con Claude)
-├── docs/                  criterios_oficiales.md (todas las fuentes) · arquitectura.md · prompts_bedrock.md
-├── data/                  perfiles.json y CSV (NO van a git)
-├── template.yaml          infraestructura AWS (SAM): Lambda, API Gateway, S3, DynamoDB, permisos Bedrock
-├── amplify.yml            build del front en AWS Amplify
+│   ├── pantallas/         Lista · Lista detallada · Empeoraron · Decisiones · Aprendizaje · Recepción de datos · Indicadores · Criterios y fuentes
+│   ├── ficha/             ficha del paciente (resumen, gestión, registrar, decisiones, fundamento, historia)
+│   └── api.js · auth.js · permisos.js · excel.js · componentes/
+├── tests/                 327 pruebas (pytest)
+├── scripts/               demo.py · generar_escenarios.py · cargar_registro.py · desplegar.py/.sh · deploy_aws.ps1 · validar_plantilla.py · empaquetar_conocimiento.py · medir_escala.py
+├── docs/                  informes/ · DECISIONES.md · diseno/ · operacion/RUNBOOK.md · conocimiento/ · investigacion/
+├── data/                  dataset sintético del hospital: perfiles.json y CSV (NO van a git, ver abajo)
+├── template.yaml · samconfig.toml   infraestructura AWS (SAM): ambientes prueba y prod
 ├── contrato.md            contrato de la API
-└── DEPLOY.md              cómo correr en local y deployar
+└── DEPLOY.md              despliegue en AWS
 ```
+
+## Datos de prueba
+La demo usa el **dataset sintético que entregó el hospital** (500 pacientes, `perfiles.json`). No está en el repositorio:
+se comparte aparte. Antes de `python scripts/demo.py`, copie `perfiles.json` (y los CSV, si los tiene) a la carpeta
+`data/` o a `docs/Datasets de ejemplo/`. Las guías y escenarios citan pacientes concretos de ese registro.
 
 ## Probar en local
 ```bash
